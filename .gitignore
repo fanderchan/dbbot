@@ -20,7 +20,6 @@ __pycache__/
 # Repository-local tooling
 **/.cursor/
 **/build/
-mysql_ansible/playbooks/exporterregistrar
 
 # Package caches and offline installers
 **/downloads/*

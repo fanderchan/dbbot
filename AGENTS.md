@@ -157,6 +157,10 @@
   - MGR
   - InnoDB Cluster
   - 备份与恢复
+- `mysql_ansible/playbooks/exporterregistrar` 是随源码仓一并发布的 Linux amd64 静态工具二进制，不要将其当作“孤立误产物”删除。
+- 若涉及 `mysql_ansible/exporterregistrar/` 源码变更，应同步更新：
+  - `mysql_ansible/playbooks/exporterregistrar`
+  - `mysql_ansible/exporterregistrar/README.md`
 - 若某能力已明确下线或不再支持，不要保留“看起来可用、实际不可用”的入口文档或默认变量。
 
 ### Monitoring
