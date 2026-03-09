@@ -1,0 +1,5 @@
+- name: Start Prometheus service
+  ansible.builtin.systemd:
+    name: prometheus
+    state: started
+    daemon_reload: true

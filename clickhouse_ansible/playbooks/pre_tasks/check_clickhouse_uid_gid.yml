@@ -1,0 +1,45 @@
+---
+- name: Check existing owner of target clickhouse uid
+  ansible.builtin.shell: |
+    getent passwd "{{ clickhouse_uid }}" | cut -d: -f1
+  register: clickhouse_uid_owner
+  changed_when: false
+  failed_when: false
+
+- name: Check existing owner of target clickhouse gid
+  ansible.builtin.shell: |
+    getent group "{{ clickhouse_gid }}" | cut -d: -f1
+  register: clickhouse_gid_owner
+  changed_when: false
+  failed_when: false
+
+- name: Check current uid of clickhouse user name
+  ansible.builtin.shell: |
+    getent passwd "{{ clickhouse_user }}" | cut -d: -f3
+  register: clickhouse_user_current_uid
+  changed_when: false
+  failed_when: false
+
+- name: Check current gid of clickhouse group name
+  ansible.builtin.shell: |
+    getent group "{{ clickhouse_group }}" | cut -d: -f3
+  register: clickhouse_group_current_gid
+  changed_when: false
+  failed_when: false
+
+- name: Validate clickhouse uid/gid mapping is safe
+  ansible.builtin.assert:
+    that:
+      - (clickhouse_uid_owner.stdout | trim | length == 0) or (clickhouse_uid_owner.stdout | trim == clickhouse_user)
+      - (clickhouse_gid_owner.stdout | trim | length == 0) or (clickhouse_gid_owner.stdout | trim == clickhouse_group)
+      - (clickhouse_user_current_uid.stdout | trim | length == 0) or ((clickhouse_user_current_uid.stdout | trim | int) == (clickhouse_uid | int))
+      - (clickhouse_group_current_gid.stdout | trim | length == 0) or ((clickhouse_group_current_gid.stdout | trim | int) == (clickhouse_gid | int))
+    fail_msg: >-
+      clickhouse uid/gid conflict detected on host={{ inventory_hostname }}.
+      desired_user={{ clickhouse_user }} uid={{ clickhouse_uid }},
+      desired_group={{ clickhouse_group }} gid={{ clickhouse_gid }},
+      uid_owner={{ clickhouse_uid_owner.stdout | trim | default('') }},
+      gid_owner={{ clickhouse_gid_owner.stdout | trim | default('') }},
+      user_current_uid={{ clickhouse_user_current_uid.stdout | trim | default('') }},
+      group_current_gid={{ clickhouse_group_current_gid.stdout | trim | default('') }}.
+      Please choose another clickhouse_uid/clickhouse_gid in playbooks/vars/common_config.yml.

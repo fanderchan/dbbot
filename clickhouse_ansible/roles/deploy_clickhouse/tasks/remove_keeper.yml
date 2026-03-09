@@ -1,0 +1,5 @@
+- name: Remove ClickHouse Keeper configuration when using standalone Zookeeper
+  ansible.builtin.file:
+    path: "{{ clickhouse_config_d_dir }}/keeper-server.xml"
+    state: absent
+  when: not use_clickhouse_keeper | default(false)

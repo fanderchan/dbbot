@@ -1,0 +1,11 @@
+groups:
+- name: CPU报警规则
+  rules:
+  - alert: CPU使用率告警
+    expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 80
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "CPU使用率正在飙升。"
+      description: "CPU使用率超过80%（持续5分钟，当前值：{{ $value }}%）"

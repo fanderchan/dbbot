@@ -1,0 +1,14 @@
+- name: Set vm.overcommit_memory to 0
+  ansible.builtin.lineinfile:
+    path: /etc/sysctl.d/80-dbbot-clickhouse-memory.conf
+    regexp: '^vm.overcommit_memory'
+    line: 'vm.overcommit_memory = 0'
+    create: yes
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply sysctl settings
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/80-dbbot-clickhouse-memory.conf
+  changed_when: true
+  failed_when: false

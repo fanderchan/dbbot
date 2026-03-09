@@ -1,0 +1,51 @@
+#!/bin/bash
+# MySQL Router Health Check Script
+# Used by Keepalived to detect Router status
+
+ROUTER_HOST="127.0.0.1"
+LOG_FILE="{{ router_health_log_file | default('/var/log/keepalived/check_mysqlrouter.log') }}"
+
+# Ports to probe (driven by the monitor field in router_ports)
+PORTS=()
+PORTS_COUNT=0
+
+{% for port_name, port_config in router_ports.items() %}
+{% if port_config.monitor is defined and port_config.monitor %}
+PORTS+=("{{ port_name }}:{{ port_config.port }}")
+PORTS_COUNT=$((PORTS_COUNT+1))
+{% endif %}
+{% endfor %}
+
+# If no ports are selected, check at least the RW port by default
+if [ ${PORTS_COUNT:-0} -eq 0 ]; then
+{% if router_ports.rw is defined %}
+    PORTS+=("rw:{{ router_ports.rw.port }}")
+{% else %}
+    PORTS+=("rw:6446")
+{% endif %}
+    PORTS_COUNT=1
+fi
+
+TCP_TIMEOUT={{ router_health_tcp_timeout | default(2) }}
+
+# Check if Router process is running
+if ! pgrep -f mysqlrouter > /dev/null 2>&1; then
+    echo "MySQL Router process is not running"
+    exit 1
+fi
+
+# Perform a single TCP handshake per port; any failure triggers an alert
+for entry in "${PORTS[@]}"; do
+    name="${entry%%:*}"
+    port="${entry##*:}"
+
+    if ! timeout ${TCP_TIMEOUT} bash -c "exec 3<>/dev/tcp/${ROUTER_HOST}/${port}" >/dev/null 2>&1; then
+        timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+        echo "${timestamp} MySQL Router port ${name}:${port} is not accepting TCP (timeout ${TCP_TIMEOUT}s)" >> "${LOG_FILE}"
+        echo "MySQL Router port ${name}:${port} is not accepting TCP"
+        exit 1
+    fi
+done
+
+echo "MySQL Router is healthy"
+exit 0

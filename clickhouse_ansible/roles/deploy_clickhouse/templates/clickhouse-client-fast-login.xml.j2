@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<config>
+    <host>{{ fcs_clickhouse_fast_login_host | default('127.0.0.1') }}</host>
+    <port>{{ clickhouse_tcp_port_base | default(9000) | int }}</port>
+    <user>default</user>
+    <password><![CDATA[{{ clickhouse_default_password }}]]></password>
+</config>

@@ -1,0 +1,39 @@
+- name: Check if transparent hugepage control file exists
+  ansible.builtin.stat:
+    path: /sys/kernel/mm/transparent_hugepage/enabled
+  register: thp_path
+  changed_when: false
+
+- name: Set transparent hugepage to madvise (runtime)
+  ansible.builtin.shell: |
+    if grep -q '\[madvise\]' /sys/kernel/mm/transparent_hugepage/enabled; then
+      echo "already_madvise"
+    else
+      echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
+      echo "updated_to_madvise"
+    fi
+  args:
+    executable: /bin/bash
+  register: thp_runtime
+  changed_when: "'updated_to_madvise' in thp_runtime.stdout"
+  when: thp_path.stat.exists
+
+- name: Persist THP madvise setting in rc.local (RedHat family)
+  ansible.builtin.lineinfile:
+    path: /etc/rc.d/rc.local
+    line: "echo madvise > /sys/kernel/mm/transparent_hugepage/enabled"
+    create: true
+    mode: '0755'
+  when:
+    - ansible_os_family == "RedHat"
+    - thp_path.stat.exists
+
+- name: Persist THP madvise setting in rc.local (Debian family)
+  ansible.builtin.lineinfile:
+    path: /etc/rc.local
+    line: "echo madvise > /sys/kernel/mm/transparent_hugepage/enabled"
+    create: true
+    mode: '0755'
+  when:
+    - ansible_os_family == "Debian"
+    - thp_path.stat.exists

@@ -1,0 +1,10 @@
+- name: Transfer mha4mysql-manager-0.58-0.el7.centos.noarch.rpm to the target server
+  ansible.builtin.copy:
+    src: "../files/mha4mysql-manager-0.58-0.el7.centos.noarch.rpm"
+    dest: "/tmp/mha4mysql-manager-0.58-0.el7.centos.noarch.rpm"
+    mode: '0755'
+
+- name: Install mha4mysql-manager-0.58-0.el7.centos.noarch.rpm
+  ansible.builtin.yum:
+    name: /tmp/mha4mysql-manager-0.58-0.el7.centos.noarch.rpm
+    state: present

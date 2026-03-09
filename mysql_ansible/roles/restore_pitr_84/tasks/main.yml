@@ -1,0 +1,120 @@
+- name: Set restore path helpers
+  ansible.builtin.set_fact:
+    restore__mycnf_file: "{{ mysql_config_file | default(mycnf_dir ~ '/my.cnf') }}"
+    restore__mysql_bin: "{{ mysql_software_dir }}/bin/mysql"
+    restore__script_path: "/tmp/restore_pitr_84.py"
+    restore__python_bin: "{{ ansible_python_interpreter | default('/usr/bin/python') }}"
+
+- name: Build restore command (debug)
+  ansible.builtin.set_fact:
+    restore__restore_argv: >-
+      {{
+        [
+          restore__python_bin,
+          restore__script_path,
+          'restore',
+          '--backup-dir', backup_dir,
+          '--mycnf-file', restore__mycnf_file,
+          '--mysql-user', mysql_user,
+          '--mysql-group', mysql_group
+        ]
+        + (['--allow-nonempty-datadir'] if restore_allow_nonempty_datadir | bool else [])
+      }}
+
+- name: Show restore command
+  ansible.builtin.debug:
+    msg: "{{ restore__restore_argv | map('quote') | join(' ') }}"
+
+- name: Deploy restore helper script
+  ansible.builtin.copy:
+    src: restore_pitr_84.py
+    dest: "{{ restore__script_path }}"
+    mode: '0755'
+
+- name: Stop MySQL service before restore
+  ansible.builtin.systemd:
+    name: "{{ mysql_service_name }}"
+    state: stopped
+
+- name: Run restore helper script
+  ansible.builtin.command:
+    argv: "{{ restore__restore_argv }}"
+  changed_when: true
+
+- name: Start MySQL service after restore
+  ansible.builtin.systemd:
+    name: "{{ mysql_service_name }}"
+    state: started
+
+- name: Wait for MySQL to listen
+  ansible.builtin.wait_for:
+    host: "{{ restore_mysql_host }}"
+    port: "{{ mysql_port | int }}"
+    state: started
+    timeout: "{{ restore_mysql_start_timeout }}"
+
+- name: Build PITR command (debug)
+  ansible.builtin.set_fact:
+    restore__pitr_argv: >-
+      {{
+        [
+          restore__python_bin,
+          restore__script_path,
+          'pitr',
+          '--backup-dir', backup_dir,
+          '--mycnf-file', restore__mycnf_file,
+          '--mysql-bin', restore__mysql_bin,
+          '--mysql-user', restore_mysql_user,
+          '--mysql-host', restore_mysql_host,
+          '--mysql-port', mysql_port
+        ]
+        + (['--pitr-target-time', pitr_target_time] if pitr_target_time | length > 0 else [])
+        + (['--pitr-target-gtid', pitr_target_gtid] if pitr_target_gtid | length > 0 else [])
+        + (['--pitr-target-gtid-inclusive'] if pitr_target_gtid_inclusive | bool else [])
+        + (['--debug'] if (restore_pitr_debug | default(false)) | bool else [])
+      }}
+  when: enable_pitr | bool
+
+- name: Set PITR log path
+  ansible.builtin.set_fact:
+    restore__pitr_log_path: "/tmp/restore_pitr_84_pitr.log"
+  when: enable_pitr | bool
+
+- name: Show PITR command
+  ansible.builtin.debug:
+    msg:
+      - "{{ restore__pitr_argv | map('quote') | join(' ') }}"
+      - "MYSQL_PWD={{ '********' if (restore_mysql_password | default('') | length > 0) else '(empty)' }}"
+  when:
+    - enable_pitr | bool
+
+- name: Apply PITR helper script
+  ansible.builtin.shell: >-
+    {{ restore__pitr_argv | map('quote') | join(' ') }} > {{ restore__pitr_log_path }} 2>&1
+  args:
+    executable: /bin/bash
+  environment:
+    MYSQL_PWD: "{{ restore_mysql_password }}"
+  register: restore__pitr_run
+  changed_when: true
+  failed_when: false
+  when: enable_pitr | bool
+
+- name: Show PITR log
+  ansible.builtin.command:
+    cmd: "cat {{ restore__pitr_log_path }}"
+  register: restore__pitr_log_out
+  changed_when: false
+  when: enable_pitr | bool
+
+- name: Display PITR output
+  ansible.builtin.debug:
+    msg: "{{ restore__pitr_log_out.stdout }}"
+  when: enable_pitr | bool
+
+- name: Fail when PITR failed
+  ansible.builtin.fail:
+    msg: "PITR failed (rc={{ restore__pitr_run.rc }}). See {{ restore__pitr_log_path }}."
+  when:
+    - enable_pitr | bool
+    - restore__pitr_run.rc != 0

@@ -1,0 +1,3 @@
+- name: Start mha manager
+  ansible.builtin.command: su - {{ mysql_user }} -s /usr/local/start_mha.sh
+  changed_when: true

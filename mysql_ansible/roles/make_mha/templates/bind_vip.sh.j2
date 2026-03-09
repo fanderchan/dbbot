@@ -1,0 +1,4 @@
+#!/bin/bash
+
+
+/usr/sbin/ip addr add {{ vip }}/{{ vip_netmask }} dev {{ net_work_interface }};/sbin/arping -c 5 -U -I {{ net_work_interface }} {{ vip }}

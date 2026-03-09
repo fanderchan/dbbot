@@ -1,0 +1,92 @@
+- name: Configure grafana Server
+  ansible.builtin.template:
+    src: ../templates/grafana.ini.j2
+    dest: /usr/local/grafana/conf/grafana.ini
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0644'
+
+- name: Configure grafana Server provisioning datasource setting
+  ansible.builtin.template:
+    src: ../templates/prometheus_datasource.yaml.j2
+    dest: /usr/local/grafana/conf/provisioning/datasources/prometheus_datasource.yaml
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0644'
+
+- name: Configure grafana Server provisioning node_exporter dashboards setting
+  ansible.builtin.template:
+    src: ../templates/node_dashboards.yaml.j2
+    dest: /usr/local/grafana/conf/provisioning/dashboards/node_dashboards.yaml
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0644'
+  when: fcs_grafana_import_node_dashboards
+
+- name: Copy Node Exporter dashboards directory to grafana server directory
+  ansible.builtin.copy:
+    src: ../files/dbbot-node-dashboards
+    dest: /usr/local/grafana/
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0755'
+    remote_src: no
+    directory_mode: '0755'
+  when: fcs_grafana_import_node_dashboards
+
+- name: Configure grafana Server provisioning mysql dashboards setting
+  ansible.builtin.template:
+    src: ../templates/mysql_dashboards.yaml.j2
+    dest: /usr/local/grafana/conf/provisioning/dashboards/mysql_dashboards.yaml
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0644'
+  when: fcs_grafana_import_mysql_dashboards
+
+- name: Copy MySQL dashboards directory to grafana server directory
+  ansible.builtin.copy:
+    src: ../files/dbbot-mysql-dashboards
+    dest: /usr/local/grafana/
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0755'
+    remote_src: no
+    directory_mode: '0755'
+  when: fcs_grafana_import_mysql_dashboards
+
+- name: Configure grafana Server provisioning router dashboards setting
+  ansible.builtin.template:
+    src: ../templates/router_dashboards.yaml.j2
+    dest: /usr/local/grafana/conf/provisioning/dashboards/router_dashboards.yaml
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0644'
+  when: fcs_grafana_import_router_dashboards
+
+- name: Copy Router dashboards directory to grafana server directory
+  ansible.builtin.copy:
+    src: ../files/dbbot-router-dashboards
+    dest: /usr/local/grafana/
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0755'
+    remote_src: no
+    directory_mode: '0755'
+  when: fcs_grafana_import_router_dashboards
+
+- name: Ensure /usr/local/grafana/plugins directory exists
+  ansible.builtin.file:
+    path: /usr/local/grafana/plugins
+    state: directory
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0755'
+
+- name: Extract natel-discrete-panel.tar.gz to /usr/local/grafana/plugins
+  ansible.builtin.unarchive:
+    src: ../files/natel-discrete-panel.tar.gz
+    dest: /usr/local/grafana/plugins
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    remote_src: no
+    creates: /usr/local/grafana/plugins/natel-discrete-panel

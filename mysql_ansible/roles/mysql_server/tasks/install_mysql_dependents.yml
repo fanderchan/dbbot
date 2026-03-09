@@ -1,0 +1,48 @@
+- name: Install libaio and numactl
+  ansible.builtin.yum:
+    name: "{{ package.name }}"
+    state: present
+  loop:
+    - { name: 'libaio' }
+    - { name: 'numactl' }
+  loop_control:
+    loop_var: package
+  tags:
+    - dependents
+
+- name: Install jemalloc
+  when: fcs_mysql_use_jemalloc | bool
+  tags:
+    - dependents
+  block:
+    - name: Install jemalloc using yum
+      ansible.builtin.yum:
+        name: jemalloc
+        state: present
+      register: mysql_server__jemalloc_install_result
+      ignore_errors: true
+
+    - name: Set jemalloc rpm file name based on OS
+      ansible.builtin.set_fact:
+        mysql_server__jemalloc_rpm_file: "{{ 'jemalloc-3.6.0-1.el8.x86_64.rpm' if os_type in ['Rocky9', 'openEuler24', 'openEuler22', 'openEuler20', 'BigCloud21', 'CentOS8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10'] else 'jemalloc-3.6.0-1.el7.x86_64.rpm' }}"
+
+    - name: Copy jemalloc rpm to target server
+      ansible.builtin.copy:
+        src: "../files/{{ mysql_server__jemalloc_rpm_file }}"
+        dest: "/tmp/{{ mysql_server__jemalloc_rpm_file }}"
+        mode: '0755'
+      when: mysql_server__jemalloc_install_result.failed
+
+    - name: Install jemalloc from local file
+      ansible.builtin.yum:
+        name: "/tmp/{{ mysql_server__jemalloc_rpm_file }}"
+        state: present
+        disable_gpg_check: true
+      register: mysql_server__jemalloc_local_install_result
+      when: mysql_server__jemalloc_install_result.failed
+      ignore_errors: true
+
+    - name: Check if jemalloc installation failed
+      ansible.builtin.fail:
+        msg: "Failed to install jemalloc"
+      when: mysql_server__jemalloc_install_result.failed and mysql_server__jemalloc_local_install_result.failed

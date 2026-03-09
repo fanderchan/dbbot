@@ -1,0 +1,29 @@
+# Logs and retries
+*.log
+*.retry
+*.pid
+
+# Editor and OS metadata
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Repository-local tooling
+**/.cursor/
+**/build/
+mysql_ansible/playbooks/exporterregistrar
+
+# Package caches and offline installers
+**/downloads/*
+!**/downloads/.gitignore
+!**/downloads/.gitkeep
+!**/downloads/README.md

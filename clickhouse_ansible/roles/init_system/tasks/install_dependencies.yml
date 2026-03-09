@@ -1,0 +1,21 @@
+- name: Install ClickHouse dependencies (RedHat family)
+  ansible.builtin.yum:
+    name:
+      - yum-utils
+      - libtool
+      - unixODBC
+      - unixODBC-devel
+    state: present
+    use_backend: auto
+  when: ansible_os_family == "RedHat"
+
+- name: Install ClickHouse dependencies (Debian family)
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - libtool
+      - unixodbc
+      - unixodbc-dev
+    state: present
+    update_cache: yes
+  when: ansible_os_family == "Debian"

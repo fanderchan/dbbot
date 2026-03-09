@@ -1,0 +1,39 @@
+- name: Deploy master-slave MySQL server using binary installation
+  hosts: dbbot_mysql
+  become: true
+  any_errors_fatal: true
+  max_fail_percentage: 1
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_keepalived_master_slave.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_keepalived_master_slave.yml
+  vars:
+    roles_to_execute:
+      - "../roles/pre_check_and_set"
+      - "../roles/mysql_server"
+      - "../roles/make_replication"
+      - "../roles/make_keepalived"
+    mtls_with_mysql_group_replication: 0
+  pre_tasks:
+    - name: Import tasks to validate setting in common_config.yml
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+    - name: Import tasks to prepare required packages
+      ansible.builtin.import_tasks: pre_tasks/prepare_role_packages.yml
+    - name: Import tasks to check if packages exist
+      ansible.builtin.import_tasks: pre_tasks/check_if_packages_exist.yml
+    - name: Import validate master_slave tasks
+      ansible.builtin.import_tasks: pre_tasks/validate_keepalived_master_slave.yml
+    - name: Import confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+  tasks:
+    - name: Include role
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+      loop: "{{ roles_to_execute }}"
+      loop_control:
+        loop_var: role_name

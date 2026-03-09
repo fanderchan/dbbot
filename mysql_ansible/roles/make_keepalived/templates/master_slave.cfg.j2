@@ -1,0 +1,35 @@
+MYSQL_CMD="{{ mysql_software_dir }}/bin/mysql"
+MYSQLBINLOG_CMD="{{ mysql_software_dir }}/bin/mysqlbinlog"
+MYSQLADMIN_CMD="{{ mysql_software_dir }}/bin/mysqladmin"
+{% if master_ip in ansible_all_ipv4_addresses %}
+LOCAL_HOST="{{ master_ip }}"
+REMOTE_HOST="{{ slave_ip }}"
+{% else %}
+LOCAL_HOST="{{ slave_ip }}"
+REMOTE_HOST="{{ master_ip }}"
+{% endif %}
+WRITE_VIP="{{ vip }}"
+MYSQL_PORT="{{ mysql_port }}"
+MYSQL_HA_USER="{{ mysql_kha_user }}"
+MYSQL_HA_PWD="{{ mysql_kha_password }}"
+MYSQL_SERVICE_NAME="{{ mysql_service_name }}"
+RESTART_MYSQL_SERVICE_ON_FAIL=false
+
+
+CHECK_TIME=5
+CHECK_COUNT=3
+CHECK_SQL="select CONCAT('COUNTER:',count(*)) from mysql.user"
+LOCAL_BINLOG="{{ binlog_dir }}/mysql-bin"
+
+sqlpath=/tmp/{{ mysql_kha_user }}
+PINGDOWN_C=5
+PINGDOWN_TOTAL=3
+REP_USER={{ mysql_rple_user }}
+REP_PWD={{ mysql_rple_password }}
+
+LOGFILE="{{ mysql_data_dir_base }}/keepalived/logs/keepalived_mysql_ha.log"
+
+
+
+#MYSQL_DATADIR="{{ datadir }}"
+#MYSQL_ERRORLOG="{{ errlog_dir }}/error.log"

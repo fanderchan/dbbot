@@ -1,0 +1,13 @@
+- name: Check mysqlrouter_exporter binary exists on control host
+  ansible.builtin.stat:
+    path: "{{ mysqlrouter_exporter_binary_path }}"
+  register: mysqlrouter_exporter__binary_stat
+  delegate_to: localhost
+  run_once: true
+
+- name: Fail if mysqlrouter_exporter binary is missing
+  ansible.builtin.fail:
+    msg: "mysqlrouter_exporter binary not found at {{ mysqlrouter_exporter_binary_path }}. Build it first."
+  when: not mysqlrouter_exporter__binary_stat.stat.exists
+  delegate_to: localhost
+  run_once: true

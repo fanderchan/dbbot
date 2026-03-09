@@ -1,0 +1,14 @@
+- name: Check if Alertmanager is operational
+  ansible.builtin.uri:
+    url: "http://localhost:{{ alertmanager_port }}/-/healthy"
+    method: GET
+    return_content: yes
+  register: result
+  until: result.status == 200
+  retries: 5
+  delay: 10
+
+- name: Fail if Alertmanager is not operational
+  ansible.builtin.fail:
+    msg: "Alertmanager server is not operational"
+  when: result.status != 200

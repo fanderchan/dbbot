@@ -1,0 +1,428 @@
+#!/bin/sh
+
+CONFIG_FILE="${BACKUP_CONFIG_PATH:-{{ backup_config_path }}}"
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "backup config not found: $CONFIG_FILE" >&2
+  exit 2
+fi
+. "$CONFIG_FILE"
+
+START_TIME=$(date +%Y%m%d_%H%M%S)
+LOCAL_IP=$(hostname -I | awk '{print $1}')
+LOCAL_HOST=$(hostname)
+LOCAL_REPORT_HOST=""
+LOCAL_MYSQL_HOST=""
+
+INSTANCE_DIR="$BACKUP_DIR_BASE/mysql${PORT}"
+SNAPSHOT_DIR="$INSTANCE_DIR/$START_TIME"
+CLONE_DIR="$SNAPSHOT_DIR/clone"
+META_DIR="$SNAPSHOT_DIR/meta"
+TMP_DIR="$INSTANCE_DIR/tmp"
+LOG_FILE="$INSTANCE_DIR/backup_${PORT}.log"
+BINLOG_INDEX_FILE="$INSTANCE_DIR/binlog.txt"
+BINLOG_DIR="$INSTANCE_DIR/binlog"
+
+CONNECT="--defaults-file=$CNF_FILE --user=$BACKUP_USER --password=$BACKUP_PASS --socket=$SOCKET --host=127.0.0.1 --port=$PORT --protocol=TCP"
+
+log(){
+  DATELOG=$(date +"%Y/%m/%d %H:%M:%S")
+  echo "$DATELOG $*" | tee -a "$LOG_FILE"
+}
+
+mysql_query(){
+  $MYSQL_BIN $CONNECT -Nse "$1" 2>/dev/null
+}
+
+mysql_query_raw(){
+  $MYSQL_BIN $CONNECT -e "$1" 2>/dev/null
+}
+
+mysql_remote_query(){
+  REMOTE_HOST="$1"
+  REMOTE_SQL="$2"
+  $MYSQL_BIN --user=$BACKUP_USER --password=$BACKUP_PASS --host=$REMOTE_HOST --port=$PORT --protocol=TCP -Nse "$REMOTE_SQL" 2>/dev/null
+}
+
+mysql_remote_query_raw(){
+  REMOTE_HOST="$1"
+  REMOTE_SQL="$2"
+  $MYSQL_BIN --user=$BACKUP_USER --password=$BACKUP_PASS --host=$REMOTE_HOST --port=$PORT --protocol=TCP -e "$REMOTE_SQL" 2>/dev/null
+}
+
+record_clone_details(){
+  DETAIL_FILE="$META_DIR/${START_TIME}.clone_detail"
+  {
+    echo "timestamp=${START_TIME}"
+    echo "hostname=${LOCAL_HOST}"
+    echo "ip=${LOCAL_IP}"
+    echo "mysql_version=${MYSQL_VERSION}"
+    echo "topology=${TOPOLOGY}"
+    echo "role=${ROLE}"
+    echo "clone_dir=${CLONE_DIR}"
+    echo ""
+    echo "== performance_schema.clone_progress =="
+    mysql_query_raw "select * from performance_schema.clone_progress"
+    echo ""
+    echo "== performance_schema.clone_status =="
+    mysql_query_raw "select * from performance_schema.clone_status"
+  } > "$DETAIL_FILE"
+
+  if [ -d "$CLONE_DIR" ]; then
+    cp "$DETAIL_FILE" "$CLONE_DIR/clone_detail.txt" 2>/dev/null || true
+  fi
+}
+
+prepare(){
+  mkdir -p "$INSTANCE_DIR" "$TMP_DIR" "$BINLOG_DIR"
+  if [ -e "$SNAPSHOT_DIR" ]; then
+    if [ -d "$SNAPSHOT_DIR" ] && [ -z "$(ls -A "$SNAPSHOT_DIR" 2>/dev/null)" ]; then
+      rmdir "$SNAPSHOT_DIR" 2>/dev/null || true
+    else
+      log "snapshot dir exists: $SNAPSHOT_DIR"
+      exit 2
+    fi
+  fi
+  mkdir -p "$SNAPSHOT_DIR" "$META_DIR"
+  if [ -e "$CLONE_DIR" ]; then
+    log "clone dir exists: $CLONE_DIR"
+    exit 2
+  fi
+  if [ ! -f "$BINLOG_INDEX_FILE" ]; then
+    touch "$BINLOG_INDEX_FILE"
+  fi
+}
+
+check_mysql(){
+  if ! $MYSQL_BIN $CONNECT -e "select 1" >/dev/null 2>&1; then
+    log "mysql_${PORT} login failed"
+    exit 2
+  fi
+  DATA_DIR=$(mysql_query "select @@datadir")
+  if [ -z "$DATA_DIR" ]; then
+    log "mysql_${PORT} failed to get datadir"
+    exit 2
+  fi
+  MYSQL_VERSION=$(mysql_query "select @@version" | tr -d '\n' | tr -d ' ')
+  if [ -z "$MYSQL_VERSION" ]; then
+    log "mysql_${PORT} failed to get version"
+    exit 2
+  fi
+  LOCAL_REPORT_HOST=$(mysql_query "select @@report_host")
+  LOCAL_MYSQL_HOST=$(mysql_query "select @@hostname")
+  if [ -f "$DATA_DIR/nobackup" ]; then
+    log "mysql_${PORT} is set to nobackup"
+    exit 2
+  fi
+}
+
+detect_topology(){
+  if [ "$BACKUP_TOPOLOGY" != "auto" ]; then
+    TOPOLOGY="$BACKUP_TOPOLOGY"
+    return
+  fi
+  MGR_COUNT=$(mysql_query "select count(*) from performance_schema.replication_group_members")
+  if [ -n "$MGR_COUNT" ] && [ "$MGR_COUNT" -gt 0 ]; then
+    META_COUNT=$(mysql_query "select count(*) from information_schema.schemata where schema_name='mysql_innodb_cluster_metadata'")
+    if [ -n "$META_COUNT" ] && [ "$META_COUNT" -gt 0 ]; then
+      TOPOLOGY="mic"
+    else
+      TOPOLOGY="mgr"
+    fi
+    return
+  fi
+  if $MYSQL_BIN $CONNECT -e "show replica status\\G" 2>/dev/null | grep -q "Replica_IO_State"; then
+    TOPOLOGY="ms"
+  else
+    TOPOLOGY="single"
+  fi
+}
+
+detect_role(){
+  ROLE="primary"
+  case "$TOPOLOGY" in
+    mgr|mic)
+      MEMBER_ROLE=$(mysql_query "select member_role from performance_schema.replication_group_members where member_id=@@server_uuid")
+      if [ -z "$MEMBER_ROLE" ]; then
+        log "mysql_${PORT} failed to get member_role"
+        exit 2
+      fi
+      if [ "$MEMBER_ROLE" = "PRIMARY" ]; then
+        ROLE="primary"
+      else
+        ROLE="replica"
+      fi
+      ;;
+    ms)
+      if $MYSQL_BIN $CONNECT -e "show replica status\\G" 2>/dev/null | grep -q "Replica_IO_State"; then
+        ROLE="replica"
+      else
+        ROLE="primary"
+      fi
+      ;;
+    single)
+      ROLE="primary"
+      ;;
+  esac
+}
+
+match_host(){
+  if [ "$1" = "$LOCAL_IP" ] || [ "$1" = "$LOCAL_HOST" ] || [ "$1" = "$INVENTORY_HOST" ]; then
+    return 0
+  fi
+  if [ -n "$LOCAL_REPORT_HOST" ] && [ "$1" = "$LOCAL_REPORT_HOST" ]; then
+    return 0
+  fi
+  if [ -n "$LOCAL_MYSQL_HOST" ] && [ "$1" = "$LOCAL_MYSQL_HOST" ]; then
+    return 0
+  fi
+  return 1
+}
+
+get_primary_host_ms(){
+  if [ "$ROLE" = "primary" ]; then
+    if [ -n "$LOCAL_REPORT_HOST" ]; then
+      echo "$LOCAL_REPORT_HOST"
+    else
+      echo "$LOCAL_IP"
+    fi
+    return
+  fi
+  $MYSQL_BIN $CONNECT -e "show replica status\\G" 2>/dev/null | awk -F': ' '/Source_Host|Master_Host/ {print $2; exit}'
+}
+
+get_replica_list_ms(){
+  if [ "$ROLE" = "primary" ]; then
+    REPLICA_LIST=$(mysql_query "show replicas" | awk '{print $2}')
+    if [ -z "$REPLICA_LIST" ]; then
+      REPLICA_LIST=$(mysql_query "show slave hosts" | awk '{print $2}')
+    fi
+    echo "$REPLICA_LIST"
+    return
+  fi
+
+  if [ -z "$BACKUP_USER" ] || [ -z "$BACKUP_PASS" ]; then
+    return
+  fi
+  PRIMARY_HOST=$(get_primary_host_ms)
+  if [ -z "$PRIMARY_HOST" ]; then
+    return
+  fi
+  REPLICA_LIST=$(mysql_remote_query "$PRIMARY_HOST" "show replicas" | awk '{print $2}')
+  if [ -z "$REPLICA_LIST" ]; then
+    REPLICA_LIST=$(mysql_remote_query "$PRIMARY_HOST" "show slave hosts" | awk '{print $2}')
+  fi
+  echo "$REPLICA_LIST"
+}
+
+is_selected_replica(){
+  if [ -n "$BACKUP_PREFERRED_HOST" ]; then
+    match_host "$BACKUP_PREFERRED_HOST"
+    return $?
+  fi
+
+  if [ "$TOPOLOGY" = "ms" ]; then
+    REPLICA_LIST=$(get_replica_list_ms)
+    if [ -n "$REPLICA_LIST" ]; then
+      PRIMARY_HOST=$(get_primary_host_ms)
+      PRIMARY_GTID=""
+      if [ -n "$PRIMARY_HOST" ]; then
+        PRIMARY_GTID=$(mysql_remote_query "$PRIMARY_HOST" "select @@global.gtid_executed")
+      fi
+
+      BEST_REPLICA=""
+      BEST_LAG=999999
+      for REPLICA in $REPLICA_LIST; do
+        STATUS=$(mysql_remote_query_raw "$REPLICA" "show replica status\\G")
+        IO_RUNNING=$(echo "$STATUS" | awk -F': ' '/Replica_IO_Running:/ {print $2; exit}')
+        SQL_RUNNING=$(echo "$STATUS" | awk -F': ' '/Replica_SQL_Running:/ {print $2; exit}')
+        if [ "$IO_RUNNING" != "Yes" ] || [ "$SQL_RUNNING" != "Yes" ]; then
+          continue
+        fi
+        LAG=$(echo "$STATUS" | awk -F': ' '/Seconds_Behind_Source:/ {print $2; exit}')
+        if [ -z "$LAG" ] || [ "$LAG" = "NULL" ]; then
+          LAG=999999
+        fi
+        if [ -n "$PRIMARY_GTID" ]; then
+          MISSING=$(mysql_remote_query "$REPLICA" "select GTID_SUBTRACT('$PRIMARY_GTID', @@global.gtid_executed)")
+          if [ -z "$MISSING" ]; then
+            LAG=0
+          fi
+        fi
+        if [ -z "$BEST_REPLICA" ] || [ "$LAG" -lt "$BEST_LAG" ] || { [ "$LAG" -eq "$BEST_LAG" ] && [ "$REPLICA" \< "$BEST_REPLICA" ]; }; then
+          BEST_REPLICA="$REPLICA"
+          BEST_LAG="$LAG"
+        fi
+      done
+
+      if [ -n "$BEST_REPLICA" ]; then
+        match_host "$BEST_REPLICA"
+        return $?
+      fi
+    fi
+  fi
+
+  if [ "$TOPOLOGY" = "mgr" ] || [ "$TOPOLOGY" = "mic" ]; then
+    FIRST_SECONDARY=$(mysql_query "select member_host from performance_schema.replication_group_members where member_role='SECONDARY' and member_state='ONLINE' order by member_host limit 1")
+    if [ -n "$FIRST_SECONDARY" ]; then
+      match_host "$FIRST_SECONDARY"
+      return $?
+    fi
+  fi
+
+  return 1
+}
+
+should_backup(){
+  case "$BACKUP_SCOPE" in
+    primary_only)
+      [ "$ROLE" = "primary" ]
+      return $?
+      ;;
+    selected)
+      match_host "$BACKUP_PREFERRED_HOST"
+      return $?
+      ;;
+    replica_all)
+      [ "$ROLE" = "replica" ]
+      return $?
+      ;;
+    replica_one)
+      if [ "$ROLE" = "replica" ]; then
+        is_selected_replica
+        return $?
+      fi
+      return 1
+      ;;
+    all)
+      return 0
+      ;;
+    *)
+      log "invalid backup_scope: $BACKUP_SCOPE"
+      exit 2
+      ;;
+  esac
+}
+
+clone_backup(){
+  log "mysql_${PORT} clone backup start: $CLONE_DIR"
+  CLONE_START=$(date +%s)
+  CLONE_ERR_FILE="$TMP_DIR/clone_${START_TIME}.err"
+  $MYSQL_BIN $CONNECT -e "CLONE LOCAL DATA DIRECTORY = '$CLONE_DIR'" >> "$LOG_FILE" 2> "$CLONE_ERR_FILE"
+  CLONE_MARK=$?
+  CLONE_END=$(date +%s)
+  CLONE_TIME=$((CLONE_END-CLONE_START))
+  if [ -s "$CLONE_ERR_FILE" ]; then
+    grep -v "Using a password on the command line interface can be insecure." "$CLONE_ERR_FILE" >> "$LOG_FILE"
+  fi
+  rm -f "$CLONE_ERR_FILE"
+
+  record_clone_details
+
+  if [ $CLONE_MARK -ne 0 ]; then
+    log "mysql_${PORT} clone backup failed"
+    rm -rf "$CLONE_DIR"
+    exit 2
+  fi
+
+  SNAPSHOT_GTID_RAW=$(mysql_query "select @@global.gtid_executed")
+  SNAPSHOT_GTID=$(printf '%s' "$SNAPSHOT_GTID_RAW" | tr -d '\n' | tr -d ' ')
+  MASTER_STATUS=$(mysql_query "show binary log status")
+  if [ -z "$MASTER_STATUS" ]; then
+    MASTER_STATUS=$(mysql_query "show master status")
+  fi
+  BINLOG_FILE=$(echo "$MASTER_STATUS" | awk '{print $1}')
+  BINLOG_POS=$(echo "$MASTER_STATUS" | awk '{print $2}')
+  if [ -z "$BINLOG_FILE" ]; then
+    log "mysql_${PORT} binlog file not found, PITR will not be available"
+  fi
+
+  log "mysql_${PORT} clone backup success, took ${CLONE_TIME}s, gtid=${SNAPSHOT_GTID}"
+
+  META_FILE="$META_DIR/${START_TIME}.meta"
+  {
+    echo "timestamp=${START_TIME}"
+    echo "hostname=${LOCAL_HOST}"
+    echo "ip=${LOCAL_IP}"
+    echo "mysql_version=${MYSQL_VERSION}"
+    echo "topology=${TOPOLOGY}"
+    echo "role=${ROLE}"
+    echo "gtid_executed=${SNAPSHOT_GTID}"
+    echo "binlog_file=${BINLOG_FILE}"
+    echo "binlog_pos=${BINLOG_POS}"
+    echo "clone_dir=${CLONE_DIR}"
+  } > "$META_FILE"
+
+  cp "$CNF_FILE" "$META_DIR/${START_TIME}.cnf" 2>/dev/null
+}
+
+backup_binlog(){
+  BINLOG_INDEX=$(mysql_query "show variables like 'log_bin_index'" | awk '{print $2}')
+  BINLOG_BASE=$(mysql_query "show variables like 'log_bin_basename'" | awk '{print $2}')
+  if [ -z "$BINLOG_INDEX" ] || [ -z "$BINLOG_BASE" ]; then
+    log "mysql_${PORT} binlog not enabled, skip"
+    return
+  fi
+
+  $MYSQL_BIN $CONNECT -e "flush binary logs" >/dev/null 2>/dev/null
+  BINLOG_ACTIVE=$(mysql_query "show binary log status" | awk '{print $1}')
+  if [ -z "$BINLOG_ACTIVE" ]; then
+    BINLOG_ACTIVE=$(mysql_query "show master status" | awk '{print $1}')
+  fi
+
+  BINLOG_DIR_PATH=$(dirname "$BINLOG_BASE")
+  awk '{print $1}' "$BINLOG_INDEX_FILE" | sort -u > "$TMP_DIR/local.txt"
+  sed 's#.*/##' "$BINLOG_INDEX" > "$TMP_DIR/index.txt"
+  grep -F -v -f "$TMP_DIR/local.txt" "$TMP_DIR/index.txt" > "$TMP_DIR/missing.txt"
+
+  if [ ! -s "$TMP_DIR/missing.txt" ]; then
+    log "mysql_${PORT} no new binlog to backup"
+    return
+  fi
+  if [ -n "$BINLOG_ACTIVE" ]; then
+    grep -F -v "$BINLOG_ACTIVE" "$TMP_DIR/missing.txt" > "$TMP_DIR/missing.txt.new"
+    mv "$TMP_DIR/missing.txt.new" "$TMP_DIR/missing.txt"
+  fi
+  if [ ! -s "$TMP_DIR/missing.txt" ]; then
+    log "mysql_${PORT} no completed binlog to backup (active=${BINLOG_ACTIVE})"
+    return
+  fi
+
+  log "mysql_${PORT} binlog backup start"
+  log "mysql_${PORT} binlog backup files: $(tr '\n' ' ' < "$TMP_DIR/missing.txt")"
+  BINLOG_START=$(date +%s)
+  BINLOG_MARK=0
+  while read -r BINLOG_FILE; do
+    if [ -z "$BINLOG_FILE" ]; then
+      continue
+    fi
+    cp "${BINLOG_DIR_PATH}/${BINLOG_FILE}" "$BINLOG_DIR" 2>> "$LOG_FILE"
+    if [ $? -eq 0 ]; then
+      echo "${BINLOG_FILE} ${START_TIME}" >> "$BINLOG_INDEX_FILE"
+    else
+      BINLOG_MARK=1
+      log "mysql_${PORT} binlog backup failed: ${BINLOG_FILE}"
+    fi
+  done < "$TMP_DIR/missing.txt"
+  BINLOG_END=$(date +%s)
+  BINLOG_TIME=$((BINLOG_END-BINLOG_START))
+
+  if [ $BINLOG_MARK -eq 0 ]; then
+    log "mysql_${PORT} binlog backup success, took ${BINLOG_TIME}s"
+  else
+    log "mysql_${PORT} binlog backup finished with errors"
+  fi
+}
+
+main(){
+  prepare
+  check_mysql
+  detect_topology
+  detect_role
+
+  log "mysql_${PORT} backup start"
+  clone_backup
+  backup_binlog
+  log "mysql_${PORT} backup end"
+}
+
+main

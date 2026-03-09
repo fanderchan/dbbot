@@ -1,0 +1,11 @@
+listen_address: "{{ mysqlrouter_exporter_listen_address }}:{{ mysqlrouter_exporter_port }}"
+metrics_path: "{{ mysqlrouter_exporter_metrics_path }}"
+api_base_url: "{{ mysqlrouter_exporter_api_base_url }}"
+api_user: "{{ mysqlrouter_exporter_api_user }}"
+api_password: "{{ mysqlrouter_exporter_api_password }}"
+timeout_seconds: {{ mysqlrouter_exporter_timeout_seconds }}
+insecure_skip_verify: {{ mysqlrouter_exporter_insecure_skip_verify | bool }}
+collect_route_connections: {{ mysqlrouter_exporter_collect_route_connections | bool }}
+router_config_file: "{{ mysqlrouter_exporter_router_config_file }}"
+listener_check_enabled: {{ mysqlrouter_exporter_listener_check_enabled | bool }}
+listener_check_timeout_seconds: {{ mysqlrouter_exporter_listener_check_timeout_seconds }}

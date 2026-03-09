@@ -1,0 +1,56 @@
+- name: Build fast-login aliases for current physical host
+  ansible.builtin.set_fact:
+    clickhouse_fast_login_aliases: >-
+      {%- set aliases = [] -%}
+      {%- for n in (clickhouse_all_nodes | default([]) | sort(attribute='instance_id')) -%}
+      {%- if n.ip == ck_physical_host -%}
+      {%- set node_port = (hostvars[n.name].clickhouse_tcp_port
+          | default((clickhouse_tcp_port_base | default(9000) | int) + (n.instance_id | int - 1))) | int -%}
+      {%- set alias_name = (fcs_create_clickhouse_fast_login_name_prefix | default('db')) ~ (node_port | string) -%}
+      {%- set _ = aliases.append({'name': alias_name, 'port': node_port}) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ aliases }}
+
+- name: Validate fast-login alias list is not empty
+  ansible.builtin.assert:
+    that:
+      - clickhouse_fast_login_aliases | length > 0
+    fail_msg: "No local ClickHouse instances were discovered for fast-login alias generation."
+
+- name: Set fast-login file paths
+  ansible.builtin.set_fact:
+    clickhouse_fast_login_home_dir: "/home/{{ clickhouse_user }}"
+    clickhouse_fast_login_config_dir: "/home/{{ clickhouse_user }}/.clickhouse-client"
+    clickhouse_fast_login_config_file: "/home/{{ clickhouse_user }}/.clickhouse-client/config.xml"
+
+- name: Ensure clickhouse-client config directory exists
+  ansible.builtin.file:
+    path: "{{ clickhouse_fast_login_config_dir }}"
+    state: directory
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0700'
+
+- name: Write clickhouse-client fast-login config
+  ansible.builtin.template:
+    src: clickhouse-client-fast-login.xml.j2
+    dest: "{{ clickhouse_fast_login_config_file }}"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0600'
+  no_log: true
+
+- name: Install fast-login aliases into clickhouse .bashrc
+  ansible.builtin.blockinfile:
+    path: "{{ clickhouse_fast_login_home_dir }}/.bashrc"
+    create: true
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0644'
+    marker: "# {mark} DBBOT CLICKHOUSE FAST LOGIN"
+    block: |
+      # Managed by dbbot: ClickHouse fast-login aliases
+      {% for item in clickhouse_fast_login_aliases %}
+      alias {{ item.name }}='clickhouse-client --config-file={{ clickhouse_fast_login_config_file }} --host={{ fcs_clickhouse_fast_login_host | default("127.0.0.1") }} --port={{ item.port }}'
+      {% endfor %}

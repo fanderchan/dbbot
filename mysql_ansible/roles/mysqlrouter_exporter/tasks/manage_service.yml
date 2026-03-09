@@ -1,0 +1,15 @@
+- name: Create mysqlrouter_exporter systemd service
+  ansible.builtin.template:
+    src: mysqlrouter_exporter.service.j2
+    dest: "{{ mysqlrouter_exporter_service_file }}"
+    mode: '0644'
+  notify:
+    - Reload systemd
+    - Restart mysqlrouter_exporter
+
+- name: Start and enable mysqlrouter_exporter service
+  ansible.builtin.systemd:
+    name: mysqlrouter_exporter
+    enabled: true
+    state: started
+    daemon_reload: true

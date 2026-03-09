@@ -1,0 +1,28 @@
+- name: Fail if mysql version is not 8.0.x or 8.4.x
+  ansible.builtin.fail:
+    msg: "group replication install playbook only support 8.0.x or 8.4.x!"
+  when: not (mysql_version.startswith('8.0') or mysql_version.startswith('8.4'))
+
+- name: Check is mysqld install by dbbot or not
+  ansible.builtin.stat:
+    path: "{{ datadir }}/single_finish.flag"
+  register: make_mgr__p
+
+# - debug: var=make_mgr__p
+- name: Fail if flag not exists
+  ansible.builtin.fail:
+    msg: "Pls install_master_slaves first!"
+  when: not make_mgr__p.stat.exists
+
+- name: Config group replication
+  ansible.builtin.import_tasks: config_group_replication.yml
+
+# - name: Set GreatSQL HA
+#  ansible.builtin.import_tasks: use_greatsql_ha.yml
+#  when: fcs_use_greatsql_ha and db_type == 'greatsql' and make_mgr_role_included is defined and make_mgr_role_included
+
+- name: Touch group_replication_finish.flag
+  ansible.builtin.file:
+    path: "{{ datadir }}/group_replication_finish.flag"
+    state: touch
+    mode: '0644'

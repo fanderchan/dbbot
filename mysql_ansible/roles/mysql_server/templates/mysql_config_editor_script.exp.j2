@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+
+set password "{{ mysql_admin_password }}"
+
+set username "{{ mysql_admin_user }}"
+
+spawn {{mysql_software_dir}}/bin/mysql_config_editor set --login-path={{ fcs_create_mysql_fast_login_name }} --host=localhost --socket={{ socket }}  --user=$username --password
+
+expect "Enter password: "
+send "$password\r"
+expect eof

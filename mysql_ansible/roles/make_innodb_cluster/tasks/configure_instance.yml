@@ -1,0 +1,22 @@
+---
+# Configure MySQL instance for InnoDB Cluster using MySQL Shell
+
+- name: Create configure instance script
+  ansible.builtin.template:
+    src: configure_instance.js.j2
+    dest: /tmp/configure_instance.js
+    mode: '0600'
+
+- name: Configure instance for InnoDB Cluster
+  ansible.builtin.command: >
+    {{ mysqlsh_path }} --no-wizard --js -f /tmp/configure_instance.js
+  register: make_innodb_cluster__configure_result
+  changed_when: "'already valid for InnoDB Cluster' not in make_innodb_cluster__configure_result.stdout"
+  failed_when:
+    - make_innodb_cluster__configure_result.rc != 0
+    - "'already valid' not in make_innodb_cluster__configure_result.stdout"
+
+- name: Remove configure script
+  ansible.builtin.file:
+    path: /tmp/configure_instance.js
+    state: absent

@@ -1,0 +1,38 @@
+- name: Check if node_exporter package exists (dbbot server)
+  ansible.builtin.stat:
+    path: "{{ mysql_packages_dir }}/{{ node_exporter_package }}"
+  register: node_exporter_package_file
+  when: node_exporter_install
+  run_once: true
+  delegate_to: localhost
+
+- name: Fail if node_exporter package not found and auto download is disabled
+  ansible.builtin.fail:
+    msg: "node_exporter package not found and auto download is disabled"
+  when:
+    - node_exporter_install
+    - not node_exporter_package_file.stat.exists
+    - not fcs_auto_download_packages | bool
+    - node_exporter_install_type == 'package'
+  run_once: true
+  delegate_to: localhost
+
+
+- name: Check if mysqld_exporter package exists (dbbot server)
+  ansible.builtin.stat:
+    path: "{{ mysql_packages_dir }}/{{ mysqld_exporter_package }}"
+  register: mysqld_exporter_package_file
+  when: mysqld_exporter_install
+  run_once: true
+  delegate_to: localhost
+
+- name: Fail if mysqld_exporter package not found and auto download is disabled
+  ansible.builtin.fail:
+    msg: "mysqld_exporter package not found and auto download is disabled"
+  when:
+    - mysqld_exporter_install
+    - not mysqld_exporter_package_file.stat.exists
+    - not fcs_auto_download_packages | bool
+    - mysqld_exporter_install_type == 'package'
+  run_once: true
+  delegate_to: localhost

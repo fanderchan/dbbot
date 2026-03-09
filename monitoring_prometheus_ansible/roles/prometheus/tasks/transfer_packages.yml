@@ -1,0 +1,7 @@
+- name: Transfer prometheus install package to remote host
+  ansible.builtin.copy:
+    src: "{{ packages_dir }}/{{ prometheus_package }}"
+    dest: /tmp
+    mode: '0755'
+    owner: "{{ prometheus_run_user }}"
+    group: "{{ prometheus_run_user_group }}"

@@ -1,0 +1,12 @@
+- name: Copy mysqld_exporter binary to target server (for pmm or dbbot)
+  ansible.builtin.copy:
+    src: "{% if mysqld_exporter_install_type == 'pmm' %}../files/pmm/mysqld_exporter{% elif mysqld_exporter_install_type == 'dbbot' %}../files/dbbot/mysqld_exporter{% endif %}"
+    dest: "{{ mysqld_exporter_install_dir }}/mysqld_exporter"
+    owner: "{{ mysqld_exporter_run_user | default('root') }}"
+    group: "{{ mysqld_exporter_run_user_group | default('root') }}"
+    mode: '0755'
+  when:
+    - not (mysqld_exporter_installed | default(false))
+    - mysqld_exporter_install_type in ['pmm', 'dbbot']
+  notify:
+    - Restart mysqld_exporter

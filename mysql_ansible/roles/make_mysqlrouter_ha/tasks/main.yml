@@ -1,0 +1,63 @@
+---
+# MySQL Router HA Role - Setup Keepalived for Router High Availability
+
+- name: Determine current node role and priority
+  ansible.builtin.set_fact:
+    router_current_node_role: "{{ (router_ha_nodes | selectattr('ip', 'equalto', ansible_default_ipv4.address) | first).role }}"
+    router_current_node_priority: "{{ (router_ha_nodes | selectattr('ip', 'equalto', ansible_default_ipv4.address) | first).priority }}"
+
+- name: Ensure Router health log directory exists
+  ansible.builtin.file:
+    path: "{{ router_health_log_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure Router health log file exists with safe permissions
+  ansible.builtin.file:
+    path: "{{ router_health_log_file }}"
+    state: touch
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Deploy Router health check script
+  ansible.builtin.template:
+    src: check_mysqlrouter.sh.j2
+    dest: "{{ router_health_check_script }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy Router HA notify script
+  ansible.builtin.template:
+    src: router_keepalived_notify.sh.j2
+    dest: "{{ router_keepalived_notify_script }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install Keepalived
+  ansible.builtin.yum:
+    name: keepalived
+    state: present
+
+- name: Configure Keepalived for Router HA
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart keepalived
+
+- name: Enable and start Keepalived
+  ansible.builtin.systemd:
+    name: keepalived
+    state: started
+    enabled: true
+
+- name: Wait for Keepalived to initialize
+  ansible.builtin.pause:
+    seconds: 3

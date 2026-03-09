@@ -1,0 +1,22 @@
+# MySQL Router Exporter defaults
+
+mysqlrouter_exporter_install: false
+mysqlrouter_exporter_port: 9165
+mysqlrouter_exporter_listen_address: "0.0.0.0"
+mysqlrouter_exporter_metrics_path: "/metrics"
+mysqlrouter_exporter_api_base_url: "https://127.0.0.1:{{ (router_ports.http.port if (router_ports is defined and router_ports.http is defined and router_ports.http.port is defined) else 8443) }}/api/20190715"
+mysqlrouter_exporter_api_user: "{{ router_rest_api_file_user | default('router_api_user') }}"
+mysqlrouter_exporter_api_password: "{{ router_rest_api_file_password | default('Dbbot_' ~ (router_rest_api_file_user | default('router_api_user')) ~ '@8888') }}"
+mysqlrouter_exporter_timeout_seconds: 5
+mysqlrouter_exporter_insecure_skip_verify: true
+mysqlrouter_exporter_collect_route_connections: false
+mysqlrouter_exporter_router_config_file: "{{ '/var/lib/mysqlrouter/mysqlrouter.conf' }}"
+mysqlrouter_exporter_listener_check_enabled: true
+mysqlrouter_exporter_listener_check_timeout_seconds: 1
+
+mysqlrouter_exporter_install_dir: "/usr/local/mysqlrouter_exporter"
+mysqlrouter_exporter_config_file: "/etc/mysqlrouter_exporter/config.yml"
+mysqlrouter_exporter_service_file: "/etc/systemd/system/mysqlrouter_exporter.service"
+mysqlrouter_exporter_run_user: "mysqlrouter"
+mysqlrouter_exporter_run_group: "mysqlrouter"
+mysqlrouter_exporter_binary_path: "{{ role_path }}/files/mysqlrouter_exporter"

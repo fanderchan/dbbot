@@ -1,0 +1,43 @@
+[Unit]
+Description=MySQL Exporter for MySQL instance on port {{ mysql_port }}
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User={{ mysqld_exporter_run_user }}
+Group={{ mysqld_exporter_run_user_group }}
+Type=simple
+WorkingDirectory={{ mysqld_exporter_install_dir }}
+ExecStart={{ mysqld_exporter_install_dir }}/mysqld_exporter \
+  --collect.slave_status \
+  --collect.global_status \
+  --collect.global_variables \
+  --collect.info_schema.query_response_time \
+  --collect.info_schema.innodb_cmp \
+  --collect.info_schema.innodb_cmpmem \
+  --collect.binlog_size \
+  --collect.auto_increment.columns \
+  --collect.engine_innodb_status \
+  --collect.engine_tokudb_status \
+  --collect.info_schema.clientstats \
+  --collect.info_schema.processlist \
+  --collect.info_schema.tables \
+  --collect.perf_schema.eventsstatements \
+  --collect.perf_schema.eventswaits \
+  --collect.perf_schema.file_instances \
+  --collect.perf_schema.file_events \
+  --collect.perf_schema.tablelocks \
+  --collect.perf_schema.indexiowaits \
+  --collect.perf_schema.tableiowaits \
+{% if mysqld_exporter_topology | default('ms') == 'mgr' %}
+  --collect.perf_schema.replication_group_members \
+  --collect.perf_schema.replication_group_member_stats \
+  --collect.perf_schema.replication_applier_status_by_worker \
+{% endif %}
+  --collect.info_schema.innodb_metrics \
+  --config.my-cnf={{ mysqld_exporter_install_dir }}/.my.cnf \
+  --web.listen-address=:{{ mysqld_exporter_port_resolved | int }}
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+- name: Check if multiple packages exist in ../downloads/ (local)
+  vars:
+    packages:
+      - "{{ prometheus_package }}"
+      - "{{ grafana_package }}"
+      - "{{ alertmanager_package }}"
+  block:
+    - name: Check if {{ item }} exists in ../downloads/
+      command: find ../downloads/ -type f -name "{{ item }}"
+      register: find_result
+      failed_when: find_result.stdout == ""
+      changed_when: false
+      run_once: true
+      delegate_to: localhost
+      loop: "{{ packages }}"

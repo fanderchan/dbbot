@@ -1,0 +1,9 @@
+- name: Transfer create_mha_user.sql to master
+  ansible.builtin.template:
+    src: ../templates/create_mha_user.sql.j2
+    dest: /tmp/create_mha_user.sql
+    mode: '0600'
+
+- name: Create mha user in mysql(master)
+  ansible.builtin.shell: "{{ mysql_software_dir }}/bin/mysql -h127.0.0.1 -P{{ mysql_port }} -u{{ mysql_admin_user }} -p{{ mysql_admin_127_password }} < /tmp/create_mha_user.sql"
+  changed_when: true

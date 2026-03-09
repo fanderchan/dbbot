@@ -1,0 +1,19 @@
+- name: Ensure mysqld_exporter group exists
+  ansible.builtin.group:
+    name: "{{ mysqld_exporter_run_user_group }}"
+    state: present
+
+- name: Create mysqld_exporter user if it does not exist
+  ansible.builtin.user:
+    name: "{{ mysqld_exporter_run_user }}"
+    group: "{{ mysqld_exporter_run_user_group }}"
+    system: true
+    state: present
+
+- name: Create mysqld_exporter installation directory on target server
+  ansible.builtin.file:
+    path: "{{ mysqld_exporter_install_dir }}"
+    state: directory
+    owner: "{{ mysqld_exporter_run_user }}"
+    group: "{{ mysqld_exporter_run_user_group }}"
+    mode: '0755'

@@ -1,0 +1,17 @@
+- name: Create systemd config file
+  ansible.builtin.template:
+    src: ../templates/mysql.service.j2
+    dest: /usr/lib/systemd/system/{{ mysql_service_name }}.service
+    mode: '0644'
+
+- name: Start mysql(sytemctl)
+  ansible.builtin.systemd:
+    name: "{{ mysql_service_name }}"
+    state: started
+    daemon_reload: true
+
+- name: Config mysql.service start up on boot
+  ansible.builtin.systemd:
+    name: "{{ mysql_service_name }}"
+    enabled: true
+    daemon_reload: true

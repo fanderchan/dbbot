@@ -1,0 +1,147 @@
+---
+- name: Mount NFS Backup Disk On ClickHouse Nodes Without fstab
+  hosts: clickhouse_backup:clickhouse_cluster
+  become: true
+  gather_facts: true
+  vars_files:
+    - vars/common_config.yml
+    - vars/cluster_config.yml
+  vars:
+    # 文档默认值使用 RFC 5737 示例地址，生产前请改为真实 NFS 服务端。
+    nfs_server_ip: "192.0.2.20"
+    nfs_export_dir: "/srv/nfs/clickhouse_backup"
+    nfs_mount_point: "/backup"
+    nfs_mount_opts: "rw,sync,hard,timeo=600,retrans=2,_netdev"
+    nfs_mount_script: "/usr/local/sbin/mount_clickhouse_backup_nfs.sh"
+    nfs_mount_log: "/var/log/mount_clickhouse_backup_nfs.log"
+    backup_mount_require_inventory_guard: true
+    backup_mount_inventory_guard_keyword: "backup"
+    backup_mount_require_inventory_purpose_guard: true
+    backup_mount_inventory_purpose: "backup"
+
+  pre_tasks:
+    - name: Validate dedicated backup inventory filename guard
+      ansible.builtin.assert:
+        that:
+          - not backup_mount_require_inventory_guard | bool or ((inventory_file | default('') | lower) is search(backup_mount_inventory_guard_keyword | lower))
+        fail_msg: >-
+          setup_nfs_client_mount_rc_local.yml requires a dedicated backup inventory by default.
+          current_inventory={{ inventory_file | default('unknown') }},
+          expected_keyword={{ backup_mount_inventory_guard_keyword }}.
+          Please use inventory/hosts.backup.ini or inventory/hosts.dr_backup.ini.
+      run_once: true
+
+    - name: Validate backup inventory purpose guard
+      ansible.builtin.assert:
+        that:
+          - not backup_mount_require_inventory_purpose_guard | bool or ((dbbot_inventory_purpose | default('') | lower) == (backup_mount_inventory_purpose | lower))
+        fail_msg: >-
+          setup_nfs_client_mount_rc_local.yml requires dbbot_inventory_purpose={{ backup_mount_inventory_purpose }}.
+          current_inventory={{ inventory_file | default('unknown') }},
+          dbbot_inventory_purpose={{ dbbot_inventory_purpose | default('unset') }}.
+      run_once: true
+
+    - name: Import tasks to parse topology
+      ansible.builtin.import_tasks: pre_tasks/parse_topology.yml
+
+    - name: Import tasks to check OS and Python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+  tasks:
+    - name: Configure NFS mount once per physical host
+      when: ck_run_host_tasks | default(true) | bool
+      block:
+        - name: Install NFS client packages
+          ansible.builtin.package:
+            name: nfs-utils
+            state: present
+
+        - name: Check whether mount point is currently mounted
+          ansible.builtin.command: "findmnt -T {{ nfs_mount_point }}"
+          register: nfs_mount_findmnt_result
+          failed_when: false
+          changed_when: false
+
+        - name: Probe mount point path readability
+          ansible.builtin.command: "stat {{ nfs_mount_point }}"
+          register: nfs_mount_stat_result
+          failed_when: false
+          changed_when: false
+
+        - name: Auto-heal stale NFS mount handle before ensuring mount directory
+          ansible.builtin.command: "umount -lf {{ nfs_mount_point }}"
+          register: nfs_stale_umount_result
+          when:
+            - nfs_mount_findmnt_result.rc == 0
+            - nfs_mount_stat_result.rc != 0
+          changed_when: nfs_stale_umount_result.rc == 0
+          failed_when: >-
+            (nfs_stale_umount_result.rc != 0) and
+            ('not mounted' not in (((nfs_stale_umount_result.stderr | default('')) ~ ' ' ~ (nfs_stale_umount_result.stdout | default(''))) | lower))
+
+        - name: Ensure NFS mount directory exists
+          ansible.builtin.file:
+            path: "{{ nfs_mount_point }}"
+            state: directory
+            owner: root
+            group: root
+            mode: "0755"
+
+        - name: Deploy NFS mount script
+          ansible.builtin.copy:
+            dest: "{{ nfs_mount_script }}"
+            mode: "0755"
+            content: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+
+              SRC="{{ nfs_server_ip }}:{{ nfs_export_dir }}"
+              DST="{{ nfs_mount_point }}"
+              OPTS="{{ nfs_mount_opts }}"
+
+              mkdir -p "${DST}"
+
+              if mountpoint -q "${DST}"; then
+                exit 0
+              fi
+
+              mount -t nfs -o "${OPTS}" "${SRC}" "${DST}"
+
+        - name: Ensure rc.local exists
+          ansible.builtin.file:
+            path: /etc/rc.d/rc.local
+            state: touch
+            owner: root
+            group: root
+            mode: "0755"
+
+        - name: Ensure rc.local runs NFS mount script
+          ansible.builtin.lineinfile:
+            path: /etc/rc.d/rc.local
+            regexp: '^/usr/local/sbin/mount_clickhouse_backup_nfs\.sh\b'
+            line: "{{ nfs_mount_script }} >>{{ nfs_mount_log }} 2>&1"
+            insertafter: EOF
+
+        - name: Ensure rc-local service is enabled when available
+          ansible.builtin.systemd:
+            name: rc-local
+            enabled: true
+          failed_when: false
+
+        - name: Mount NFS immediately
+          ansible.builtin.command: "{{ nfs_mount_script }}"
+          changed_when: false
+
+        - name: Verify NFS mount exists
+          ansible.builtin.command: "mountpoint {{ nfs_mount_point }}"
+          register: nfs_mountpoint_result
+          changed_when: false
+
+        - name: Show mount line
+          ansible.builtin.shell: "mount | grep ' {{ nfs_mount_point }} '"
+          register: nfs_mount_line
+          changed_when: false
+
+        - name: Display mount summary
+          ansible.builtin.debug:
+            msg: "{{ nfs_mount_line.stdout }}"

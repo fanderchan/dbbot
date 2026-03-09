@@ -1,0 +1,880 @@
+---
+- name: Run Enterprise ClickHouse Restore (by backup manifest)
+  hosts: clickhouse_restore:clickhouse_cluster
+  become: true
+  any_errors_fatal: true
+  serial: "{{ restore_serial | default('100%') }}"
+  vars_files:
+    - vars/common_config.yml
+    - vars/cluster_config.yml
+    - vars/backup_config.yml
+    - vars/restore_config.yml
+
+  pre_tasks:
+    - name: Validate restore batch id is configured
+      ansible.builtin.assert:
+        that:
+          - restore_batch_id | trim | length > 0
+        fail_msg: "Please set restore_batch_id in vars/restore_config.yml or via -e."
+      run_once: true
+
+    - name: Validate dedicated restore inventory guard (run once)
+      ansible.builtin.assert:
+        that:
+          - not restore_require_inventory_guard | bool or ((inventory_file | default('') | lower) is search(restore_inventory_guard_keyword | lower))
+        fail_msg: >-
+          restore_cluster.yml requires a dedicated restore inventory by default.
+          current_inventory={{ inventory_file | default('unknown') }}.
+          Please use inventory/hosts.restore.ini or set restore_require_inventory_guard=false.
+      run_once: true
+
+    - name: Validate restore inventory purpose guard (run once)
+      ansible.builtin.assert:
+        that:
+          - not restore_require_inventory_purpose_guard | bool or ((dbbot_inventory_purpose | default('') | lower) == (restore_inventory_purpose | lower))
+        fail_msg: >-
+          restore_cluster.yml requires dbbot_inventory_purpose={{ restore_inventory_purpose }}.
+          current_inventory={{ inventory_file | default('unknown') }},
+          dbbot_inventory_purpose={{ dbbot_inventory_purpose | default('unset') }}.
+          Please use inventory/hosts.restore.ini or set restore_require_inventory_purpose_guard=false.
+      run_once: true
+
+    - name: Import tasks to validate common configuration
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    - name: Set effective restore confirmation phrase (run once)
+      ansible.builtin.set_fact:
+        restore_confirm_phrase_effective: >-
+          {{
+            restore_confirm_phrase
+            if (restore_confirm_phrase | default('') | trim | length > 0)
+            else ('RESTORE ' ~ restore_batch_id)
+          }}
+      run_once: true
+
+    - name: Manual confirmation before restore (run once)
+      ansible.builtin.pause:
+        prompt: |-
+          [MANUAL CONFIRM REQUIRED]
+          inventory={{ inventory_file | default('unknown') }}
+          restore_batch_id={{ restore_batch_id }}
+          target_group=clickhouse_restore|clickhouse_cluster
+          Type exactly "{{ restore_confirm_phrase_effective }}" to continue:
+      register: restore_manual_confirm_input
+      delegate_to: localhost
+      become: false
+      when: restore_require_manual_confirm | bool
+      run_once: true
+
+    - name: Validate restore confirmation phrase (run once)
+      ansible.builtin.assert:
+        that:
+          - (restore_manual_confirm_input.user_input | default('') | trim) == (restore_confirm_phrase_effective | trim)
+        fail_msg: >-
+          Manual confirmation failed.
+          Expected: {{ restore_confirm_phrase_effective }}
+      when: restore_require_manual_confirm | bool
+      run_once: true
+
+    - name: Import tasks to parse topology
+      ansible.builtin.import_tasks: pre_tasks/parse_topology.yml
+
+    - name: Import tasks to check OS and Python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Calculate ClickHouse TCP port based on instance id (when not explicitly set)
+      ansible.builtin.set_fact:
+        clickhouse_tcp_port: "{{ (clickhouse_tcp_port_base | default(9000) | int) + (current_node_instance_id | int - 1) }}"
+      when: clickhouse_tcp_port is not defined
+
+    - name: Validate full cluster scope when partial restore is disabled
+      ansible.builtin.assert:
+        that:
+          - restore_allow_partial_cluster | bool or ((ansible_play_hosts_all | length) == (groups['clickhouse_cluster'] | default([]) | length))
+        fail_msg: "restore_cluster.yml requires full clickhouse_cluster scope. Remove --limit or set restore_allow_partial_cluster=true."
+      run_once: true
+
+    - name: Validate playbook is not running in check mode
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+        fail_msg: "restore_cluster.yml does not support --check (contains async/polling restore workflow)."
+      run_once: true
+
+    - name: Set restore run id (run once)
+      ansible.builtin.set_fact:
+        restore_run_id_effective: >-
+          {{
+            restore_run_id
+            if (restore_run_id | default('') | trim | length > 0)
+            else (lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ') ~ '_restore')
+          }}
+      run_once: true
+
+    - name: Set restore manifest file path (run once)
+      ansible.builtin.set_fact:
+        restore_manifest_file_effective: >-
+          {{
+            restore_manifest_file
+            if (restore_manifest_file | default('') | trim | length > 0)
+            else (playbook_dir ~ '/../artifacts/manifests/backup/' ~ restore_batch_id ~ '.json')
+          }}
+      run_once: true
+
+    - name: Check restore manifest file exists on control host (run once)
+      ansible.builtin.stat:
+        path: "{{ restore_manifest_file_effective }}"
+      register: restore_manifest_file_stat
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Validate restore manifest file exists
+      ansible.builtin.assert:
+        that:
+          - restore_manifest_file_stat.stat.exists
+        fail_msg: "Restore manifest not found: {{ restore_manifest_file_effective }}"
+      run_once: true
+
+    - name: Load restore manifest JSON (run once)
+      ansible.builtin.set_fact:
+        restore_manifest_json: "{{ lookup('file', restore_manifest_file_effective) | from_json }}"
+      run_once: true
+
+    - name: Validate restore manifest content
+      ansible.builtin.assert:
+        that:
+          - (restore_manifest_json.manifest_format | default('dbbot.clickhouse.backup_manifest')) == 'dbbot.clickhouse.backup_manifest'
+          - (restore_manifest_json.manifest_version | default(1) | int) == 1
+          - restore_manifest_json.batch_id | default('') | trim == restore_batch_id | trim
+          - restore_manifest_json.results is defined
+          - restore_manifest_json.results | length > 0
+        fail_msg: "Invalid restore manifest content: {{ restore_manifest_file_effective }}"
+      run_once: true
+
+    - name: Validate config snapshots exist in manifest when config restore is enabled
+      ansible.builtin.assert:
+        that:
+          - restore_manifest_json.config_snapshots is defined
+          - restore_manifest_json.config_snapshots | length > 0
+        fail_msg: >-
+          restore_include_config_files=true but no config_snapshots in manifest:
+          {{ restore_manifest_file_effective }}
+      when: restore_include_config_files | bool
+      run_once: true
+
+    - name: Build restore object clause from vars (run once)
+      ansible.builtin.set_fact:
+        restore_object_clause_from_vars: "{{ (restore_db_clauses + restore_table_clauses) | join(', ') }}"
+      vars:
+        restore_db_clauses: "{{ restore_databases | default([]) | map('regex_replace', '^(.*)$', 'DATABASE \\1') | list }}"
+        restore_table_clauses: "{{ restore_tables | default([]) | map('regex_replace', '^(.*)$', 'TABLE \\1') | list }}"
+      run_once: true
+
+    - name: Set effective restore object clause (run once)
+      ansible.builtin.set_fact:
+        restore_object_clause_effective: >-
+          {{
+            restore_object_clause_override
+            if (restore_object_clause_override | default('') | trim | length > 0)
+            else (
+              (restore_manifest_json.backup_object_clause | default(''))
+              if (restore_use_manifest_object_clause | bool)
+              else restore_object_clause_from_vars
+            )
+          }}
+      run_once: true
+
+    - name: Validate effective restore object clause
+      ansible.builtin.assert:
+        that:
+          - restore_object_clause_effective | trim | length > 0
+        fail_msg: >-
+          Restore object clause is empty.
+          Check restore_use_manifest_object_clause / restore_object_clause_override /
+          restore_databases / restore_tables.
+      run_once: true
+
+    - name: Set effective restore disk and cluster name (run once)
+      ansible.builtin.set_fact:
+        restore_storage_disk_effective: >-
+          {{
+            restore_storage_disk
+            if (restore_storage_disk | default('') | trim | length > 0)
+            else (restore_manifest_json.backup_storage_disk | default('backup_nfs'))
+          }}
+        restore_cluster_name_effective: "{{ restore_manifest_json.cluster_name | default(clickhouse_cluster_name) }}"
+      run_once: true
+
+    - name: Set shard list (run once)
+      ansible.builtin.set_fact:
+        restore_shards: "{{ clickhouse_all_nodes | map(attribute='shard') | unique | sort | list }}"
+      run_once: true
+
+    - name: Initialize restore source path map (run once)
+      ansible.builtin.set_fact:
+        restore_source_path_by_shard: {}
+      run_once: true
+
+    - name: Build restore source path map from manifest (run once)
+      ansible.builtin.set_fact:
+        restore_source_path_by_shard: "{{ restore_source_path_by_shard | combine({ (item.shard | string): item.target_rel_path }) }}"
+      loop: "{{ restore_manifest_json.results | default([]) }}"
+      loop_control:
+        label: "shard={{ item.shard | default('?') }}, status={{ item.status | default('?') }}"
+      when:
+        - item.status | default('') == 'BACKUP_CREATED'
+        - item.shard is defined
+        - item.target_rel_path is defined
+      run_once: true
+
+    - name: Validate restore source path coverage
+      ansible.builtin.assert:
+        that:
+          - restore_source_path_by_shard | length > 0
+          - restore_allow_partial_cluster | bool or ((restore_shards | map('string') | difference(restore_source_path_by_shard.keys() | list) | length) == 0)
+        fail_msg: >-
+          Missing restore source path for some shards.
+          restore_shards={{ restore_shards }},
+          available={{ restore_source_path_by_shard.keys() | list }}.
+      run_once: true
+
+    - name: Initialize primary restore host map (run once)
+      ansible.builtin.set_fact:
+        restore_primary_host_by_shard: {}
+      run_once: true
+
+    - name: Select fallback primary restore host per shard (lowest replica) (run once)
+      ansible.builtin.set_fact:
+        restore_primary_host_by_shard: "{{ restore_primary_host_by_shard | combine({ (item | string): selected_host }) }}"
+      vars:
+        shard_nodes: "{{ clickhouse_all_nodes | selectattr('shard', 'equalto', item | int) | sort(attribute='replica') | list }}"
+        selected_host: "{{ shard_nodes[0].name if (shard_nodes | length > 0) else '' }}"
+      loop: "{{ restore_shards }}"
+      loop_control:
+        label: "shard={{ item }}"
+      run_once: true
+
+    - name: Prefer configured replica number when available (run once)
+      ansible.builtin.set_fact:
+        restore_primary_host_by_shard: "{{ restore_primary_host_by_shard | combine({ (item.shard | string): item.name }) }}"
+      loop: "{{ clickhouse_all_nodes | sort(attribute='replica') | list }}"
+      loop_control:
+        label: "host={{ item.name }}, shard={{ item.shard }}, replica={{ item.replica }}"
+      when: item.replica | int == restore_prefer_replica | int
+      run_once: true
+
+    - name: Apply explicit per-shard primary restore host overrides (run once)
+      ansible.builtin.set_fact:
+        restore_primary_host_by_shard: "{{ restore_primary_host_by_shard | combine({ (item.key | string): item.value }) }}"
+      loop: "{{ restore_shard_host_override | default({}) | dict2items }}"
+      loop_control:
+        label: "shard={{ item.key }} -> {{ item.value }}"
+      run_once: true
+
+    - name: Build primary restore nodes list (run once)
+      ansible.builtin.set_fact:
+        restore_primary_nodes: >-
+          {{
+            clickhouse_all_nodes
+            | selectattr('name', 'in', (restore_primary_host_by_shard | dict2items | map(attribute='value') | list))
+            | list
+          }}
+      run_once: true
+
+    - name: Validate primary restore nodes
+      ansible.builtin.assert:
+        that:
+          - restore_primary_host_by_shard | length == restore_shards | length
+          - (restore_primary_host_by_shard | dict2items | selectattr('value', 'ne', '') | list | length) == (restore_shards | length)
+          - restore_primary_nodes | length == restore_shards | length
+          - (restore_primary_nodes | map(attribute='name') | unique | list | length) == (restore_shards | length)
+        fail_msg: "Failed to build primary restore nodes, please check restore_shard_host_override."
+      run_once: true
+
+    - name: Build selected restore nodes (run once)
+      ansible.builtin.set_fact:
+        restore_selected_nodes: "{{ clickhouse_all_nodes if (restore_to_all_replicas | bool) else restore_primary_nodes }}"
+      run_once: true
+
+    - name: Build structure-only restore nodes (run once)
+      ansible.builtin.set_fact:
+        restore_structure_only_nodes: >-
+          {{
+            (clickhouse_all_nodes
+             | rejectattr('name', 'in', (restore_primary_nodes | map(attribute='name') | list))
+             | list)
+            if (restore_to_all_replicas | bool)
+            else []
+          }}
+      run_once: true
+
+    - name: Validate selected restore hosts
+      ansible.builtin.assert:
+        that:
+          - restore_selected_nodes | length > 0
+          - (restore_selected_nodes | map(attribute='name') | unique | list | length) == (restore_selected_nodes | length)
+          - (restore_selected_nodes | map(attribute='shard') | map('string') | unique | difference(restore_source_path_by_shard.keys() | list) | length) == 0
+          - (restore_primary_nodes | map(attribute='shard') | map('string') | unique | difference(restore_source_path_by_shard.keys() | list) | length) == 0
+        fail_msg: "Failed to build restore selected nodes, please check restore_to_all_replicas / restore_shard_host_override / restore manifest."
+      run_once: true
+
+    - name: Initialize restore phase plan (single phase default) (run once)
+      ansible.builtin.set_fact:
+        restore_phase_plan:
+          - name: "single"
+            id_suffix: ""
+            object_clause: "{{ restore_object_clause_effective }}"
+        restore_two_phase_detected_non_mv_tables: []
+        restore_two_phase_detected_mv_tables: []
+        restore_two_phase_scan_unsupported_objects: []
+      run_once: true
+
+    - name: Set two-phase metadata scan host and path (run once)
+      ansible.builtin.set_fact:
+        restore_two_phase_scan_host_effective: >-
+          {{
+            restore_two_phase_scan_host
+            if (restore_two_phase_scan_host | default('') | trim | length > 0)
+            else (restore_selected_nodes[0].name)
+          }}
+        restore_two_phase_scan_source_rel_path: "{{ restore_source_path_by_shard[(restore_shards | first | string)] }}"
+      when: restore_enable_two_phase_mv_compat | bool
+      run_once: true
+
+    - name: Scan backup metadata for MV classification (run once)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        py_bin="$(command -v python3 || command -v python2 || command -v python)"
+        "${py_bin}" - <<'PY'
+        from __future__ import print_function
+        import glob
+        import io
+        import json
+        import os
+        import re
+
+        metadata_dir = os.environ["RESTORE_METADATA_DIR"]
+        object_clause = os.environ.get("RESTORE_OBJECT_CLAUSE", "")
+        if not os.path.isdir(metadata_dir):
+          raise SystemExit("metadata dir not found: {0}".format(metadata_dir))
+
+        object_files = sorted(glob.glob(os.path.join(metadata_dir, "*", "*.sql")))
+        mv_tables = []
+        non_mv_tables = []
+        unsupported_objects = []
+
+        for path in object_files:
+          db = os.path.basename(os.path.dirname(path))
+          table = os.path.splitext(os.path.basename(path))[0]
+          fqn = "{0}.{1}".format(db, table)
+          with io.open(path, "r", encoding="utf-8", errors="ignore") as fh:
+            sql = fh.read(4096)
+          if re.search(r"^\s*CREATE\s+MATERIALIZED\s+VIEW\b", sql, flags=re.IGNORECASE | re.MULTILINE):
+            mv_tables.append(fqn)
+          elif re.search(r"^\s*CREATE\s+(TABLE|VIEW)\b", sql, flags=re.IGNORECASE | re.MULTILINE):
+            non_mv_tables.append(fqn)
+          else:
+            first_line = sql.strip().splitlines()[0] if sql.strip() else ""
+            unsupported_objects.append({
+              "name": fqn,
+              "first_line": first_line[:120]
+            })
+
+        requested_databases = re.findall(r"(?i)\bDATABASE\s+([A-Za-z0-9_]+)", object_clause)
+        requested_tables = re.findall(r"(?i)\bTABLE\s+([A-Za-z0-9_]+\.[A-Za-z0-9_]+)", object_clause)
+        requested_tables_lc = {t.lower() for t in requested_tables}
+        requested_databases_lc = {d.lower() for d in requested_databases}
+
+        if requested_tables_lc:
+          mv_tables = [t for t in mv_tables if t.lower() in requested_tables_lc]
+          non_mv_tables = [t for t in non_mv_tables if t.lower() in requested_tables_lc]
+        elif requested_databases_lc:
+          mv_tables = [t for t in mv_tables if t.split(".", 1)[0].lower() in requested_databases_lc]
+          non_mv_tables = [t for t in non_mv_tables if t.split(".", 1)[0].lower() in requested_databases_lc]
+
+        payload = {
+          "non_mv_tables": sorted(non_mv_tables),
+          "mv_tables": sorted(mv_tables),
+          "unsupported_objects": unsupported_objects,
+        }
+        print(json.dumps(payload, ensure_ascii=True))
+        PY
+      args:
+        executable: /bin/bash
+      environment:
+        RESTORE_METADATA_DIR: "{{ restore_mount_dir }}/{{ restore_two_phase_scan_source_rel_path }}/metadata"
+        RESTORE_OBJECT_CLAUSE: "{{ restore_object_clause_effective }}"
+      register: restore_two_phase_scan_result
+      changed_when: false
+      delegate_to: "{{ restore_two_phase_scan_host_effective }}"
+      run_once: true
+      when: restore_enable_two_phase_mv_compat | bool
+
+    - name: Parse two-phase scan result (run once)
+      ansible.builtin.set_fact:
+        restore_two_phase_scan_json: "{{ restore_two_phase_scan_result.stdout | from_json }}"
+        restore_two_phase_detected_non_mv_tables: "{{ (restore_two_phase_scan_result.stdout | from_json).non_mv_tables | default([]) }}"
+        restore_two_phase_detected_mv_tables: "{{ (restore_two_phase_scan_result.stdout | from_json).mv_tables | default([]) }}"
+        restore_two_phase_scan_unsupported_objects: "{{ (restore_two_phase_scan_result.stdout | from_json).unsupported_objects | default([]) }}"
+      when: restore_enable_two_phase_mv_compat | bool
+      run_once: true
+
+    - name: Validate two-phase scan result when enabled
+      ansible.builtin.assert:
+        that:
+          - restore_two_phase_scan_json is mapping
+        fail_msg: "Failed to parse restore two-phase metadata classification result."
+      when: restore_enable_two_phase_mv_compat | bool
+      run_once: true
+
+    - name: Warn unsupported objects in two-phase scan
+      ansible.builtin.debug:
+        msg:
+          - "Two-phase scan found unsupported objects:"
+          - "{{ restore_two_phase_scan_unsupported_objects }}"
+          - "Will keep using original object clause for unsupported objects."
+      when:
+        - restore_enable_two_phase_mv_compat | bool
+        - restore_two_phase_scan_unsupported_objects | length > 0
+      run_once: true
+
+    - name: Fail on unsupported objects in two-phase scan (optional)
+      ansible.builtin.assert:
+        that:
+          - restore_two_phase_scan_unsupported_objects | length == 0
+        fail_msg: >-
+          Found unsupported objects in backup metadata while two-phase mode is enabled.
+          Set restore_two_phase_fail_on_unsupported_objects=false to continue, or disable two-phase mode.
+      when:
+        - restore_enable_two_phase_mv_compat | bool
+        - restore_two_phase_fail_on_unsupported_objects | bool
+      run_once: true
+
+    - name: Switch to two-phase restore plan when MV exists (run once)
+      ansible.builtin.set_fact:
+        restore_phase_plan: "{{ restore_phase_plan_two_phase }}"
+      vars:
+        restore_non_mv_object_clause: "{{ restore_two_phase_detected_non_mv_tables | map('regex_replace', '^(.*)$', 'TABLE \\1') | join(', ') }}"
+        restore_mv_object_clause: "{{ restore_two_phase_detected_mv_tables | map('regex_replace', '^(.*)$', 'TABLE \\1') | join(', ') }}"
+        restore_phase_plan_two_phase: >-
+          {{
+            ([{'name': 'phase1_non_mv', 'id_suffix': 'p1', 'object_clause': restore_non_mv_object_clause}]
+             if (restore_non_mv_object_clause | trim | length > 0) else [])
+            +
+            ([{'name': 'phase2_mv', 'id_suffix': 'p2mv', 'object_clause': restore_mv_object_clause}]
+             if (restore_mv_object_clause | trim | length > 0) else [])
+          }}
+      when:
+        - restore_enable_two_phase_mv_compat | bool
+        - restore_two_phase_detected_mv_tables | length > 0
+      run_once: true
+
+    - name: Validate restore phase plan
+      ansible.builtin.assert:
+        that:
+          - restore_phase_plan | length > 0
+          - (restore_phase_plan | selectattr('object_clause', 'defined') | list | length) == (restore_phase_plan | length)
+        fail_msg: "restore_phase_plan is empty or invalid."
+      run_once: true
+
+    - name: Build required databases for TABLE-level restore phases (run once)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        py_bin="$(command -v python3 || command -v python2 || command -v python)"
+        "${py_bin}" - <<'PY'
+        from __future__ import print_function
+        import json
+        import os
+        import re
+
+        plan = json.loads(os.environ.get("RESTORE_PHASE_PLAN_JSON", "[]"))
+        databases = set()
+        for phase in plan:
+          clause = phase.get("object_clause", "")
+          for match in re.finditer(r"(?i)\bTABLE\s+([A-Za-z0-9_]+)\.[A-Za-z0-9_]+", clause):
+            databases.add(match.group(1))
+        print(json.dumps(sorted(databases), ensure_ascii=True))
+        PY
+      args:
+        executable: /bin/bash
+      environment:
+        RESTORE_PHASE_PLAN_JSON: "{{ restore_phase_plan | to_json }}"
+      register: restore_precreate_db_scan_result
+      changed_when: false
+      run_once: true
+
+    - name: Set required database list for TABLE-level restore phases (run once)
+      ansible.builtin.set_fact:
+        restore_precreate_databases: "{{ restore_precreate_db_scan_result.stdout | from_json }}"
+      run_once: true
+
+    - name: Ensure required databases exist before TABLE-level restore (run once)
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          --multiquery -q "
+            SET distributed_ddl_output_mode='none';
+            {% for db_name in restore_precreate_databases %}
+            CREATE DATABASE IF NOT EXISTS {{ db_name }} ON CLUSTER '{{ restore_cluster_name_effective }}';
+            {% endfor %}
+          "
+      changed_when: false
+      when: restore_precreate_databases | length > 0
+      run_once: true
+
+    - name: Distribute run-once facts to all hosts
+      ansible.builtin.set_fact:
+        restore_run_id_effective: "{{ hostvars[ansible_play_hosts_all[0]].restore_run_id_effective }}"
+        restore_manifest_file_effective: "{{ hostvars[ansible_play_hosts_all[0]].restore_manifest_file_effective }}"
+        restore_manifest_json: "{{ hostvars[ansible_play_hosts_all[0]].restore_manifest_json }}"
+        restore_object_clause_effective: "{{ hostvars[ansible_play_hosts_all[0]].restore_object_clause_effective }}"
+        restore_storage_disk_effective: "{{ hostvars[ansible_play_hosts_all[0]].restore_storage_disk_effective }}"
+        restore_cluster_name_effective: "{{ hostvars[ansible_play_hosts_all[0]].restore_cluster_name_effective }}"
+        restore_shards: "{{ hostvars[ansible_play_hosts_all[0]].restore_shards }}"
+        restore_source_path_by_shard: "{{ hostvars[ansible_play_hosts_all[0]].restore_source_path_by_shard }}"
+        restore_primary_nodes: "{{ hostvars[ansible_play_hosts_all[0]].restore_primary_nodes }}"
+        restore_selected_nodes: "{{ hostvars[ansible_play_hosts_all[0]].restore_selected_nodes }}"
+        restore_structure_only_nodes: "{{ hostvars[ansible_play_hosts_all[0]].restore_structure_only_nodes }}"
+        restore_phase_plan: "{{ hostvars[ansible_play_hosts_all[0]].restore_phase_plan }}"
+        restore_two_phase_detected_non_mv_tables: "{{ hostvars[ansible_play_hosts_all[0]].restore_two_phase_detected_non_mv_tables }}"
+        restore_two_phase_detected_mv_tables: "{{ hostvars[ansible_play_hosts_all[0]].restore_two_phase_detected_mv_tables }}"
+        restore_precreate_databases: "{{ hostvars[ansible_play_hosts_all[0]].restore_precreate_databases }}"
+
+    - name: Mark whether current host is restore target
+      ansible.builtin.set_fact:
+        restore_selected_for_execution: >-
+          {{ (restore_selected_nodes | selectattr('name', 'equalto', inventory_hostname) | list | length) > 0 }}
+        restore_selected_node_info: >-
+          {{ (restore_selected_nodes | selectattr('name', 'equalto', inventory_hostname) | list | first | default({})) }}
+        restore_execution_mode: >-
+          {{
+            'full'
+            if ((restore_primary_nodes | selectattr('name', 'equalto', inventory_hostname) | list | length) > 0)
+            else (
+              'structure_only'
+              if ((restore_structure_only_nodes | selectattr('name', 'equalto', inventory_hostname) | list | length) > 0)
+              else 'skip'
+            )
+          }}
+
+    - name: Set restore path and execution mode flags for selected hosts
+      ansible.builtin.set_fact:
+        restore_source_rel_path: "{{ restore_source_path_by_shard[current_node_shard | string] }}"
+        restore_structure_only_execution: "{{ restore_execution_mode == 'structure_only' }}"
+      when: restore_selected_for_execution
+
+    - name: Show selected restore topology (run once)
+      ansible.builtin.debug:
+        msg:
+          - "restore_batch_id={{ restore_batch_id }}"
+          - "restore_run_id={{ restore_run_id_effective }}"
+          - "restore_to_all_replicas={{ restore_to_all_replicas }}"
+          - "restore_primary_nodes={{ restore_primary_nodes }}"
+          - "restore_structure_only_nodes={{ restore_structure_only_nodes }}"
+          - "restore_selected_nodes={{ restore_selected_nodes }}"
+          - "restore_phase_plan={{ restore_phase_plan }}"
+          - "restore_precreate_databases={{ restore_precreate_databases }}"
+      run_once: true
+
+  tasks:
+    - name: Check ClickHouse restore disk exists on selected host
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "SELECT count() FROM system.disks WHERE name='{{ restore_storage_disk_effective }}'"
+      register: restore_disk_check
+      changed_when: false
+      failed_when: restore_disk_check.rc != 0 or (restore_disk_check.stdout | trim | int) == 0
+      when: restore_selected_for_execution
+
+    - name: Check restore source path exists on selected host
+      ansible.builtin.shell: |
+        test -d "{{ restore_mount_dir }}/{{ restore_source_rel_path }}"
+      register: restore_source_path_check
+      changed_when: false
+      failed_when: restore_source_path_check.rc != 0
+      when: restore_selected_for_execution
+
+    - name: Initialize restore phase status list
+      ansible.builtin.set_fact:
+        restore_phase_statuses: []
+      when: restore_selected_for_execution
+
+    - name: Execute restore phases on selected host
+      ansible.builtin.include_tasks: tasks/restore_execute_phase.yml
+      loop: "{{ restore_phase_plan }}"
+      loop_control:
+        loop_var: restore_phase
+        label: "{{ restore_phase.name | default('phase') }}"
+      when: restore_selected_for_execution
+
+    - name: Set final restore status from phase results
+      ansible.builtin.set_fact:
+        restore_status_json: "{{ restore_phase_statuses | last | default({}) }}"
+        restore_task_id: "{{ (restore_phase_statuses | last | default({})).id | default('') }}"
+      when: restore_selected_for_execution
+
+    - name: Initialize config-restore status
+      ansible.builtin.set_fact:
+        restore_config_apply_status: "{{ 'disabled' if not (restore_include_config_files | bool) else 'pending' }}"
+        restore_config_apply_error: ""
+
+    - name: Resolve config snapshot record for current host
+      ansible.builtin.set_fact:
+        restore_config_snapshot_record: >-
+          {%- set snaps = restore_manifest_json.config_snapshots | default([]) -%}
+          {%- set by_host = snaps | selectattr('host', 'equalto', inventory_hostname) | list -%}
+          {%- set by_shard_replica = snaps | selectattr('shard', 'equalto', (current_node_shard | int)) | selectattr('replica', 'equalto', (current_node_replica | int)) | list -%}
+          {%- set by_shard_instance = snaps | selectattr('shard', 'equalto', (current_node_shard | int)) | selectattr('instance_id', 'equalto', (current_node_instance_id | int)) | list -%}
+          {{
+            (by_host | first)
+            if (by_host | length > 0)
+            else (
+              (by_shard_replica | first)
+              if (by_shard_replica | length > 0)
+              else ((by_shard_instance | first) if (by_shard_instance | length > 0) else {})
+            )
+          }}
+      when: restore_include_config_files | bool
+
+    - name: Set config snapshot archive path for current host
+      ansible.builtin.set_fact:
+        restore_config_snapshot_rel_archive: "{{ restore_config_snapshot_record.archive_rel_path | default('') }}"
+        restore_config_snapshot_abs_archive: "{{ restore_mount_dir }}/{{ restore_config_snapshot_record.archive_rel_path | default('') }}"
+      when: restore_include_config_files | bool
+
+    - name: Validate config snapshot record for current host
+      ansible.builtin.assert:
+        that:
+          - restore_config_snapshot_record | default({}) | length > 0
+        fail_msg: >-
+          No matching config snapshot record for host={{ inventory_hostname }}
+          (shard={{ current_node_shard }}, replica={{ current_node_replica }}, instance_id={{ current_node_instance_id }}).
+      when:
+        - restore_include_config_files | bool
+        - restore_config_fail_on_missing_snapshot | bool
+
+    - name: Check config snapshot archive exists on current host
+      ansible.builtin.stat:
+        path: "{{ restore_config_snapshot_abs_archive }}"
+      register: restore_config_snapshot_archive_stat
+      changed_when: false
+      when:
+        - restore_include_config_files | bool
+        - restore_config_snapshot_record | default({}) | length > 0
+
+    - name: Validate config snapshot archive exists
+      ansible.builtin.assert:
+        that:
+          - restore_config_snapshot_archive_stat.stat.exists | default(false)
+        fail_msg: "Config snapshot archive not found: {{ restore_config_snapshot_abs_archive }}"
+      when:
+        - restore_include_config_files | bool
+        - restore_config_fail_on_missing_snapshot | bool
+        - restore_config_snapshot_record | default({}) | length > 0
+
+    - name: Mark config restore skipped when snapshot record is missing
+      ansible.builtin.set_fact:
+        restore_config_apply_status: "skipped_no_snapshot"
+        restore_config_apply_error: "no matching config snapshot record"
+      when:
+        - restore_include_config_files | bool
+        - not (restore_config_fail_on_missing_snapshot | bool)
+        - restore_config_snapshot_record | default({}) | length == 0
+
+    - name: Mark config restore skipped when snapshot archive is missing
+      ansible.builtin.set_fact:
+        restore_config_apply_status: "skipped_missing_archive"
+        restore_config_apply_error: "config snapshot archive not found"
+      when:
+        - restore_include_config_files | bool
+        - not (restore_config_fail_on_missing_snapshot | bool)
+        - restore_config_snapshot_record | default({}) | length > 0
+        - not (restore_config_snapshot_archive_stat.stat.exists | default(false))
+
+    - name: Check existing config paths before apply
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ restore_config_snapshot_record.included_paths | default([]) }}"
+      loop_control:
+        label: "{{ item }}"
+      register: restore_config_existing_path_stats
+      changed_when: false
+      when:
+        - restore_include_config_files | bool
+        - restore_config_snapshot_record | default({}) | length > 0
+        - restore_config_snapshot_archive_stat.stat.exists | default(false)
+
+    - name: Build existing config path list before apply
+      ansible.builtin.set_fact:
+        restore_config_existing_paths: "{{ restore_config_existing_path_stats.results | selectattr('stat.exists', 'equalto', true) | map(attribute='item') | list }}"
+      when:
+        - restore_include_config_files | bool
+        - restore_config_snapshot_record | default({}) | length > 0
+        - restore_config_snapshot_archive_stat.stat.exists | default(false)
+
+    - name: Backup current config paths before applying snapshot
+      ansible.builtin.shell: |
+        set -euo pipefail
+        paths=(
+        {% for p in restore_config_existing_paths %}
+          "{{ p }}"
+        {% endfor %}
+        )
+        tar -czf "/tmp/dbbot_ck_pre_config_restore_{{ restore_run_id_effective }}_{{ inventory_hostname }}.tar.gz" "${paths[@]}"
+      args:
+        executable: /bin/bash
+      when:
+        - restore_include_config_files | bool
+        - restore_config_backup_before_apply | bool
+        - restore_config_existing_paths | default([]) | length > 0
+        - restore_config_snapshot_record | default({}) | length > 0
+        - restore_config_snapshot_archive_stat.stat.exists | default(false)
+
+    - name: Apply config snapshot archive to filesystem root
+      ansible.builtin.unarchive:
+        src: "{{ restore_config_snapshot_abs_archive }}"
+        dest: "/"
+        remote_src: true
+      when:
+        - restore_include_config_files | bool
+        - restore_config_snapshot_record | default({}) | length > 0
+        - restore_config_snapshot_archive_stat.stat.exists | default(false)
+
+    - name: Mark config restore as applied
+      ansible.builtin.set_fact:
+        restore_config_apply_status: "applied"
+      when:
+        - restore_include_config_files | bool
+        - restore_config_snapshot_record | default({}) | length > 0
+        - restore_config_snapshot_archive_stat.stat.exists | default(false)
+
+    - name: Reload ClickHouse config/users after config restore
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          --multiquery -q "
+            SYSTEM RELOAD CONFIG;
+            SYSTEM RELOAD USERS;
+          "
+      register: restore_config_reload_result
+      changed_when: false
+      failed_when: false
+      when:
+        - restore_include_config_files | bool
+        - restore_config_reload_after_apply | bool
+        - restore_config_apply_status == 'applied'
+
+    - name: Mark config restore status when reload failed
+      ansible.builtin.set_fact:
+        restore_config_apply_status: "applied_reload_failed"
+        restore_config_apply_error: "{{ restore_config_reload_result.stderr | default(restore_config_reload_result.stdout | default('reload failed')) }}"
+      when:
+        - restore_include_config_files | bool
+        - restore_config_reload_after_apply | bool
+        - restore_config_apply_status == 'applied'
+        - restore_config_reload_result.rc | default(0) != 0
+
+    - name: Restart ClickHouse service after config restore (optional)
+      ansible.builtin.systemd:
+        name: "{{ clickhouse_service_name }}"
+        state: restarted
+      when:
+        - restore_include_config_files | bool
+        - restore_config_restart_service_after_apply | bool
+        - restore_config_apply_status in ['applied', 'applied_reload_failed']
+
+    - name: Check replication health after restore
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "SELECT count() FROM system.replicas WHERE is_readonly != 0 OR queue_size > {{ restore_max_replication_queue | int }}"
+      register: restore_replica_health
+      changed_when: false
+      failed_when: restore_replica_health.rc != 0 or (restore_replica_health.stdout | trim | int) > 0
+      when: restore_check_replication_after_restore | bool
+
+    - name: Build restore manifest payload (run once)
+      ansible.builtin.set_fact:
+        restore_manifest_payload:
+          restore_run_id: "{{ restore_run_id_effective }}"
+          restore_batch_id: "{{ restore_batch_id }}"
+          source_manifest_file: "{{ restore_manifest_file_effective }}"
+          source_safe_ts: "{{ restore_manifest_json.safe_ts | default('') }}"
+          source_backup_mode: "{{ restore_manifest_json.backup_mode | default('') }}"
+          source_backup_object_clause: "{{ restore_manifest_json.backup_object_clause | default('') }}"
+          restore_object_clause: "{{ restore_object_clause_effective }}"
+          restore_storage_disk: "{{ restore_storage_disk_effective }}"
+          restore_to_all_replicas: "{{ restore_to_all_replicas }}"
+          restore_phase_plan: "{{ restore_phase_plan }}"
+          config_restore_enabled: "{{ restore_include_config_files | bool }}"
+          config_restore_results: "{{ restore_config_results_list }}"
+          restore_selected_nodes: "{{ restore_selected_nodes }}"
+          results: "{{ restore_results_list }}"
+      vars:
+        restore_config_results_list: >-
+          {%- set out = [] -%}
+          {%- for h in ansible_play_hosts_all -%}
+          {%- set hv = hostvars[h] -%}
+          {%- set _ = out.append({
+                'host': h,
+                'ip': (hv.ansible_host | default(h)),
+                'shard': (hv.current_node_shard | default(0)),
+                'replica': (hv.current_node_replica | default(0)),
+                'instance_id': (hv.current_node_instance_id | default(0)),
+                'status': (hv.restore_config_apply_status | default('disabled')),
+                'error': (hv.restore_config_apply_error | default('')),
+                'archive_rel_path': (hv.restore_config_snapshot_rel_archive | default(''))
+              }) -%}
+          {%- endfor -%}
+          {{ out }}
+        restore_results_list: >-
+          {%- set out = [] -%}
+          {%- for n in restore_selected_nodes -%}
+          {%- set h = hostvars[n.name] -%}
+          {%- set _ = out.append({
+                'host': n.name,
+                'ip': n.ip,
+                'shard': n.shard,
+                'replica': n.replica,
+                'instance_id': n.instance_id,
+                'execution_mode': (h.restore_execution_mode | default('skip')),
+                'task_id': h.restore_task_id | default(''),
+                'source_rel_path': h.restore_source_rel_path | default(''),
+                'phase_results': (h.restore_phase_statuses | default([])),
+                'status': (h.restore_status_json.status | default('UNKNOWN')),
+                'error': (h.restore_status_json.error | default('')),
+                'num_files': (h.restore_status_json.num_files | default(0)),
+                'compressed_size': (h.restore_status_json.compressed_size | default(0)),
+                'uncompressed_size': (h.restore_status_json.uncompressed_size | default(0)),
+                'start_time': (h.restore_status_json.start_time | default('')),
+                'end_time': (h.restore_status_json.end_time | default(''))
+              }) -%}
+          {%- endfor -%}
+          {{ out }}
+      run_once: true
+
+    - name: Ensure control-host restore manifest directory exists (run once)
+      ansible.builtin.file:
+        path: "{{ restore_manifest_control_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      when: restore_manifest_write_to_control | bool
+      run_once: true
+
+    - name: Write restore manifest to control host (run once)
+      ansible.builtin.copy:
+        dest: "{{ restore_manifest_control_dir }}/{{ restore_run_id_effective }}.json"
+        mode: "0644"
+        content: "{{ restore_manifest_payload | to_nice_json }}"
+      delegate_to: localhost
+      become: false
+      when: restore_manifest_write_to_control | bool
+      run_once: true
+
+    - name: Print restore summary (run once)
+      ansible.builtin.debug:
+        msg:
+          - "restore_batch_id={{ restore_batch_id }}"
+          - "restore_run_id={{ restore_run_id_effective }}"
+          - "restore_manifest_local={{ restore_manifest_control_dir }}/{{ restore_run_id_effective }}.json"
+      run_once: true

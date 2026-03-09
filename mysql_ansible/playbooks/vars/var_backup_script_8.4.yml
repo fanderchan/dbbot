@@ -1,0 +1,14 @@
+# Clone-based backup settings for MySQL 8.4
+backup_topology: auto   # auto, ms, mgr, mic, single
+backup_scope: primary_only  # primary_only, replica_one, replica_all, all, selected
+backup_preferred_host: ""  # Required when backup_scope=selected
+
+backup_base_dir: "/backup"
+backup_script_dir: "{{ mysql_data_dir_base }}/scripts"
+backup_script_path: "{{ backup_script_dir }}/backup_clone{{ mysql_port }}.sh"
+backup_schedule_script_path: "{{ backup_script_dir }}/backup_schedule{{ mysql_port }}.sh"
+backup_purge_script_path: "{{ backup_script_dir }}/backup_purge{{ mysql_port }}.sh"
+backup_config_path: "{{ backup_script_dir }}/backup_clone{{ mysql_port }}.conf"
+backup_keep_full: 2
+backup_keep_binlog_days: 7
+backup_cron: "0 2 * * *"

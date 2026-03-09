@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <listen_host>::</listen_host>
+    <http_port>{{ clickhouse_http_port }}</http_port>
+{% if clickhouse_enable_ssl | default(false) %}
+    <https_port>{{ clickhouse_https_port }}</https_port>
+    <tcp_port_secure>{{ clickhouse_tcp_port_secure }}</tcp_port_secure>
+{% endif %}
+    <tcp_port>{{ clickhouse_tcp_port }}</tcp_port>
+    <interserver_http_port>{{ clickhouse_interserver_http_port }}</interserver_http_port>
+    <interserver_http_host>{{ ansible_host | default(inventory_hostname) }}</interserver_http_host>
+    <keep_alive_timeout>600</keep_alive_timeout>
+    <max_concurrent_queries>150</max_concurrent_queries>
+    <max_table_size_to_drop>0</max_table_size_to_drop>
+</clickhouse>

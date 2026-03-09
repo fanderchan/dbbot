@@ -1,0 +1,35 @@
+- name: Copy SQL template to target server
+  ansible.builtin.template:
+    src: ../templates/create_mysql_exporter_db_user.sql.j2
+    dest: /tmp/create_mysql_exporter_db_user.sql
+    mode: '0600'
+  when: fcs_role_mysqld_exporter_create_monitor_user
+
+- name: Resolve MySQL basedir from instance my.cnf
+  ansible.builtin.shell: "awk -F= '/^basedir/ { split($2, parts, \"#\"); gsub(/[[:space:]]+/, \"\", parts[1]); print parts[1]; exit }' {{ mycnf_dir }}/my.cnf"
+  register: mysqld_exporter_mysql_basedir
+  changed_when: false
+  failed_when:
+    - mysqld_exporter_mysql_basedir.rc != 0
+    - mysqld_exporter_mysql_basedir.stdout == ""
+  when: fcs_role_mysqld_exporter_create_monitor_user
+
+- name: Create MySQL exporter database user
+  ansible.builtin.shell: >
+    {{ mysqld_exporter_mysql_basedir.stdout }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password}} -S {{ socket }} < /tmp/create_mysql_exporter_db_user.sql
+  changed_when: true
+  when: fcs_role_mysqld_exporter_create_monitor_user
+
+- name: Delete SQL script from target server
+  ansible.builtin.file:
+    path: /tmp/create_mysql_exporter_db_user.sql
+    state: absent
+  when: fcs_role_mysqld_exporter_create_monitor_user
+
+- name: Generate .my.cnf for mysqld_exporter
+  ansible.builtin.template:
+    src: ../templates/my.cnf.j2
+    dest: "{{ mysqld_exporter_install_dir }}/.my.cnf"
+    mode: '0600'
+    owner: "{{ mysqld_exporter_run_user }}"
+    group: "{{ mysqld_exporter_run_user_group }}"

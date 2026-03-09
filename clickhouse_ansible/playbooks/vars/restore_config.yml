@@ -1,0 +1,94 @@
+# ClickHouse 企业级恢复参数
+
+# 恢复执行并发（按 inventory 主机并行）
+restore_serial: "100%"
+
+# 需要恢复的备份批次号（必填），例如：20260208T161949_CST_bk
+restore_batch_id: ""
+
+# 恢复任务运行 ID（为空自动生成 UTC 值）
+restore_run_id: ""
+
+# 恢复执行保护
+# 1) inventory 守卫：默认要求 inventory 文件名包含关键字（如 hosts.restore.ini）
+# 2) inventory purpose 守卫：默认要求 dbbot_inventory_purpose=restore
+# 3) 手工确认：默认要求在控制台输入确认短语后才能继续
+restore_require_inventory_guard: true
+restore_inventory_guard_keyword: "restore"
+restore_require_inventory_purpose_guard: true
+restore_inventory_purpose: "restore"
+restore_require_manual_confirm: true
+# 为空时默认确认短语：RESTORE <restore_batch_id>
+restore_confirm_phrase: ""
+
+# 备份 manifest 文件路径（为空则使用默认路径）
+# 默认：playbooks/../artifacts/manifests/backup/<restore_batch_id>.json
+restore_manifest_file: ""
+
+# 恢复对象来源：
+# true  -> 从备份 manifest 中读取 backup_object_clause
+# false -> 使用 restore_databases / restore_tables 组装
+restore_use_manifest_object_clause: true
+
+# 手工覆盖恢复对象（优先级最高），例如：
+# restore_object_clause_override: "DATABASE lab_hot_backup"
+restore_object_clause_override: ""
+
+# 当 restore_use_manifest_object_clause=false 时生效
+restore_databases: []
+restore_tables: []
+
+# 恢复使用的存储磁盘（为空则取 manifest.backup_storage_disk）
+restore_storage_disk: ""
+
+# 备份挂载目录（用于检查备份路径是否存在）
+restore_mount_dir: "/backup"
+
+# 是否异步执行 RESTORE 语句
+restore_async: true
+
+# 轮询配置（等待 system.backups 最终状态）
+restore_poll_delay_seconds: 5
+restore_poll_retries: 1440  # 5s * 1440 = 最多约 2 小时
+
+# 恢复行为控制
+restore_allow_non_empty_tables: false
+restore_allow_different_table_def: false
+# 是否在同一次恢复内自动拆分为两阶段（phase1: 非 MV；phase2: MV）
+# 说明：用于规避 22.11 在 DATABASE 级恢复时可能出现的 MV 依赖顺序问题
+restore_enable_two_phase_mv_compat: true
+# 两阶段扫描备份 metadata 时使用的执行主机（空=自动选择一个恢复主机）
+restore_two_phase_scan_host: ""
+# 两阶段扫描遇到不支持对象类型（如 DICTIONARY）时是否直接失败
+restore_two_phase_fail_on_unsupported_objects: false
+
+# 是否额外恢复配置与权限相关文件（默认关闭）
+# 说明：开启后会从备份 manifest 的 config_snapshots 中匹配当前主机并回放
+restore_include_config_files: false
+# true: 开启配置恢复时，若找不到当前主机对应的配置快照则失败
+restore_config_fail_on_missing_snapshot: true
+# 回放配置后是否执行 SYSTEM RELOAD CONFIG / SYSTEM RELOAD USERS
+restore_config_reload_after_apply: true
+# 回放配置后是否重启 clickhouse-server 服务（默认关闭，避免额外抖动）
+restore_config_restart_service_after_apply: false
+# 回放前是否对当前已存在配置路径做本机临时备份（/tmp）
+restore_config_backup_before_apply: true
+
+# 恢复执行节点策略
+# true  -> 所有副本参与恢复：
+#          每分片主副本做全量恢复，其余副本做 structure_only 恢复，避免所有副本都从备份盘全量读写
+# false -> 每分片只在一个副本执行恢复
+restore_to_all_replicas: true
+restore_prefer_replica: 1
+restore_shard_host_override: {}
+
+# 恢复后复制健康检查
+restore_check_replication_after_restore: true
+restore_max_replication_queue: 0
+
+# manifest 输出
+restore_manifest_write_to_control: true
+restore_manifest_control_dir: "{{ playbook_dir }}/../artifacts/manifests/restore"
+
+# 是否允许使用 --limit 仅对部分 inventory 执行恢复（默认不允许）
+restore_allow_partial_cluster: false

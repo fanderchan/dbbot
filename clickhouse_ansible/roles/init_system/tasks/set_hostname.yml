@@ -1,0 +1,32 @@
+- name: Set system hostname (hostnamectl)
+  ansible.builtin.command: hostnamectl set-hostname "{{ ck_system_hostname }}"
+  changed_when: true
+  failed_when: false
+  when:
+    - fcs_set_hostname | default(true)
+    - ck_system_hostname is defined
+    - ck_system_hostname | length > 0
+    - ansible_service_mgr == "systemd"
+
+- name: Set system hostname (fallback)
+  ansible.builtin.shell: |
+    echo "{{ ck_system_hostname }}" > /etc/hostname
+    hostname "{{ ck_system_hostname }}"
+  changed_when: true
+  failed_when: false
+  when:
+    - fcs_set_hostname | default(true)
+    - ck_system_hostname is defined
+    - ck_system_hostname | length > 0
+    - ansible_service_mgr != "systemd"
+
+- name: Ensure /etc/hosts has hostname mapping
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ ck_physical_host | default(ansible_host | default(inventory_hostname)) }}\\s+"
+    line: "{{ ck_physical_host | default(ansible_host | default(inventory_hostname)) }} {{ ck_system_hostname }}"
+    state: present
+  when:
+    - fcs_set_hostname | default(true)
+    - ck_system_hostname is defined
+    - ck_system_hostname | length > 0

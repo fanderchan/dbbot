@@ -1,0 +1,161 @@
+---
+# ============================================================
+# MySQL Router Deployment Playbook (App / HA Toggle)
+# ============================================================
+# Purpose: Deploy MySQL Router on application servers, with optional
+#          Keepalived-based HA when router_enable_ha=true.
+# Prerequisites:
+#   1. InnoDB Cluster is deployed and running
+#   2. Router nodes can connect to cluster nodes
+# Usage:
+#   ansible-playbook innodb_cluster_router.yml           # App mode (default)
+#   ansible-playbook innodb_cluster_router.yml -e router_enable_ha=true  # HA mode
+# ============================================================
+
+- name: Deploy MySQL Router (App or HA)
+  hosts: dbbot_router
+  become: true
+  any_errors_fatal: true
+  max_fail_percentage: 1
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_innodb_cluster.yml
+    - default/var_innodb_cluster_router.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_innodb_cluster.yml
+    - vars/var_innodb_cluster_router.yml
+  vars:
+    roles_to_execute:
+      - "../roles/mysql_router"
+      - "../roles/make_mysqlrouter_ha"
+
+  pre_tasks:
+    # Common configuration validation
+    - name: Import tasks to validate setting in common_config.yml
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    # Router configuration validation
+    - name: Import tasks to validate Router settings
+      ansible.builtin.import_tasks: pre_tasks/validate_innodb_cluster_router.yml
+
+    # Router HA configuration validation (only when HA enabled)
+    - name: Import tasks to validate Router HA settings
+      ansible.builtin.import_tasks: pre_tasks/validate_innodb_cluster_router_ha.yml
+      when: router_enable_ha | bool
+
+    # OS and Python check
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    # Prepare and/or download packages needed by roles
+    - name: Import tasks to prepare required packages
+      ansible.builtin.import_tasks: pre_tasks/prepare_role_packages.yml
+
+    # Confirmation
+    - name: Import confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+
+  tasks:
+    - name: Include role
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+      loop: "{{ roles_to_execute }}"
+      loop_control:
+        loop_var: role_name
+      when: router_enable_ha | bool or item != "../roles/make_mysqlrouter_ha"
+
+  post_tasks:
+    - name: Wait up to 5s for VIP on each router (no fail here)
+      ansible.builtin.command: ip addr show {{ router_net_work_interface }}
+      register: vip_check
+      changed_when: false
+      retries: 5
+      delay: 1
+      until: router_vip in vip_check.stdout
+      ignore_errors: true
+      when: router_enable_ha | bool
+  
+    - name: Assert VIP exists on any router
+      ansible.builtin.assert:
+        that:
+          - >-
+            {{
+              ansible_play_hosts
+              | select('in', hostvars.keys())
+              | select('match', '.*')
+              | map('extract', hostvars, 'vip_check')
+              | select('defined')
+              | map(attribute='stdout')
+              | select('search', router_vip)
+              | list | length > 0
+            }}
+        fail_msg: "VIP {{ router_vip }} not found on any router after 5 seconds."
+      run_once: true
+      when: router_enable_ha | bool
+
+    - name: Display Router deployment summary (HA mode)
+      ansible.builtin.debug:
+        msg: "{{ (
+                [
+                  '======================================================',
+                  'MySQL Router HA Deployment Complete!',
+                  '======================================================',
+                  'VIP Address: ' ~ router_vip,
+                  'Interface:   ' ~ router_net_work_interface,
+                  'HA Nodes:    ' ~ (router_ha_nodes | map(attribute='ip') | list | join(', ')),
+                  '',
+                  'Connection Ports (via VIP):'
+                ]
+                + (['  - RW: ' ~ (router_ports.rw.port | string)] if router_ports.rw.enabled else [])
+                + (['  - RO: ' ~ (router_ports.ro.port | string)] if router_ports.ro.enabled else [])
+                + (['  - RW X: ' ~ (router_ports.rw_x.port | string)] if router_ports.rw_x.enabled else [])
+                + (['  - RO X: ' ~ (router_ports.ro_x.port | string)] if router_ports.ro_x.enabled else [])
+                + (['  - RW Split: ' ~ (router_ports.rw_split.port | string)] if router_ports.rw_split.enabled else [])
+                + (['  - REST API: ' ~ (router_ports.http.port | string)] if router_ports.http.enabled else [])
+                + [
+                  '',
+                  'Connect Example:',
+                ]
+                + (['  - mysql -h ' ~ router_vip ~ ' -P ' ~ (router_ports.rw.port | string) ~ ' -u<user> -p'] if router_ports.rw.enabled else [])
+                + [
+                  '',
+                  'Check Status:',
+                  '  - systemctl status keepalived',
+                  '  - ip addr show ' ~ router_net_work_interface,
+                  '======================================================'
+                ]
+              ) }}"
+      run_once: true
+      when: router_enable_ha | bool
+
+    - name: Display Router deployment summary (App mode)
+      ansible.builtin.debug:
+        msg: "{{ (
+                [
+                  '=====================================================',
+                  'MySQL Router Deployment Complete! (App Server Mode)',
+                  '=====================================================',
+                  'Router Host:      ' ~ ansible_default_ipv4.address,
+                  '',
+                  'Connection Ports:'
+                ]
+                + (['  - RW:    ' ~ (router_ports.rw.port | string)] if router_ports.rw.enabled else [])
+                + (['  - RO:    ' ~ (router_ports.ro.port | string)] if router_ports.ro.enabled else [])
+                + (['  - RW X:  ' ~ (router_ports.rw_x.port | string)] if router_ports.rw_x.enabled else [])
+                + (['  - RO X:  ' ~ (router_ports.ro_x.port | string)] if router_ports.ro_x.enabled else [])
+                + (['  - RW Split: ' ~ (router_ports.rw_split.port | string)] if router_ports.rw_split.enabled else [])
+                + [
+                  '',
+                  'Connect Example:'
+                ]
+                + (['  - mysql -h ' ~ ansible_default_ipv4.address ~ ' -P ' ~ (router_ports.rw.port | string) ~ ' -u<user> -p'] if router_ports.rw.enabled else [])
+                + [
+                  '',
+                  'Check Status:',
+                  '  - systemctl status mysqlrouter',
+                  '====================================================='
+                ]
+              ) }}"
+      when: not router_enable_ha | bool

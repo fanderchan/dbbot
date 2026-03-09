@@ -1,0 +1,25 @@
+---
+# Create InnoDB Cluster on primary node
+
+- name: Create cluster creation script
+  ansible.builtin.template:
+    src: create_cluster.js.j2
+    dest: /tmp/create_cluster.js
+    mode: '0600'
+  run_once: true
+
+- name: Create InnoDB Cluster
+  ansible.builtin.command: >
+    {{ mysqlsh_path }} --no-wizard --js -f /tmp/create_cluster.js
+  register: make_innodb_cluster__create_result
+  run_once: true
+  changed_when: "'Cluster successfully created' in make_innodb_cluster__create_result.stdout"
+  failed_when:
+    - make_innodb_cluster__create_result.rc != 0
+    - "'already exists' not in make_innodb_cluster__create_result.stderr"
+
+- name: Remove create cluster script
+  ansible.builtin.file:
+    path: /tmp/create_cluster.js
+    state: absent
+  run_once: true

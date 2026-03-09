@@ -1,0 +1,4 @@
+downloads export-ignore
+artifacts/manifests export-ignore
+examples/hot_backup_lab/run export-ignore
+logs export-ignore

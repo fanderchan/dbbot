@@ -1,0 +1,43 @@
+---
+# Setup MySQL Shell for InnoDB Cluster
+
+- name: Check if MySQL Shell already installed
+  ansible.builtin.stat:
+    path: "{{ mysqlshell_base_dir }}/bin/mysqlsh"
+  register: setup_mysqlshell__installed
+
+- name: Check MySQL Shell package availability (local)
+  ansible.builtin.stat:
+    path: "{{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}"
+  register: setup_mysqlshell__package_stat
+  delegate_to: localhost
+  when: not setup_mysqlshell__installed.stat.exists
+
+- name: Fail if MySQL Shell package not found (local)
+  ansible.builtin.fail:
+    msg: "MySQL Shell package not found at {{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}. Please place it before running."
+  when:
+    - not setup_mysqlshell__installed.stat.exists
+    - not setup_mysqlshell__package_stat.stat.exists
+  delegate_to: localhost
+
+- name: Install MySQL Shell
+  ansible.builtin.import_tasks: install.yml
+  when: not setup_mysqlshell__installed.stat.exists
+
+- name: Create symlink to /usr/bin/mysqlsh
+  ansible.builtin.file:
+    src: "{{ mysqlshell_base_dir }}/bin/mysqlsh"
+    dest: /usr/bin/mysqlsh
+    state: link
+    force: true
+
+- name: Verify MySQL Shell installation
+  ansible.builtin.command: /usr/bin/mysqlsh --version
+  register: setup_mysqlshell__version
+  changed_when: false
+
+- name: Display MySQL Shell version
+  ansible.builtin.debug:
+    msg: "MySQL Shell installed: {{ setup_mysqlshell__version.stdout }}"
+  run_once: true

@@ -1,0 +1,41 @@
+dbbot third-party components
+=============================
+
+The top-level Apache-2.0 license applies to original dbbot work unless a
+subdirectory or file is identified below or carries its own notice.
+
+1. portable-ansible-v0.5.0-py3/
+   - Nature: modified redistribution of Ansible runtime and bundled
+     dependencies / collections.
+   - Upstream project: https://github.com/ansible/ansible
+   - Upstream license: GPL-3.0-or-later for Ansible; bundled components may
+     carry their own additional licenses.
+   - Repository treatment: this directory is not re-licensed under the
+     repository top-level Apache-2.0 license. Preserve bundled COPYING /
+     LICENSE files and the local NOTICE in that directory when redistributing.
+
+2. monitoring_prometheus_ansible/roles/grafana/files/dbbot-mysql-dashboards/
+   monitoring_prometheus_ansible/roles/grafana/files/dbbot-router-dashboards/
+   - Nature: Percona PMM-derived Grafana dashboards.
+   - Upstream project: https://github.com/percona/pmm
+   - Upstream license: AGPL-3.0-only.
+   - Repository treatment: these dashboard JSON files should be treated as
+     third-party AGPL-covered assets, not as Apache-2.0 relicensed originals.
+
+3. monitoring_prometheus_ansible/roles/grafana/files/dbbot-node-dashboards/1860_rev37.json
+   - Nature: imported Grafana dashboard.
+   - Upstream project: https://github.com/rfmoz/grafana-dashboards
+   - Upstream dashboard page: https://grafana.com/grafana/dashboards/1860
+   - Upstream license: Apache-2.0.
+
+4. monitoring_prometheus_ansible/roles/grafana/files/natel-discrete-panel.tar.gz
+   - Nature: bundled Grafana panel plugin archive.
+   - Upstream project: https://github.com/NatelEnergy/grafana-discrete-panel
+   - Upstream license: MIT.
+   - Repository treatment: the bundled archive already contains its own
+     LICENSE file and should keep that notice intact.
+
+Practical rule:
+If a third-party component is modified or redistributed from dbbot, keep its
+original attribution and license notices. Do not assume the repository
+top-level Apache-2.0 license replaces upstream licenses for those components.

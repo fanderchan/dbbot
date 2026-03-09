@@ -1,0 +1,21 @@
+[Unit]
+Description=Apache Zookeeper Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ zookeeper_user }}
+Group={{ zookeeper_group }}
+Restart=on-failure
+RestartSec=10
+{% if zookeeper_java_home | default('') | length > 0 %}
+Environment=JAVA_HOME={{ zookeeper_java_home }}
+Environment=PATH={{ zookeeper_java_home }}/bin:/usr/bin:/bin
+{% endif %}
+ExecStart={{ zookeeper_home }}/bin/zkServer.sh start-foreground {{ zookeeper_home }}/conf/zoo.cfg
+ExecStop={{ zookeeper_home }}/bin/zkServer.sh stop {{ zookeeper_home }}/conf/zoo.cfg
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

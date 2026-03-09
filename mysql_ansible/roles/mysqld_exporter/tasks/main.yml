@@ -1,0 +1,35 @@
+- name: Check if mysqld_exporter is installed
+  ansible.builtin.import_tasks: check_if_mysqld_exporter_installed.yml
+
+- name: Setup and configure mysqld_exporter if not installed
+  block:
+    - name: Check if mysqld_exporter package availability(delegate_to dbbot server)
+      ansible.builtin.import_tasks: check_if_mysqld_exporter_package_availability.yml
+
+    - name: Download mysqld_exporter package if necessary(delegate_to dbbot server)
+      ansible.builtin.import_tasks: download_package.yml
+      when:
+        - mysqld_exporter_install_type == 'package'
+        - not mysqld_exporter_package_stat.stat.exists
+        - fcs_auto_download_packages | bool
+
+    - name: Create user and make dir
+      ansible.builtin.import_tasks: create_user_and_dir.yml
+
+    - name: Setup mysqld_exporter by package
+      ansible.builtin.import_tasks: setup_mysqld_exporter_by_package.yml
+      when: mysqld_exporter_install_type == 'package'
+
+    - name: Setup mysqld_exporter
+      ansible.builtin.import_tasks: setup_mysqld_exporter.yml
+      when: mysqld_exporter_install_type != 'package'
+
+    - name: Config mysqld_exporter
+      ansible.builtin.import_tasks: config_mysqld_exporter.yml
+
+    - name: Manage mysqld_exporter service (create systemd service, enable and start)
+      ansible.builtin.import_tasks: manage_service.yml
+  when: not (mysqld_exporter_installed | default(false))
+
+- name: Validate mysqld_exporter service is operational
+  ansible.builtin.import_tasks: validate_service.yml

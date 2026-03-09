@@ -1,0 +1,15 @@
+- name: Transfer sql statement to remote
+  ansible.builtin.template:
+    src: ../templates/create_backup_user.sql.j2
+    dest: /tmp/create_backup_user.sql
+    mode: '0600'
+
+- name: Create backup user
+  ansible.builtin.shell: >
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} < /tmp/create_backup_user.sql
+  changed_when: true
+
+- name: Remove temp file /tmp/create_backup_user.sql
+  ansible.builtin.file:
+    dest: /tmp/create_backup_user.sql
+    state: absent

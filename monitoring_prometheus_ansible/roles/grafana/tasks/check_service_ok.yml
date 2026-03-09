@@ -1,0 +1,14 @@
+- name: Check if Grafana is operational
+  ansible.builtin.uri:
+    url: "http://localhost:{{ grafana_port }}/api/health"
+    method: GET
+    return_content: yes
+  register: result
+  until: result.status == 200 and result.json.database == "ok"
+  retries: 5
+  delay: 10
+
+- name: Fail if Grafana is not operational
+  ansible.builtin.fail:
+    msg: "Grafana server is not operational"
+  when: result.status != 200 or result.json.database != "ok"

@@ -1,0 +1,33 @@
+- name: Import tasks to disable transparent hugepage
+  ansible.builtin.import_tasks: disable_thp.yml
+
+- name: Import tasks to disable swap
+  ansible.builtin.import_tasks: disable_swap.yml
+
+- name: Import tasks to optimize NUMA settings
+  ansible.builtin.import_tasks: disable_numa.yml
+
+- name: Import tasks to set overcommit memory
+  ansible.builtin.import_tasks: set_overcommit.yml
+
+- name: Import tasks to disable SELinux
+  ansible.builtin.import_tasks: disable_selinux.yml
+
+- name: Import tasks to disable firewall
+  ansible.builtin.import_tasks: disable_firewall.yml
+
+- name: Import tasks to set file limits
+  ansible.builtin.import_tasks: set_limits.yml
+
+- name: Import tasks to set timezone
+  ansible.builtin.import_tasks: set_timezone.yml
+
+- name: Import tasks to set hostname
+  ansible.builtin.import_tasks: set_hostname.yml
+
+- name: Import tasks to install dependencies
+  ansible.builtin.import_tasks: install_dependencies.yml
+
+- name: Import tasks to check SSE 4.2
+  ansible.builtin.import_tasks: check_sse42.yml
+  when: not fcs_skip_check_sse42 | default(false)

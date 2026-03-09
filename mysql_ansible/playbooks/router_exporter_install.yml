@@ -1,0 +1,32 @@
+---
+- name: Deploy mysqlrouter_exporter
+  hosts: dbbot_router
+  become: true
+  any_errors_fatal: true
+  max_fail_percentage: 1
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_router_exporter_install.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_router_exporter_install.yml
+  vars:
+    roles_to_execute:
+      - "../roles/mysqlrouter_exporter"
+
+  pre_tasks:
+    - name: Import tasks to validate setting in common_config.yml
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Import tasks to confirm deployment
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+
+  tasks:
+    - name: Include mysqlrouter_exporter role
+      ansible.builtin.include_role:
+        name: "../roles/mysqlrouter_exporter"
+      when: mysqlrouter_exporter_install | bool

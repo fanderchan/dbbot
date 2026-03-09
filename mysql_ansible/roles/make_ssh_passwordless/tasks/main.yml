@@ -1,0 +1,52 @@
+- name: Close ssh check
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/ssh_config
+    regexp: '^.*StrictHostKeyChecking.*$'
+    line: '   StrictHostKeyChecking no'
+
+- name: Delete /home/${mysql_user}/.ssh/ —— {{ mysql_user }}
+  ansible.builtin.file:
+    path: /home/{{ mysql_user }}/.ssh/
+    state: absent
+
+# - name: Generating public/private rsa key pair
+#   ansible.builtin.shell: su mysql -c "ssh-keygen -t rsa -b 2048 -N '' -f /home/{{ mysql_user }}/.ssh/id_rsa"
+
+- name: Generating public/private rsa key pair
+  ansible.builtin.command:
+    cmd: su {{ mysql_user }} -c "ssh-keygen -t rsa -b 2048 -N '' -f /home/{{ mysql_user }}/.ssh/id_rsa"
+  changed_when: true
+
+- name: Fetch copy
+  ansible.builtin.fetch:
+    src: /home/{{ mysql_user }}/.ssh/id_rsa.pub
+    dest: /tmp/ssh
+
+- name: Append file authorized_keys.log (local)
+  ansible.builtin.shell: find /tmp/ssh/* -type f -exec sh -c 'cat {}>>/tmp/ssh/authorized_keys.log' \;
+  changed_when: true
+  run_once: true
+  delegate_to: 127.0.0.1
+
+- name: Copy authorized_keys
+  ansible.builtin.copy:
+    src: /tmp/ssh/authorized_keys.log
+    dest: /home/{{ mysql_user }}/.ssh/authorized_keys
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0600'
+
+- name: Touch ssh_finish.flag
+  ansible.builtin.file:
+    path: "/tmp/ssh_finish.flag"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    state: touch
+    mode: '0644'
+
+- name: Delete /tmp/ssh/ (local)
+  ansible.builtin.file:
+    path: /tmp/ssh/
+    state: absent
+  run_once: true
+  delegate_to: 127.0.0.1

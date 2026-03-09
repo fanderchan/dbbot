@@ -1,0 +1,99 @@
+---
+# ============================================================
+# MySQL InnoDB Cluster Deployment Playbook
+# ============================================================
+# Purpose: Deploy MySQL 8.4 InnoDB Cluster core components
+# Components: MySQL Server + MySQL Shell + InnoDB Cluster Configuration
+#
+# Prerequisites:
+#   1. Target servers have network connectivity
+#   2. mysql_version must be 8.4.x
+#   3. At least 3 nodes
+#
+# Usage:
+#   cd playbooks
+#   ../portable-ansible ansible-playbook innodb_cluster.yml
+# ============================================================
+
+- name: Deploy MySQL InnoDB Cluster
+  hosts: dbbot_innodb_cluster
+  become: true
+  any_errors_fatal: true
+  max_fail_percentage: 1
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_innodb_cluster.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_innodb_cluster.yml
+  vars:
+    roles_to_execute:
+      - "../roles/pre_check_and_set"
+      - "../roles/mysql_server"
+      - "../roles/setup_mysqlshell"
+      - "../roles/make_innodb_cluster"
+    # InnoDB Cluster uses MGR, TLS required
+    mtls_with_mysql_group_replication: 1
+
+  pre_tasks:
+    # Common configuration validation
+    - name: Import tasks to validate setting in common_config.yml
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    # InnoDB Cluster specific validation (includes MySQL 8.4 version check)
+    - name: Import tasks to validate InnoDB Cluster settings
+      ansible.builtin.import_tasks: pre_tasks/validate_innodb_cluster.yml
+
+    # OS and Python check
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    # Prepare and/or download packages needed by roles
+    - name: Import tasks to prepare required packages
+      ansible.builtin.import_tasks: pre_tasks/prepare_role_packages.yml
+
+    # Package check
+    - name: Import tasks to check if packages exist
+      ansible.builtin.import_tasks: pre_tasks/check_if_packages_exist.yml
+
+    # Confirmation
+    - name: Import confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+
+  tasks:
+    - name: Set make_innodb_cluster_role_included variable
+      ansible.builtin.set_fact:
+        make_innodb_cluster_role_included: true
+      when: "'../roles/make_innodb_cluster' in roles_to_execute"
+
+    - name: Include role
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+      loop: "{{ roles_to_execute }}"
+      loop_control:
+        loop_var: role_name
+
+  post_tasks:
+    - name: Display InnoDB Cluster deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "====================================================="
+          - "InnoDB Cluster Deployment Complete!"
+          - "====================================================="
+          - "Cluster Name:    {{ innodb_cluster_name }}"
+          - "MySQL Version:   {{ mysql_version }}"
+          - "Cluster Nodes:   {{ innodb_cluster_members | join(', ') }}"
+          - "MySQL Port:      {{ mysql_port }}"
+          - "MGR Port:        {{ mysql_mgr_port }}"
+          - "====================================================="
+          - "Connection:"
+          - "  mysqlsh {{ mysql_cluster_admin_user }}@{{ innodb_cluster_primary }}:{{ mysql_port }}"
+          - ""
+          - "Check Status:"
+          - "  mysqlsh --js -e \"dba.getCluster().status()\""
+          - ""
+          - "Next Step:"
+          - "  Deploy MySQL Router for application connection"
+          - "====================================================="
+      run_once: true

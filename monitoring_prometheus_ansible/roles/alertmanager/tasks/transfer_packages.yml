@@ -1,0 +1,7 @@
+- name: Transfer alertmanager install package to remote host
+  ansible.builtin.copy:
+    src: "{{ packages_dir }}/{{ alertmanager_package }}"
+    dest: /tmp
+    mode: '0755'
+    owner: "{{ alertmanager_run_user }}"
+    group: "{{ alertmanager_run_user_group }}"

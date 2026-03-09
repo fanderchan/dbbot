@@ -1,0 +1,21 @@
+- name: Set file limits in /etc/security/limits.conf
+  ansible.builtin.blockinfile:
+    path: /etc/security/limits.conf
+    block: |
+      * soft nofile 65536
+      * hard nofile 65536
+      * soft nproc  131072
+      * hard nproc  131072
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - ClickHouse limits"
+    create: yes
+
+- name: Set file limits in /etc/security/limits.d/20-nproc.conf
+  ansible.builtin.blockinfile:
+    path: /etc/security/limits.d/20-nproc.conf
+    block: |
+      * soft nofile 65536
+      * hard nofile 65536
+      * soft nproc  131072
+      * hard nproc  131072
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - ClickHouse limits"
+    create: yes

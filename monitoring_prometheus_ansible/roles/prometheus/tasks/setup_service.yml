@@ -1,0 +1,11 @@
+- name: Create Prometheus systemd config file
+  ansible.builtin.template:
+    src: ../templates/prometheus.service.j2
+    dest: /etc/systemd/system/prometheus.service
+    mode: '0644'
+
+- name: Configure Prometheus service to start at boot
+  ansible.builtin.systemd:
+    name: prometheus
+    enabled: true
+    daemon_reload: true

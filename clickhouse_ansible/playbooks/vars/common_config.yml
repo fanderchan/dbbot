@@ -1,0 +1,84 @@
+## ClickHouse 通用配置
+## 大部分情况下，只需要调整这些参数
+
+# ClickHouse 版本
+# 支持两种写法：
+# 1) 四段完整版本（推荐）：如 22.11.2.30、23.6.1.1524
+# 2) 三段主版本：如 22.11.2、23.6.1（会在可联网时自动解析为可用的最新四段版本）
+clickhouse_version: "23.6.1"
+
+# ClickHouse 安装包目录
+clickhouse_packages_dir: ../downloads/
+# 是否额外安装 clickhouse-common-static-dbg 调试包
+# 默认关闭，避免 release 包体积和分发时间被 1GB 级调试包放大
+clickhouse_install_debug_package: false
+
+# ClickHouse 运行用户
+clickhouse_user: clickhouse
+clickhouse_group: clickhouse
+# ClickHouse 用户/组固定 UID/GID（建议源集群与容灾集群保持一致，避免 NFS 备份权限问题）
+# 如与现网冲突，请在本文件按环境修改
+# 默认使用 18123（便于记忆：1 + ClickHouse HTTP 端口 8123）
+clickhouse_uid: 18123
+clickhouse_gid: 18123
+
+# ClickHouse 数据目录（基础路径）
+clickhouse_data_dir_base: "/opt/clickhouse"
+
+# ClickHouse 日志目录
+clickhouse_log_dir_base: "/opt/clickhouse/log"
+
+# ClickHouse default 用户密码
+# 开源默认值采用 Dbbot_default@8888 规律，便于快速体验。
+# 为避免公开默认密码直接进生产，默认会在 pre_tasks 阶段拦截，除非显式设置 fcs_allow_dbbot_default_passwd=true。
+clickhouse_default_password: "Dbbot_default@8888"
+clickhouse_distributed_ddl_path: "/clickhouse/task_queue/ddl"
+# MySQL/PostgreSQL 协议端口步长：
+# mysql/postgresql 实际端口 = *_port_base + (instance_id - 1) * clickhouse_aux_port_stride
+# 默认 10：9004/9005 -> 9014/9015 -> 9024/9025 ...
+clickhouse_aux_port_stride: 10
+clickhouse_enable_ssl: false
+clickhouse_dhparam_bits: 2048
+
+# 集群名称
+clickhouse_cluster_name: "example_3shards_2replicas"
+
+# Zookeeper 配置
+# 如果使用 clickhouse-keeper，则不需要配置独立的 zookeeper
+use_clickhouse_keeper: false  # true: 使用 clickhouse-keeper, false: 使用独立 zookeeper
+zookeeper_port: 2181
+keeper_port: 9181  # clickhouse-keeper 端口
+
+# Zookeeper 安装包与版本
+zookeeper_version: "3.8.4"
+zookeeper_packages_dir: ../downloads/
+fcs_auto_download_zookeeper: true  # 是否自动下载 zookeeper 安装包
+fcs_auto_download_java: true  # 是否自动下载 Java 安装包（tarball）
+
+# 时区
+timezone: "Asia/Shanghai"
+
+# 功能控制开关
+fcs_skip_check_sse42: false  # 是否跳过 SSE 4.2 检查
+fcs_auto_download_packages: true  # 是否自动下载安装包（如果禁用，需要手动放置）
+fcs_set_hostname: true  # 是否设置主机名（建议生产环境开启）
+fcs_allow_dbbot_default_passwd: false
+# 是否为 clickhouse 用户创建快速登录（生成 600 权限认证文件 + dblocal<tcp_port> 别名）
+fcs_create_clickhouse_fast_login: true
+# 快速登录别名前缀：默认会生成 dblocal9000 / dblocal9001 ...
+fcs_create_clickhouse_fast_login_name_prefix: "dblocal"
+# 快速登录默认连接地址（通常保持 127.0.0.1）
+fcs_clickhouse_fast_login_host: "127.0.0.1"
+
+# 并发控制：默认全量并行（按 instance_id 分批）
+clickhouse_serial: "100%"
+
+# 高风险剧本手工确认开关（部署/恢复）
+# 说明：备份剧本默认不启用此确认，便于后续定时调度
+deploy_require_manual_confirm: true
+# 为空时默认确认短语：DEPLOY <clickhouse_cluster_name>
+deploy_confirm_phrase: ""
+
+# 部署 inventory 守卫（防止误用 backup/restore inventory）
+deploy_require_inventory_guard: true
+deploy_inventory_purpose: "deploy"

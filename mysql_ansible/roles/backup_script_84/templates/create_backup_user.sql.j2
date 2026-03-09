@@ -1,0 +1,5 @@
+{% for host in mysql_backup_user_hosts %}
+CREATE USER IF NOT EXISTS '{{ mysql_backup_user }}'@'{{ host }}' IDENTIFIED BY '{{ mysql_backup_password }}';
+GRANT BACKUP_ADMIN, CLONE_ADMIN, RELOAD, REPLICATION CLIENT, PROCESS ON *.* TO '{{ mysql_backup_user }}'@'{{ host }}';
+GRANT SELECT ON performance_schema.* TO '{{ mysql_backup_user }}'@'{{ host }}';
+{% endfor %}

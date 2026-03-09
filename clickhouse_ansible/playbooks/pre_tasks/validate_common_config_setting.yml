@@ -1,0 +1,28 @@
+- name: Validate clickhouse_default_password complexity
+  ansible.builtin.assert:
+    that:
+      - clickhouse_default_password | length >= 8
+      - clickhouse_default_password | regex_search('[a-z]') is not none
+      - clickhouse_default_password | regex_search('[A-Z]') is not none
+      - clickhouse_default_password | regex_search('[0-9]') is not none
+      - clickhouse_default_password | regex_search('[!@#$%^&*()]') is not none
+    fail_msg: >-
+      clickhouse_default_password does not meet complexity requirements:
+      at least 8 characters long, at least 1 digit, at least 1 uppercase letter,
+      at least 1 lowercase letter, at least 1 special character.
+  no_log: true
+
+- name: Validate fcs_allow_dbbot_default_passwd is boolean
+  ansible.builtin.fail:
+    msg: "fcs_allow_dbbot_default_passwd value is not a boolean."
+  when: fcs_allow_dbbot_default_passwd is not boolean
+
+- name: Block deployment when dbbot public ClickHouse default password is used
+  ansible.builtin.fail:
+    msg: >-
+      Detected dbbot public default password: clickhouse_default_password.
+      Set fcs_allow_dbbot_default_passwd=true to explicitly allow this default,
+      or customize clickhouse_default_password in playbooks/vars/common_config.yml before running the playbook.
+  when:
+    - not (fcs_allow_dbbot_default_passwd | bool)
+    - clickhouse_default_password == 'Dbbot_default@8888'

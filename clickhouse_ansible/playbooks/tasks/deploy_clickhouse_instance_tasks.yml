@@ -1,0 +1,19 @@
+- name: Deploy instance {{ ck_instance_id }}
+  when: current_node_instance_id | int == ck_instance_id | int
+  block:
+    - name: Initialize system (once per physical host)
+      ansible.builtin.include_role:
+        name: "../roles/init_system"
+      when: ck_run_host_tasks | default(true)
+
+    - name: Deploy ClickHouse Keeper (optional)
+      ansible.builtin.include_role:
+        name: "../roles/deploy_zookeeper"
+      when:
+        - use_clickhouse_keeper | bool
+        - inventory_hostname in groups['zookeeper_cluster'] | default([])
+        - ck_run_host_tasks | default(true)
+
+    - name: Deploy ClickHouse
+      ansible.builtin.include_role:
+        name: "../roles/deploy_clickhouse"

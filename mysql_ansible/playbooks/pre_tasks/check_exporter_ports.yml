@@ -1,0 +1,66 @@
+- name: Check if node_exporter service file exists
+  ansible.builtin.stat:
+    path: "{{ node_exporter_service_file }}"
+  register: node_exporter_service_stat
+  when: node_exporter_install
+
+- name: Check if mysqld_exporter service file exists
+  ansible.builtin.stat:
+    path: "{{ mysqld_exporter_service_file }}"
+  register: mysqld_exporter_service_stat
+  when: mysqld_exporter_install
+
+- name: Check node_exporter port is free
+  ansible.builtin.shell: "ss -lnt | awk 'NR>1 && $4 ~ /:{{ node_exporter_port }}$/ {print $4}'"
+  register: node_exporter_port_check
+  changed_when: false
+  when:
+    - node_exporter_install
+    - not (node_exporter_service_stat.stat.exists | default(false))
+
+- name: Fail if node_exporter port is in use
+  ansible.builtin.fail:
+    msg: "node_exporter port {{ node_exporter_port }} is already in use"
+  when:
+    - node_exporter_install
+    - not (node_exporter_service_stat.stat.exists | default(false))
+    - node_exporter_port_check.stdout != ""
+
+- name: Check mysqld_exporter port is free
+  ansible.builtin.fail:
+    msg: "`mysqld_exporter_port` must be `auto` or a numeric port."
+  when:
+    - mysqld_exporter_install
+    - not ((mysqld_exporter_port | string) == 'auto' or (mysqld_exporter_port | string) is match('^[0-9]+$'))
+
+- name: Validate node_exporter port is within range
+  ansible.builtin.fail:
+    msg: "`node_exporter_port` value must be within the range 1024 to 65535."
+  when:
+    - node_exporter_install
+    - not (node_exporter_service_stat.stat.exists | default(false))
+    - (node_exporter_port | int) < 1024 or (node_exporter_port | int) > 65535
+
+- name: Validate mysqld_exporter port is within range
+  ansible.builtin.fail:
+    msg: "`mysqld_exporter_port` resolved value must be within the range 1024 to 65535."
+  when:
+    - mysqld_exporter_install
+    - not (mysqld_exporter_service_stat.stat.exists | default(false))
+    - (mysqld_exporter_port_resolved | int) < 1024 or (mysqld_exporter_port_resolved | int) > 65535
+
+- name: Check mysqld_exporter port is free
+  ansible.builtin.shell: "ss -lnt | awk 'NR>1 && $4 ~ /:{{ mysqld_exporter_port_resolved | int }}$/ {print $4}'"
+  register: mysqld_exporter_port_check
+  changed_when: false
+  when:
+    - mysqld_exporter_install
+    - not (mysqld_exporter_service_stat.stat.exists | default(false))
+
+- name: Fail if mysqld_exporter port is in use
+  ansible.builtin.fail:
+    msg: "mysqld_exporter port {{ mysqld_exporter_port_resolved | int }} is already in use"
+  when:
+    - mysqld_exporter_install
+    - not (mysqld_exporter_service_stat.stat.exists | default(false))
+    - mysqld_exporter_port_check.stdout != ""

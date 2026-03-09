@@ -1,0 +1,18 @@
+# InnoDB Cluster Role Default Variables
+
+# Cluster name
+innodb_cluster_name: "myCluster"
+
+# Cluster admin user
+mysql_cluster_admin_user: clusteradmin
+mysql_cluster_admin_password: "Dbbot_{{ mysql_cluster_admin_user }}@8888"
+
+# MySQL Shell path
+mysqlsh_path: /usr/bin/mysqlsh
+
+# Cluster options
+innodb_cluster_multi_primary: false
+innodb_cluster_member_weight: 50
+innodb_cluster_auto_rejoin_tries: 3
+innodb_cluster_exit_state_action: READ_ONLY
+innodb_cluster_expel_timeout: 5

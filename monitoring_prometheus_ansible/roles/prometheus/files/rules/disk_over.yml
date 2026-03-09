@@ -1,0 +1,11 @@
+groups:
+- name: 磁盘使用率报警规则
+  rules:
+  - alert: 磁盘使用率告警
+    expr: 100 - node_filesystem_free_bytes{fstype=~"xfs|ext4"} / node_filesystem_size_bytes{fstype=~"xfs|ext4"} * 100 > 85
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "硬盘分区使用率过高"
+      description: "分区使用大于85%（当前值：{{ $value }}%）"

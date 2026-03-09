@@ -1,0 +1,182 @@
+# File automatically generated during MySQL Router bootstrap
+[DEFAULT]
+name={{ router_bootstrap_name | default(ansible_hostname) }}
+user={{ router_user }}
+logging_folder={{ router_log_dir }}
+runtime_folder={{ router_run_dir }}
+data_folder={{ router_data_dir }}/data
+keyring_path={{ router_data_dir }}/data/keyring
+master_key_path={{ router_data_dir }}/mysqlrouter.key
+connect_timeout=5
+read_timeout=30
+dynamic_state={{ router_data_dir }}/data/state.json
+client_ssl_cert={{ router_data_dir }}/data/router-cert.pem
+client_ssl_key={{ router_data_dir }}/data/router-key.pem
+client_ssl_mode=PREFERRED
+server_ssl_mode=PREFERRED
+server_ssl_verify=DISABLED
+unknown_config_option=error
+max_idle_server_connections=64
+router_require_enforce=1
+{% if max_total_connections is defined %}
+max_total_connections={{ max_total_connections }}
+{% endif %}
+
+[logger]
+level=info
+
+[metadata_cache:bootstrap]
+cluster_type=gr
+router_id={{ router_id }}
+user={{ mysql_router_user }}
+metadata_cluster={{ metadata_cluster_name }}
+ttl=60
+auth_cache_ttl=-1
+auth_cache_refresh_interval=60
+use_gr_notifications=1
+
+{% if router_ports.rw is defined and router_ports.rw.enabled | default(true) %}
+[routing:bootstrap_rw]
+bind_address=0.0.0.0
+bind_port={{ router_ports.rw.port }}
+socket={{ router_ports.rw.socket | default(router_data_dir ~ '/mysql.sock') }}
+destinations={{ router_ports.rw.destinations | default('metadata-cache://' ~ metadata_cluster_name ~ '/?role=PRIMARY') }}
+routing_strategy={{ router_ports.rw.routing_strategy | default('first-available') }}
+protocol={{ router_ports.rw.protocol | default('classic') }}
+{% if router_ports.rw.max_connections is defined %}
+max_connections={{ router_ports.rw.max_connections }}
+{% endif %}
+{% if router_ports.rw.client_ssl_mode is defined %}
+client_ssl_mode={{ router_ports.rw.client_ssl_mode }}
+{% endif %}
+{% if router_ports.rw.server_ssl_mode is defined %}
+server_ssl_mode={{ router_ports.rw.server_ssl_mode }}
+{% endif %}
+
+{% endif %}
+{% if router_ports.ro is defined and router_ports.ro.enabled | default(false) %}
+[routing:bootstrap_ro]
+bind_address=0.0.0.0
+bind_port={{ router_ports.ro.port }}
+socket={{ router_ports.ro.socket | default(router_data_dir ~ '/mysqlro.sock') }}
+destinations={{ router_ports.ro.destinations | default('metadata-cache://' ~ metadata_cluster_name ~ '/?role=SECONDARY') }}
+routing_strategy={{ router_ports.ro.routing_strategy | default('round-robin-with-fallback') }}
+protocol={{ router_ports.ro.protocol | default('classic') }}
+{% if router_ports.ro.max_connections is defined %}
+max_connections={{ router_ports.ro.max_connections }}
+{% endif %}
+{% if router_ports.ro.client_ssl_mode is defined %}
+client_ssl_mode={{ router_ports.ro.client_ssl_mode }}
+{% endif %}
+{% if router_ports.ro.server_ssl_mode is defined %}
+server_ssl_mode={{ router_ports.ro.server_ssl_mode }}
+{% endif %}
+
+{% endif %}
+{% if router_ports.rw_split is defined and router_ports.rw_split.enabled | default(false) %}
+[routing:bootstrap_rw_split]
+bind_address=0.0.0.0
+bind_port={{ router_ports.rw_split.port }}
+socket={{ router_ports.rw_split.socket | default(router_data_dir ~ '/mysqlsplit.sock') }}
+destinations={{ router_ports.rw_split.destinations | default('metadata-cache://' ~ metadata_cluster_name ~ '/?role=PRIMARY_AND_SECONDARY') }}
+routing_strategy={{ router_ports.rw_split.routing_strategy | default('round-robin') }}
+protocol={{ router_ports.rw_split.protocol | default('classic') }}
+{% if router_ports.rw_split.max_connections is defined %}
+max_connections={{ router_ports.rw_split.max_connections }}
+{% endif %}
+{% if router_ports.rw_split.connection_sharing is defined %}
+connection_sharing={{ router_ports.rw_split.connection_sharing }}
+{% endif %}
+{% if router_ports.rw_split.client_ssl_mode is defined %}
+client_ssl_mode={{ router_ports.rw_split.client_ssl_mode }}
+{% else %}
+client_ssl_mode=PREFERRED
+{% endif %}
+{% if router_ports.rw_split.server_ssl_mode is defined %}
+server_ssl_mode={{ router_ports.rw_split.server_ssl_mode }}
+{% else %}
+server_ssl_mode=PREFERRED
+{% endif %}
+{% if router_ports.rw_split.access_mode is defined %}
+access_mode={{ router_ports.rw_split.access_mode }}
+{% endif %}
+
+{% endif %}
+{% if router_ports.rw_x is defined and router_ports.rw_x.enabled | default(false) %}
+[routing:bootstrap_x_rw]
+bind_address=0.0.0.0
+bind_port={{ router_ports.rw_x.port }}
+socket={{ router_ports.rw_x.socket | default(router_data_dir ~ '/mysqlx.sock') }}
+destinations={{ router_ports.rw_x.destinations | default('metadata-cache://' ~ metadata_cluster_name ~ '/?role=PRIMARY') }}
+routing_strategy={{ router_ports.rw_x.routing_strategy | default('first-available') }}
+protocol={{ router_ports.rw_x.protocol | default('x') }}
+{% if router_ports.rw_x.max_connections is defined %}
+max_connections={{ router_ports.rw_x.max_connections }}
+{% endif %}
+{% if router_ports.rw_x.router_require_enforce is defined %}
+router_require_enforce={{ router_ports.rw_x.router_require_enforce }}
+{% else %}
+router_require_enforce=0
+{% endif %}
+client_ssl_ca=
+server_ssl_key=
+server_ssl_cert=
+
+{% endif %}
+{% if router_ports.ro_x is defined and router_ports.ro_x.enabled | default(false) %}
+[routing:bootstrap_x_ro]
+bind_address=0.0.0.0
+bind_port={{ router_ports.ro_x.port }}
+socket={{ router_ports.ro_x.socket | default(router_data_dir ~ '/mysqlxro.sock') }}
+destinations={{ router_ports.ro_x.destinations | default('metadata-cache://' ~ metadata_cluster_name ~ '/?role=SECONDARY') }}
+routing_strategy={{ router_ports.ro_x.routing_strategy | default('round-robin-with-fallback') }}
+protocol={{ router_ports.ro_x.protocol | default('x') }}
+{% if router_ports.ro_x.max_connections is defined %}
+max_connections={{ router_ports.ro_x.max_connections }}
+{% endif %}
+{% if router_ports.ro_x.router_require_enforce is defined %}
+router_require_enforce={{ router_ports.ro_x.router_require_enforce }}
+{% else %}
+router_require_enforce=0
+{% endif %}
+client_ssl_ca=
+server_ssl_key=
+server_ssl_cert=
+
+{% endif %}
+
+# -----------------------------
+# REST API: bind to 127.0.0.1 + file auth (optional)
+# -----------------------------
+{% if router_ports.http is defined and router_ports.http.enabled | default(true) %}
+[http_server]
+bind_address={{ router_rest_api_bind_address | default('127.0.0.1') }}
+port={{ router_ports.http.port }}
+ssl=1
+ssl_cert={{ router_data_dir }}/data/router-cert.pem
+ssl_key={{ router_data_dir }}/data/router-key.pem
+
+[http_auth_realm:default_auth_realm]
+backend=default_auth_backend
+method=basic
+name=default_realm
+
+[http_auth_backend:default_auth_backend]
+{% if router_rest_api_auth_mode is defined and router_rest_api_auth_mode == 'file' %}
+backend=file
+filename={{ router_rest_api_realm_file }}
+{% else %}
+backend=metadata_cache
+{% endif %}
+
+[rest_api]
+
+[rest_router]
+require_realm=default_auth_realm
+
+[rest_routing]
+require_realm=default_auth_realm
+
+[rest_metadata_cache]
+require_realm=default_auth_realm
+{% endif %}

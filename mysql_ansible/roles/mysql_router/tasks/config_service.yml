@@ -1,0 +1,17 @@
+---
+# Configure MySQL Router systemd service
+
+- name: Create systemd service file
+  ansible.builtin.template:
+    src: mysqlrouter.service.j2
+    dest: "/etc/systemd/system/{{ router_service_name }}.service"
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Reload systemd
+    - Restart mysqlrouter
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true

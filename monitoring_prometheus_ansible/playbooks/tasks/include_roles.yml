@@ -1,0 +1,10 @@
+- name: Include role set_linux
+  ansible.builtin.include_role:
+    name: "../roles/set_linux"
+  when: include_set_linux | default(false)
+
+- name: Include other roles
+  ansible.builtin.include_role:
+    name: "{{ item }}"
+  loop: "{{ roles_to_execute }}"
+  when: item != "../roles/set_linux"

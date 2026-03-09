@@ -1,0 +1,13 @@
+- name: Ensure group "mysql" exists
+  ansible.builtin.group:
+    name: "{{ mysql_group }}"
+    state: present
+
+- name: Create mysql user
+  ansible.builtin.user:
+    name: "{{ mysql_user }}"
+    shell: /bin/bash
+    home: /home/{{ mysql_user }}
+    group: "{{ mysql_group }}"
+    password: "{{ mysql_user_password | password_hash('sha512') }}"
+    state: present

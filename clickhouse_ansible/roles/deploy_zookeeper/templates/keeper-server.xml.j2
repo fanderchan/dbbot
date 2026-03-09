@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<yandex>
+    <keeper_server>
+        <tcp_port>{{ keeper_tcp_port }}</tcp_port>
+        <server_id>{{ keeper_server_id }}</server_id>
+        <log_storage_path>{{ keeper_log_storage_path }}</log_storage_path>
+        <snapshot_storage_path>{{ keeper_snapshot_storage_path }}</snapshot_storage_path>
+        <coordination_settings>
+            <operation_timeout_ms>{{ keeper_operation_timeout_ms }}</operation_timeout_ms>
+            <session_timeout_ms>{{ keeper_session_timeout_ms }}</session_timeout_ms>
+            <raft_logs_level>{{ keeper_raft_logs_level }}</raft_logs_level>
+        </coordination_settings>
+
+        <raft_configuration>
+{% if groups['zookeeper_cluster'] is defined %}
+{% for node in groups['zookeeper_cluster'] %}
+            <server>
+                <id>{{ hostvars[node]['zk_id'] | default(loop.index) }}</id>
+                <hostname>{{ hostvars[node]['ansible_host'] | default(node) }}</hostname>
+                <port>{{ keeper_raft_port }}</port>
+            </server>
+{% endfor %}
+{% else %}
+{% for node in groups['clickhouse_cluster'] | default([]) %}
+            <server>
+                <id>{{ loop.index }}</id>
+                <hostname>{{ hostvars[node]['ansible_host'] | default(node) }}</hostname>
+                <port>{{ keeper_raft_port }}</port>
+            </server>
+{% endfor %}
+{% endif %}
+        </raft_configuration>
+    </keeper_server>
+</yandex>

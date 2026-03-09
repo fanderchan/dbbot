@@ -1,0 +1,44 @@
+# ClickHouse 恢复后跨集群校验参数
+
+# 源集群/目标集群分组
+# 典型用法：
+#   ansible-playbook \
+#     -i ../inventory/hosts.backup.ini \
+#     -i ../inventory/hosts.restore.ini \
+#     validate_restore_consistency.yml
+validate_source_group: "clickhouse_backup"
+validate_target_group: "clickhouse_restore"
+
+# 查询连接参数
+# 默认使用每台主机本地 127.0.0.1 + inventory 中的 clickhouse_tcp_port
+validate_source_query_host: "127.0.0.1"
+validate_target_query_host: "127.0.0.1"
+validate_clickhouse_user: "default"
+validate_clickhouse_password: "{{ clickhouse_default_password }}"
+
+# 对比键：按 check 名称 + shard + replica 对比
+validate_compare_key_fields:
+  - shard
+  - replica
+
+# true: 源/目标缺少对应分片副本时直接失败
+validate_fail_on_missing_pairs: true
+
+# 校验项列表
+# 说明：
+# 1) 默认按单值 SQL 结果比较，建议返回 count()/sum() 等单值。
+# 2) 若 query 为空，则自动生成：
+#      SELECT toString(count()) FROM <database>.<local_table> [WHERE <where>]
+# 3) TTL 表建议使用固定时间窗口，例如：
+#      where: "log_time >= toDateTime('2026-02-07 00:00:00')"
+validate_checks: []
+#
+# 示例：
+# validate_checks:
+#   - name: "mysql_slowlog_recent_window"
+#     database: "lab_ck_biz"
+#     local_table: "mysql_slowlog_raw_local"
+#     where: "log_time >= toDateTime('2026-02-07 00:00:00')"
+#   - name: "order_items_full_count"
+#     database: "lab_ck_biz"
+#     local_table: "fact_order_item_local"

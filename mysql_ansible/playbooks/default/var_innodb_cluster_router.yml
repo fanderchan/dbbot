@@ -1,0 +1,90 @@
+# vars loading order: common_config -> this file
+# ============================================================
+# Common settings (usually only need to modify these)
+# ============================================================
+router_enable_ha: true
+router_bootstrap_server: 192.0.2.131
+
+# ============================================================
+# HA settings (effective when router_enable_ha=true)
+# ============================================================
+router_vip: 198.51.100.150
+router_net_work_interface: ens33
+router_ha_nodes:
+  - ip: 198.51.100.151
+    role: MASTER
+    priority: 100
+  - ip: 198.51.100.152
+    role: BACKUP
+    priority: 90
+router_vip_netmask: "32"
+router_keepalived_virtual_router_id: 60
+router_bootstrap_force: true
+router_keepalived_check_interval: 3
+router_keepalived_check_fall: 2
+router_keepalived_check_rise: 2
+router_health_tcp_timeout: 2
+
+# ============================================================
+# Advanced settings (usually no need to modify)
+# ============================================================
+
+# ============================================================
+# Port Configuration
+# ============================================================
+# Port configuration dictionary; each port entry includes:
+#   - port: port number
+#   - enabled: whether to enable the port in mysqlrouter.conf
+#   - monitor: whether to monitor the port in health checks (HA mode only)
+#   - other routing-specific options (optional)
+#
+router_ports:
+  rw:
+    port: 6446
+    enabled: true      # Enable in mysqlrouter.conf
+    monitor: true      # Monitor in health checks
+    max_connections: 1000
+  ro:
+    port: 6447
+    enabled: true 
+    monitor: true     
+    max_connections: 1000
+  rw_x:
+    port: 6448
+    enabled: false
+    monitor: false
+    max_connections: 1000
+  ro_x:
+    port: 6449
+    enabled: false
+    monitor: false
+    max_connections: 1000
+  rw_split:
+    port: 6450
+    enabled: false
+    monitor: false
+    max_connections: 1000
+  http:
+    port: 8443
+    enabled: true      # REST API enabled by default
+    monitor: false     # REST API usually does not need monitoring
+    max_connections: 1000
+
+max_total_connections: 1000
+
+# ============================================================
+# REST API Configuration
+# ============================================================
+# REST API bind address (default: 127.0.0.1 for security)
+router_rest_api_bind_address: 127.0.0.1
+
+# REST API authentication mode: 'file' or 'metadata_cache' (default: 'file')
+# - 'file': Use file-based authentication
+# - 'metadata_cache': Use MySQL accounts from metadata cache
+router_rest_api_auth_mode: file
+
+# REST API file authentication user (used when auth_mode is 'file')
+router_rest_api_file_user: router_api_user
+
+# REST API file authentication password (used when auth_mode is 'file')
+router_rest_api_file_password: "Dbbot_{{ router_rest_api_file_user | default('router_api_user') }}@8888"

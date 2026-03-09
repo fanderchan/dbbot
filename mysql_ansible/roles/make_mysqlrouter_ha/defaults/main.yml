@@ -1,0 +1,47 @@
+# MySQL Router HA Role Default Variables
+
+# Health check script path and log destination
+router_health_check_script: "/usr/local/bin/check_mysqlrouter.sh"
+router_health_log_file: "/var/log/keepalived/check_mysqlrouter.log"
+router_keepalived_notify_script: "/usr/local/bin/router_keepalived_notify.sh"
+
+# Keepalived check parameters
+router_keepalived_check_interval: 3
+router_keepalived_check_fall: 2
+router_keepalived_check_rise: 2
+
+# Health check timeout (single TCP handshake seconds)
+router_health_tcp_timeout: 2
+
+# Port configuration dictionary (aligned with the mysql_router role)
+# In HA mode, set monitor: true to enable port monitoring
+# To override monitoring, redefine router_ports in vars and set the monitor field
+router_ports:
+  rw:
+    port: 6446
+    enabled: true
+    monitor: true
+  ro:
+    port: 6447
+    enabled: false
+    monitor: false
+  rw_x:
+    port: 6448
+    enabled: false
+    monitor: false
+  ro_x:
+    port: 6449
+    enabled: false
+    monitor: false
+  rw_split:
+    port: 6450
+    enabled: false
+    monitor: false
+  http:
+    port: 8443
+    enabled: true
+    monitor: false
+
+# Keepalived VRRP configuration
+router_keepalived_virtual_router_id: 60
+router_keepalived_auth_pass: "mysqlrouter"

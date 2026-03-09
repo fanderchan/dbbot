@@ -1,0 +1,27 @@
+- name: Set the number of hosts in each group
+  set_fact:
+    alertmanager_count: "{{ groups['alertmanager'] | length }}"
+    prometheus_count: "{{ groups['prometheus'] | length }}"
+    grafana_count: "{{ groups['grafana'] | length }}"
+  run_once: true
+
+- name: Verify that 'alertmanager' group has exactly one host
+  assert:
+    that:
+      - "alertmanager_count |int == 1"
+    fail_msg: "The 'alertmanager' group must have exactly one host."
+  run_once: true
+
+- name: Verify that 'prometheus' group has exactly one host
+  assert:
+    that:
+      - "prometheus_count | int == 1"
+    fail_msg: "The 'prometheus' group must have exactly one host."
+  run_once: true
+
+- name: Verify that 'grafana' group has exactly one host
+  assert:
+    that:
+      - "grafana_count | int == 1"
+    fail_msg: "The 'grafana' group must have exactly one host."
+  run_once: true

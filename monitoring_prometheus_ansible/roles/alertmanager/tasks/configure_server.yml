@@ -1,0 +1,16 @@
+- name: Configure alertmanager Server
+  ansible.builtin.template:
+    src: ../templates/alertmanager.yml.j2
+    dest: /usr/local/alertmanager/alertmanager.yml
+    owner: "{{ alertmanager_run_user }}"
+    group: "{{ alertmanager_run_user_group }}"
+    mode: '0644'
+
+- name: Copy alertmanager.tmpl to alertmanager server directory
+  ansible.builtin.copy:
+    src: ../files/alertmanager.tmpl
+    dest: /usr/local/alertmanager/alertmanager.tmpl
+    owner: "{{ alertmanager_run_user }}"
+    group: "{{ alertmanager_run_user_group }}"
+    mode: '0644'
+    remote_src: no

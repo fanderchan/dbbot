@@ -1,0 +1,28 @@
+- name: Replace all occurrences in my.cnf
+  ansible.builtin.replace:
+    path: "{{ mysql_config_file }}"
+    regexp: '^({{ setting.key }}\s*=\s*)\S+'
+    replace: "{{ setting.key }} = {{ setting.value }}"
+  loop:
+    - { key: 'read_only', value: "on" }
+    - { key: 'super_read_only', value: "on" }
+    - { key: 'skip_slave_start', value: "on" }
+  loop_control:
+    loop_var: setting
+    label: "{{ setting.key }}"
+  register: make_keepalived__replace_result
+  failed_when: make_keepalived__replace_result.msg is defined and "No such file or directory" in make_keepalived__replace_result.msg
+
+- name: Ensure read_only, super_read_only, skip_slave_start exist in my.cnf
+  ansible.builtin.lineinfile:
+    path: "{{ mysql_config_file }}"
+    regexp: '^({{ setting.key }}\s*=\s*)\S+'
+    line: "{{ setting.key }} = {{ setting.value }}"
+    insertafter: EOF
+  loop:
+    - { key: 'read_only', value: "on" }
+    - { key: 'super_read_only', value: "on" }
+    - { key: 'skip_slave_start', value: "on" }
+  loop_control:
+    loop_var: setting
+    label: "{{ setting.key }}"

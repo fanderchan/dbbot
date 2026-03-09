@@ -1,0 +1,24 @@
+- name: Ensure /usr/local/prometheus directory exists
+  ansible.builtin.file:
+    path: /usr/local/prometheus
+    state: directory
+    owner: "{{ prometheus_run_user }}"
+    group: "{{ prometheus_run_user_group }}"
+    mode: '0755'
+
+- name: Extract prometheus tarball
+  ansible.builtin.unarchive:
+    creates: "/tmp/unarchive_prometheus_package_finished"
+    copy: false
+    src: /tmp/{{ prometheus_package }}
+    dest: /usr/local/prometheus
+    owner: "{{ prometheus_run_user }}"
+    group: "{{ prometheus_run_user_group }}"
+    extra_opts:
+      - --strip-components=1
+
+- name: Touch unarchive_prometheus_package_finished file
+  ansible.builtin.file:
+    path: "/tmp/unarchive_prometheus_package_finished"
+    mode: '0755'
+    state: touch

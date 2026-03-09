@@ -1,0 +1,7 @@
+- name: Touch alertmanager_finish.flag
+  ansible.builtin.file:
+    path: "/tmp/alertmanager_finish.flag"
+    owner: "{{ alertmanager_run_user }}"
+    group: "{{ alertmanager_run_user_group }}"
+    state: touch
+    mode: '0644'

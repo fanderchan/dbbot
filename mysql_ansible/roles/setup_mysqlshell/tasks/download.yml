@@ -1,0 +1,38 @@
+---
+# Download MySQL Shell package
+
+- name: Ensure downloads directory exists
+  ansible.builtin.file:
+    path: "{{ mysqlshell_packages_dir }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Check if MySQL Shell package exists locally
+  ansible.builtin.stat:
+    path: "{{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}"
+  register: setup_mysqlshell__package_stat
+  delegate_to: localhost
+
+- name: Download MySQL Shell from MySQL CDN
+  ansible.builtin.get_url:
+    url: "https://cdn.mysql.com/Downloads/MySQL-Shell/{{ mysqlshell_package }}"
+    dest: "{{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}"
+    mode: '0644'
+    timeout: 300
+  delegate_to: localhost
+  run_once: true
+  when: not setup_mysqlshell__package_stat.stat.exists
+
+- name: Verify package downloaded
+  ansible.builtin.stat:
+    path: "{{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}"
+  register: setup_mysqlshell__package_verify
+  delegate_to: localhost
+
+- name: Fail if package not found
+  ansible.builtin.fail:
+    msg: "MySQL Shell package not found: {{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}"
+  when: not setup_mysqlshell__package_verify.stat.exists
+

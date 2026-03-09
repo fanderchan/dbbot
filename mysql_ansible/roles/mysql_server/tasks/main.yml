@@ -1,0 +1,45 @@
+- name: Fail if flag exists
+  ansible.builtin.import_tasks: fail_if_flag_exists.yml
+
+- name: Fail if mysql port in use
+  ansible.builtin.import_tasks: check_mysql_port_not_in_use.yml
+
+- name: Create user
+  ansible.builtin.import_tasks: create_user.yml
+
+- name: Create dir and config file
+  ansible.builtin.import_tasks: mkdir_and_config_file.yml
+
+- name: Install mysql dependents
+  ansible.builtin.import_tasks: install_mysql_dependents.yml
+
+- name: Install mysql to /usr/local/mysql
+  ansible.builtin.import_tasks: install_mysql.yml
+
+- name: Fix libcrypto.so and libssl.so not find by create link if db_type is greatsql
+  ansible.builtin.import_tasks: fix_greatsql_install.yml
+  when: db_type == 'greatsql'
+
+- name: Init mysql datadir
+  ansible.builtin.import_tasks: initialize_mysql_datadir.yml
+
+- name: Config mysql service and start mysql
+  ansible.builtin.import_tasks: config_mysql_service_and_start_mysql.yml
+
+- name: MySQL status
+  ansible.builtin.import_tasks: status.yml
+
+- name: Make mysql secure
+  ansible.builtin.import_tasks: make_mysql_security.yml
+
+- name: Create mysql fast login
+  ansible.builtin.import_tasks: create_mysql_fast_login.yml
+  when: fcs_create_mysql_fast_login | bool
+
+- name: Touch single_finish.flag
+  ansible.builtin.file:
+    path: "{{ datadir }}/single_finish.flag"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    state: touch
+    mode: '0644'

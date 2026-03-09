@@ -1,0 +1,2 @@
+- name: Install xtrabackup
+  ansible.builtin.import_tasks: install_xtrabackup.yml

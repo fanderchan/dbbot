@@ -1,0 +1,48 @@
+- name: Check is mysqld install by dbbot or not
+  ansible.builtin.stat:
+    path: "{{ datadir }}/master_slave_finish.flag"
+  register: make_mha__p
+
+# - debug: var=make_mha__p
+- name: Fail if flag not exists
+  ansible.builtin.fail:
+    msg: "Pls install_master_slaves first!"
+  when: not make_mha__p.stat.exists
+
+- name: Check if finish setting ssh passwordless or not
+  ansible.builtin.stat:
+    path: "/tmp/ssh_finish.flag"
+  register: make_mha__z
+
+# - debug: var=make_mha__z
+- name: Fail if flag not exists
+  ansible.builtin.fail:
+    msg: "Pls set_ssh_passwordless first!"
+  when: not make_mha__z.stat.exists
+
+- name: Install mha node and mha manager dependencies
+  ansible.builtin.import_tasks: install_dependencies.yml
+
+- name: Install mha node
+  ansible.builtin.import_tasks: install_node.yml
+
+- name: Create mha user
+  ansible.builtin.import_tasks: create_mha_user.yml
+  when: master_ip in ansible_all_ipv4_addresses
+
+- name: Bind vip
+  ansible.builtin.import_tasks: bind_vip.yml
+  when: master_ip in ansible_all_ipv4_addresses
+
+- name: Install mha manager
+  ansible.builtin.import_tasks: install_manager.yml
+
+- name: Config manager
+  ansible.builtin.import_tasks: config_manager.yml
+
+- name: Start manager
+  ansible.builtin.import_tasks: start_manager.yml
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Edit /etc/sudoers
+  ansible.builtin.import_tasks: edit_mysql_sudoer.yml

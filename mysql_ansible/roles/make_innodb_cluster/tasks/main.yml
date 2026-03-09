@@ -1,0 +1,56 @@
+---
+# InnoDB Cluster Main Tasks
+# Create and configure InnoDB Cluster using MySQL Shell
+
+- name: Check MySQL Shell is installed
+  ansible.builtin.command: which mysqlsh
+  register: make_innodb_cluster__mysqlsh_check
+  changed_when: false
+  failed_when: make_innodb_cluster__mysqlsh_check.rc != 0
+
+- name: Set mysqlsh path
+  ansible.builtin.set_fact:
+    mysqlsh_path: "{{ make_innodb_cluster__mysqlsh_check.stdout }}"
+
+- name: Check if cluster already exists
+  ansible.builtin.stat:
+    path: "{{ datadir }}/innodb_cluster_finish.flag"
+  register: make_innodb_cluster__flag
+
+- name: Create cluster admin user
+  ansible.builtin.import_tasks: create_cluster_admin.yml
+  when: not make_innodb_cluster__flag.stat.exists
+
+- name: Configure instances for InnoDB Cluster
+  ansible.builtin.import_tasks: configure_instance.yml
+  when: not make_innodb_cluster__flag.stat.exists
+
+- name: Create InnoDB Cluster (on primary node only)
+  ansible.builtin.import_tasks: create_cluster.yml
+  when:
+    - not make_innodb_cluster__flag.stat.exists
+    - ansible_default_ipv4.address == innodb_cluster_primary
+
+- name: Add instances to cluster (on primary node only)
+  ansible.builtin.import_tasks: add_instances.yml
+  when:
+    - not make_innodb_cluster__flag.stat.exists
+    - ansible_default_ipv4.address == innodb_cluster_primary
+
+- name: Setup MySQL Router account (on primary node only)
+  ansible.builtin.import_tasks: setup_router_account.yml
+  when:
+    - not make_innodb_cluster__flag.stat.exists
+    - ansible_default_ipv4.address == innodb_cluster_primary
+
+- name: Verify cluster status
+  ansible.builtin.import_tasks: verify_cluster.yml
+  when: ansible_default_ipv4.address == innodb_cluster_primary
+
+- name: Touch innodb_cluster_finish.flag
+  ansible.builtin.file:
+    path: "{{ datadir }}/innodb_cluster_finish.flag"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    state: touch
+    mode: '0644'

@@ -1,0 +1,16 @@
+---
+# Create MySQL Router system user and group
+
+- name: Create router group
+  ansible.builtin.group:
+    name: "{{ router_group }}"
+    state: present
+
+- name: Create router user
+  ansible.builtin.user:
+    name: "{{ router_user }}"
+    group: "{{ router_group }}"
+    shell: /sbin/nologin
+    system: true
+    create_home: false
+    comment: "MySQL Router"

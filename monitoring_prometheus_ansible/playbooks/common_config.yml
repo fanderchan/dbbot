@@ -1,0 +1,28 @@
+packages_dir: ../downloads/
+
+prometheus_port: 9090
+prometheus_run_user: monitor
+prometheus_run_user_group: monitor
+prometheus_package: prometheus-2.54.0.linux-amd64.tar.gz
+
+grafana_port: 3000
+grafana_run_user: monitor
+grafana_run_user_group: monitor
+grafana_import_mysql_dashboard: true
+grafana_package: grafana-enterprise-10.4.6.linux-amd64.tar.gz
+
+alertmanager_port: 9093
+alertmanager_run_user: monitor
+alertmanager_run_user_group: monitor
+alertmanager_package: alertmanager-0.27.0.linux-amd64.tar.gz
+
+alert_email_to: 'alerts@example.com'  # The email address to receive alert notifications.
+alert_email_from: 'dbbot-alerts@example.com'  # The sender email address for alert notifications.
+alert_smtp_smarthost: 'smtp.example.com:587'  # The SMTP server address (e.g., smtp.example.com:587).
+alert_smtp_auth_username: 'smtp-user@example.com'  # The SMTP server authentication username.
+alert_smtp_auth_password: '<your_smtp_password>'  # The SMTP server authentication password.
+
+fcs_auto_download: false
+fcs_grafana_import_node_dashboards: true
+fcs_grafana_import_mysql_dashboards: true
+fcs_grafana_import_router_dashboards: true

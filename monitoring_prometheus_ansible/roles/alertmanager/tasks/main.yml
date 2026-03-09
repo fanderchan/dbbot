@@ -1,0 +1,32 @@
+- name: Fail if flag exists
+  ansible.builtin.import_tasks: fail_if_flag_exists.yml
+
+- name: Fail if alertmanager port -> {{ alertmanager_port }} is in use
+  ansible.builtin.import_tasks: check_port_not_in_use.yml
+
+- name: Create user -> {{ alertmanager_run_user }}
+  ansible.builtin.import_tasks: create_user.yml
+
+- name: Download packages
+  ansible.builtin.import_tasks: download_packages.yml
+
+- name: Transfer packages -> {{ alertmanager_package }}
+  ansible.builtin.import_tasks: transfer_packages.yml
+
+- name: Extract packages -> {{ alertmanager_package }}
+  ansible.builtin.import_tasks: extract_packages.yml
+
+- name: Configure alertmanager Server
+  ansible.builtin.import_tasks: configure_server.yml
+
+- name: Setup and enable alertmanager service
+  ansible.builtin.import_tasks: setup_service.yml
+
+- name: Start alertmanager service
+  ansible.builtin.import_tasks: start_service.yml
+
+- name: Check alertmanager service is operational
+  ansible.builtin.import_tasks: check_service_ok.yml
+
+- name: Touch finished flag
+  ansible.builtin.import_tasks: touch_finished_flag.yml

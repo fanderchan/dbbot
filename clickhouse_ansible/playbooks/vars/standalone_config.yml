@@ -1,0 +1,15 @@
+# Standalone ClickHouse (single-node) configuration
+# 用于快速测试版本与功能验证
+
+# 集群名称（单机时用于 system.clusters 显示）
+clickhouse_cluster_name: "standalone"
+
+# 拓扑模式：standalone = 每台主机只配置本机实例（不感知其他主机）
+clickhouse_topology_mode: "standalone"
+
+# 是否强制要求 inventory 中仅包含单一物理主机
+# 如果需要多台主机并行单机部署，可设为 false
+clickhouse_single_host_required: false
+
+# 单机快速测试默认不启用 keeper
+use_clickhouse_keeper: false

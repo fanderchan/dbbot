@@ -1,0 +1,5 @@
+server_specs_processor_count: "{{ ansible_processor_count }}"
+server_specs_memtotal_mb: "{{ ansible_memtotal_mb }}"
+server_specs_memtotal_gb: "{{ ansible_memtotal_mb |int // 1024 }}"
+# Guard for templates/tasks that check GR mTLS; default off to avoid undefined variable errors.
+mtls_with_mysql_group_replication: false

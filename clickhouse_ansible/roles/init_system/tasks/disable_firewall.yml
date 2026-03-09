@@ -1,0 +1,89 @@
+- name: Gather service facts before firewall changes
+  ansible.builtin.service_facts:
+
+- name: Resolve firewalld service name
+  ansible.builtin.set_fact:
+    firewalld_service_name: >-
+      {% if 'firewalld.service' in ansible_facts.services %}firewalld.service
+      {% elif 'firewalld' in ansible_facts.services %}firewalld
+      {% else %}{% endif %}
+  when: ansible_os_family == "RedHat"
+
+- name: Resolve iptables service name
+  ansible.builtin.set_fact:
+    iptables_service_name: >-
+      {% if 'iptables.service' in ansible_facts.services %}iptables.service
+      {% elif 'iptables' in ansible_facts.services %}iptables
+      {% else %}{% endif %}
+  when: ansible_os_family == "RedHat"
+
+- name: Stop and disable firewalld (if installed)
+  ansible.builtin.systemd:
+    name: "{{ firewalld_service_name | trim }}"
+    state: stopped
+    enabled: false
+  when:
+    - ansible_os_family == "RedHat"
+    - (firewalld_service_name | default('') | trim | length) > 0
+
+- name: Stop and disable iptables (if installed)
+  ansible.builtin.systemd:
+    name: "{{ iptables_service_name | trim }}"
+    state: stopped
+    enabled: false
+  when:
+    - ansible_os_family == "RedHat"
+    - (iptables_service_name | default('') | trim | length) > 0
+
+- name: Check if UFW command exists
+  ansible.builtin.stat:
+    path: /usr/sbin/ufw
+  register: ufw_binary
+  when: ansible_os_family == "Debian"
+
+- name: Stop and disable UFW (if installed)
+  ansible.builtin.command: ufw --force disable
+  changed_when: true
+  when:
+    - ansible_os_family == "Debian"
+    - ufw_binary.stat.exists | default(false)
+
+- name: Gather service facts after firewall changes
+  ansible.builtin.service_facts:
+
+- name: Assert firewalld is disabled
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.services[firewalld_service_name | trim].state | default('unknown')) != 'running'
+      - (ansible_facts.services[firewalld_service_name | trim].status | default('unknown')) != 'enabled'
+    fail_msg: "firewalld is still active or enabled, which violates deployment baseline."
+  when:
+    - ansible_os_family == "RedHat"
+    - (firewalld_service_name | default('') | trim | length) > 0
+
+- name: Assert iptables is disabled
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.services[iptables_service_name | trim].state | default('unknown')) != 'running'
+      - (ansible_facts.services[iptables_service_name | trim].status | default('unknown')) != 'enabled'
+    fail_msg: "iptables is still active or enabled, which violates deployment baseline."
+  when:
+    - ansible_os_family == "RedHat"
+    - (iptables_service_name | default('') | trim | length) > 0
+
+- name: Check UFW status
+  ansible.builtin.command: ufw status
+  register: ufw_status
+  changed_when: false
+  when:
+    - ansible_os_family == "Debian"
+    - ufw_binary.stat.exists | default(false)
+
+- name: Assert UFW is inactive
+  ansible.builtin.assert:
+    that:
+      - "'inactive' in (ufw_status.stdout | lower)"
+    fail_msg: "UFW is still active, which violates deployment baseline."
+  when:
+    - ansible_os_family == "Debian"
+    - ufw_binary.stat.exists | default(false)

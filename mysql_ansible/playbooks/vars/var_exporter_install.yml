@@ -1,0 +1,25 @@
+# Node Exporter
+node_exporter_install: true
+node_exporter_port: 9100
+node_exporter_package: node_exporter-1.10.2.linux-amd64.tar.gz
+node_exporter_run_user: root
+node_exporter_run_user_group: root
+node_exporter_install_dir: "/usr/local/bin"
+node_exporter_service_file: "/etc/systemd/system/node_exporter.service"
+node_exporter_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_package | regex_replace('node_exporter-(.*)\\.linux-amd64\\.tar\\.gz', '\\1') }}/{{ node_exporter_package }}"
+node_exporter_install_type: dbbot    # dbbot, pmm, package
+
+# MySQLd Exporter
+mysqld_exporter_install: true
+mysqld_exporter_topology: ms    # ms, mgr
+mysqld_exporter_port: auto    # auto or explicit port number, e.g. 9108
+mysqld_exporter_port_auto_base: 9104
+mysqld_exporter_port_auto_mysql_base: 3306
+mysqld_exporter_port_resolved: "{{ ((mysqld_exporter_port_auto_base | int) + (mysql_port | int) - (mysqld_exporter_port_auto_mysql_base | int)) if (mysqld_exporter_port | string) == 'auto' else (mysqld_exporter_port | int) }}"
+mysqld_exporter_package: mysqld_exporter-0.18.0.linux-amd64.tar.gz
+mysqld_exporter_run_user: mysql
+mysqld_exporter_run_user_group: mysql
+mysqld_exporter_install_dir: "{{ mysql_data_dir_base }}/exporter/{{ mysql_port }}"
+mysqld_exporter_service_file: "/etc/systemd/system/mysqld{{ mysql_port }}_exporter.service"
+mysqld_exporter_url: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ mysqld_exporter_package | regex_replace('mysqld_exporter-(.*)\\.linux-amd64\\.tar\\.gz', '\\1') }}/{{ mysqld_exporter_package }}"
+mysqld_exporter_install_type: dbbot    # dbbot, pmm, package

@@ -1,0 +1,35 @@
+- name: Ensure MySQL Shell package directory exists (local)
+  ansible.builtin.file:
+    path: "{{ mysql_packages_dir }}"
+    state: directory
+    mode: '0755'
+  run_once: true
+
+- name: Remove invalid MySQL Shell package before re-download (local)
+  ansible.builtin.file:
+    path: "{{ mysql_shell_package_path }}"
+    state: absent
+  when:
+    - install_mysql_shell__package_file.stat.exists
+    - install_mysql_shell__tar_test.rc != 0
+  run_once: true
+
+- name: Download MySQL Shell package (local)
+  ansible.builtin.get_url:
+    url: "{{ mysql_shell_download_url }}"
+    dest: "{{ mysql_shell_package_path }}"
+    mode: '0644'
+    timeout: 300
+    headers:
+      User-Agent: "Wget/1.21.1"
+  run_once: true
+
+- name: Verify downloaded MySQL Shell package (local)
+  ansible.builtin.shell:
+    cmd: tar tf "{{ mysql_shell_package_path }}" 1>/dev/null 2>&1
+    warn: false
+  register: install_mysql_shell__downloaded_tar_test
+  changed_when: false
+  failed_when: install_mysql_shell__downloaded_tar_test.rc != 0
+  run_once: true
+  tags: [skip_ansible_lint]

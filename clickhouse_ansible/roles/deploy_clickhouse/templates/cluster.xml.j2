@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<clickhouse>
+    {% set topology_mode = clickhouse_topology_mode | default('cluster') %}
+    {% set nodes_for_cluster = clickhouse_all_nodes | default([]) %}
+    {% if topology_mode == 'standalone' %}
+        {% set nodes_for_cluster = clickhouse_all_nodes | selectattr('ip','equalto', ck_physical_host) | list %}
+    {% endif %}
+    {% if nodes_for_cluster | length == 0 %}
+        {% set nodes_for_cluster = clickhouse_all_nodes | default([]) %}
+    {% endif %}
+    {% set shard_ids = nodes_for_cluster | map(attribute='shard') | unique | list | sort %}
+
+    {% if topology_mode != 'standalone' %}
+    {% set zk_hosts = zookeeper_nodes | default([]) %}
+    {% if zk_hosts | length == 0 %}
+        {% set zk_hosts = groups['zookeeper_cluster'] | default([]) %}
+    {% endif %}
+    {% if (zk_hosts | length == 0) and (use_clickhouse_keeper | default(false)) %}
+        {% set zk_hosts = groups['clickhouse_cluster'] | default([]) %}
+    {% endif %}
+    {% set use_keeper = use_clickhouse_keeper | default(false) %}
+    {% set zk_port = (keeper_tcp_port | default(9181)) if use_keeper else (zookeeper_port | default(2181)) %}
+
+    {% if zk_hosts | length > 0 %}
+    <zookeeper>
+{% for node in zk_hosts %}
+        <node>
+{% if node in hostvars %}
+            <host>{{ hostvars[node]['ansible_host'] | default(node) }}</host>
+{% else %}
+            <host>{{ node }}</host>
+{% endif %}
+            <port>{{ zk_port }}</port>
+        </node>
+{% endfor %}
+    </zookeeper>
+    {% endif %}
+    {% endif %}
+
+    <remote_servers>
+        <{{ clickhouse_cluster_name }}>
+{% for shard_num in shard_ids %}
+            <shard>
+                <internal_replication>true</internal_replication>
+{% for node in nodes_for_cluster %}
+{% set node_shard = node.shard | int %}
+{% set node_instance_id = node.instance_id | int %}
+{% set node_ip = node.ip %}
+{% if node_shard == (shard_num | int) %}
+                <replica>
+                    <host>{{ node_ip }}</host>
+                    <port>{{ (clickhouse_tcp_port_base | default(9000) | int) + (node_instance_id - 1) }}</port>
+                    <user>default</user>
+                    <password>{{ clickhouse_default_password }}</password>
+                </replica>
+{% endif %}
+{% endfor %}
+            </shard>
+{% endfor %}
+        </{{ clickhouse_cluster_name }}>
+    </remote_servers>
+
+    <macros>
+        <cluster>{{ clickhouse_cluster_name }}</cluster>
+        <shard>{{ current_node_shard }}</shard>
+        <replica>{{ current_node_replica_name }}</replica>
+    </macros>
+
+    <networks>
+        <ip>::/0</ip>
+    </networks>
+
+    <clickhouse_compression>
+        <case>
+            <min_part_size>10000000000</min_part_size>
+            <min_part_size_ratio>0.01</min_part_size_ratio>
+            <method>lz4</method>
+        </case>
+    </clickhouse_compression>
+</clickhouse>

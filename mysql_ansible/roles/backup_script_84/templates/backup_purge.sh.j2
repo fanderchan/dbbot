@@ -1,0 +1,80 @@
+#!/bin/sh
+
+CONFIG_FILE="${BACKUP_CONFIG_PATH:-{{ backup_config_path }}}"
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "backup config not found: $CONFIG_FILE" >&2
+  exit 2
+fi
+. "$CONFIG_FILE"
+
+INSTANCE_DIR="$BACKUP_DIR_BASE/mysql${PORT}"
+TMP_DIR="$INSTANCE_DIR/tmp"
+LOG_FILE="$INSTANCE_DIR/backup_${PORT}.log"
+BINLOG_INDEX_FILE="$INSTANCE_DIR/binlog.txt"
+
+log(){
+  DATELOG=$(date +"%Y/%m/%d %H:%M:%S")
+  echo "$DATELOG $*" | tee -a "$LOG_FILE"
+}
+
+rebuild_binlog_index(){
+  if [ ! -f "$BINLOG_INDEX_FILE" ]; then
+    return
+  fi
+  TMP_INDEX="$TMP_DIR/binlog.txt.new"
+  : > "$TMP_INDEX"
+  while read -r BINLOG_FILE SNAPSHOT_ID; do
+    if [ -z "$BINLOG_FILE" ] || [ -z "$SNAPSHOT_ID" ]; then
+      continue
+    fi
+    if [ -f "$INSTANCE_DIR/binlog/$BINLOG_FILE" ]; then
+      echo "$BINLOG_FILE $SNAPSHOT_ID" >> "$TMP_INDEX"
+    fi
+  done < "$BINLOG_INDEX_FILE"
+  mv "$TMP_INDEX" "$BINLOG_INDEX_FILE"
+}
+
+purge_snapshots(){
+  if [ ! -d "$INSTANCE_DIR" ]; then
+    return
+  fi
+  SNAPSHOT_LIST=$(ls -1 "$INSTANCE_DIR" 2>/dev/null | grep -E '^[0-9]{8}_[0-9]{6}$' | sort)
+  SNAPSHOT_COUNT=$(printf "%s\n" "$SNAPSHOT_LIST" | grep -c .)
+  if [ "$SNAPSHOT_COUNT" -le "${KEEP_FULL_BACKUP_LAST_COPYS}" ]; then
+    return
+  fi
+  PURGE_COUNT=$((SNAPSHOT_COUNT-KEEP_FULL_BACKUP_LAST_COPYS))
+  PURGE_LIST=$(printf "%s\n" "$SNAPSHOT_LIST" | head -n "$PURGE_COUNT")
+  for SNAPSHOT_ID in $PURGE_LIST; do
+    SNAPSHOT_DIR="$INSTANCE_DIR/$SNAPSHOT_ID"
+    rm -rf "$SNAPSHOT_DIR/clone" "$SNAPSHOT_DIR/meta"
+    if [ -d "$SNAPSHOT_DIR" ] && [ -z "$(ls -A "$SNAPSHOT_DIR" 2>/dev/null)" ]; then
+      rmdir "$SNAPSHOT_DIR" 2>/dev/null || true
+    fi
+    log "mysql_${PORT} purge snapshot clone/meta ${SNAPSHOT_ID}"
+  done
+}
+
+purge_binlogs(){
+  if [ ! -d "$INSTANCE_DIR" ]; then
+    return
+  fi
+  find "$INSTANCE_DIR/binlog" -type f -mtime +${EXPIRE_BINLOG_DAYS} | sort > "$TMP_DIR/purge_binlog.txt"
+  if [ -s "$TMP_DIR/purge_binlog.txt" ]; then
+    xargs rm -f < "$TMP_DIR/purge_binlog.txt"
+    log "mysql_${PORT} purge binlog older than ${EXPIRE_BINLOG_DAYS} days"
+  fi
+}
+
+purge(){
+  purge_snapshots
+  purge_binlogs
+  rebuild_binlog_index
+}
+
+main(){
+  mkdir -p "$TMP_DIR"
+  purge
+}
+
+main

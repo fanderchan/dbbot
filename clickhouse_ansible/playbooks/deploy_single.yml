@@ -1,0 +1,90 @@
+---
+- name: Deploy ClickHouse Standalone (single node)
+  hosts: clickhouse_deploy:clickhouse_cluster
+  become: true
+  any_errors_fatal: true
+  serial: "{{ clickhouse_serial | default('100%') }}"
+  vars_files:
+    - vars/common_config.yml
+    - vars/standalone_config.yml
+  vars:
+    roles_to_execute:
+      - "../roles/init_system"
+      - "../roles/deploy_clickhouse"
+  pre_tasks:
+    - name: Validate deploy inventory purpose guard (run once)
+      ansible.builtin.assert:
+        that:
+          - not deploy_require_inventory_guard | bool or ((dbbot_inventory_purpose | default('') | lower) == (deploy_inventory_purpose | lower))
+        fail_msg: >-
+          deploy_single.yml requires deploy inventory by default.
+          current_inventory={{ inventory_file | default('unknown') }},
+          dbbot_inventory_purpose={{ dbbot_inventory_purpose | default('unset') }},
+          expected={{ deploy_inventory_purpose }}.
+          Please use inventory/hosts.single.ini or inventory/hosts.deploy.ini,
+          or set deploy_require_inventory_guard=false.
+      run_once: true
+
+    - name: Import tasks to validate common configuration
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    - name: Set effective deploy confirmation phrase (run once)
+      ansible.builtin.set_fact:
+        deploy_confirm_phrase_effective: >-
+          {{
+            deploy_confirm_phrase
+            if (deploy_confirm_phrase | default('') | trim | length > 0)
+            else ('DEPLOY ' ~ clickhouse_cluster_name)
+          }}
+      run_once: true
+
+    - name: Manual confirmation before standalone deploy (run once)
+      ansible.builtin.pause:
+        prompt: |-
+          [MANUAL CONFIRM REQUIRED]
+          playbook=deploy_single.yml
+          inventory={{ inventory_file | default('unknown') }}
+          target_group=clickhouse_deploy|clickhouse_cluster
+          Type exactly "{{ deploy_confirm_phrase_effective }}" to continue:
+      register: deploy_manual_confirm_input
+      delegate_to: localhost
+      become: false
+      when: deploy_require_manual_confirm | bool
+      run_once: true
+
+    - name: Validate deploy confirmation phrase (run once)
+      ansible.builtin.assert:
+        that:
+          - (deploy_manual_confirm_input.user_input | default('') | trim) == (deploy_confirm_phrase_effective | trim)
+        fail_msg: >-
+          Manual confirmation failed.
+          Expected: {{ deploy_confirm_phrase_effective }}
+      when: deploy_require_manual_confirm | bool
+      run_once: true
+
+    - name: Import tasks to parse topology
+      ansible.builtin.import_tasks: pre_tasks/parse_topology.yml
+
+    - name: Import tasks to check OS and Python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Import tasks to check clickhouse uid/gid conflicts
+      ansible.builtin.import_tasks: pre_tasks/check_clickhouse_uid_gid.yml
+
+    - name: Import tasks to prepare packages directory
+      ansible.builtin.import_tasks: pre_tasks/prepare_packages.yml
+
+    - name: Validate single-host topology
+      ansible.builtin.assert:
+        that:
+          - clickhouse_all_nodes | length >= 1
+          - (clickhouse_all_nodes | map(attribute='ip') | unique | list | length) == 1
+        fail_msg: "Standalone playbook requires all ClickHouse instances to be on a single physical host."
+      when: clickhouse_single_host_required | default(true)
+
+  tasks:
+    - name: Deploy ClickHouse by instance_id (per-host sequential, cross-host parallel)
+      ansible.builtin.include_tasks: tasks/deploy_clickhouse_instance_tasks.yml
+      loop: "{{ clickhouse_instance_ids | default([current_node_instance_id]) }}"
+      loop_control:
+        loop_var: ck_instance_id

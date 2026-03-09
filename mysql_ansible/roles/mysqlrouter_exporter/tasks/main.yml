@@ -1,0 +1,23 @@
+- name: Install and configure mysqlrouter_exporter
+  when: mysqlrouter_exporter_install | bool
+  block:
+    - name: Check mysqlrouter_exporter port availability
+      ansible.builtin.import_tasks: check_port_not_in_use.yml
+
+    - name: Check mysqlrouter_exporter binary availability
+      ansible.builtin.import_tasks: check_binary.yml
+
+    - name: Create mysqlrouter_exporter user and directories
+      ansible.builtin.import_tasks: create_user_and_dir.yml
+
+    - name: Install mysqlrouter_exporter binary
+      ansible.builtin.import_tasks: install_binary.yml
+
+    - name: Configure mysqlrouter_exporter
+      ansible.builtin.import_tasks: configure_exporter.yml
+
+    - name: Manage mysqlrouter_exporter service
+      ansible.builtin.import_tasks: manage_service.yml
+
+    - name: Validate mysqlrouter_exporter service
+      ansible.builtin.import_tasks: validate_service.yml

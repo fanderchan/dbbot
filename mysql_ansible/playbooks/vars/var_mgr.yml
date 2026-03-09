@@ -1,0 +1,17 @@
+# vars loading order: common_config -> this file
+mysql_binlog_format: row
+mysql_mgr_port: "{{ (mysql_port | int) * 10 + 1 }}"
+sub_nets: 1%
+mysql_mgr_hosts:
+  - '192.0.2.131'
+  - '192.0.2.132'
+  - '192.0.2.133'
+
+
+# If you have installed MySQL instead of GreatSQL, the following parameters will have no effect.
+greatsql_vip: 192.0.2.134
+greatsql_net_work_interface: "ens33"
+greatsql_netmask: "255.255.255.255"
+greatsql_group_replication_arbitrator: false
+greatsql_group_replication_arbitrator_hosts:
+  - '192.0.2.133'

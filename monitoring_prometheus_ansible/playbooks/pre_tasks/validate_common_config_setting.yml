@@ -1,0 +1,73 @@
+#- name: Validate passwords
+#  block:
+#    - name: Check if password meets complexity requirements
+#      ansible.builtin.assert:
+#        that:
+#          - "password.value | length >= 8"
+#          - "password.value | regex_search('[a-z]') is not none"
+#          - "password.value | regex_search('[A-Z]') is not none"
+#          - "password.value | regex_search('[0-9]') is not none"
+#          - "password.value | regex_search('[!@#$%^&*()]') is not none"
+#      register: password_check
+#      loop:
+#        - {key: 'grafana_web_admin_password', value: "{{ grafana_web_admin_password }}"}
+#      loop_control:
+#        loop_var: password
+#      no_log: true
+#      ignore_errors: true
+#
+#    - name: Print custom error message
+#      ansible.builtin.fail:
+#        msg: >
+#          Password for '{{ password_check.results | selectattr('msg','equalto','Assertion failed')
+#          | map(attribute='password.key')  }}' in common_config.yml does not meet complexity
+#          requirements: at least 8 characters long, at least 1 digit, at least 1 uppercase letter,
+#          at least 1 lowercase letter, at least 1 special character.
+#      when: password_check.results | selectattr('msg','equalto','Assertion failed') |list | length > 0
+
+#- name: Validate fcs_ setting are 0 or 1
+#  fail:
+#    msg: "{{ item }} value is not 0 or 1."
+#  loop:
+#    #- fcs_backup_script_create_backup_user
+#  when:
+#    - vars[item] not in [0, 1]
+
+- name: Validate grafana_port is within range
+  fail:
+    msg: "`grafana_port` value must within the range 1024 to 65535."
+  when:
+    - (grafana_port | int) < 1024 or (grafana_port | int) > 65535
+
+- name: Validate prometheus_port is within range
+  fail:
+    msg: "`prometheus_port` value must within the range 1024 to 65535."
+  when:
+    - (prometheus_port | int) < 1024 or (prometheus_port | int) > 65535
+
+- name: Validate alertmanager_port is within range
+  fail:
+    msg: "`alertmanager_port` value must within the range 1024 to 65535."
+  when:
+    - (alertmanager_port | int) < 1024 or (alertmanager_port | int) > 65535
+
+## example
+#- name: Validate opengauss_version is within range
+#  fail:
+#    msg: "`opengauss_version`: {{ opengauss_version }} for {{ db_type }} is not test so not support!"
+#  when:
+#    (db_type == 'opengauss' and opengauss_version not in ['5.0.0', '5.0.1', '5.0.2']) or 
+#    (db_type == 'panweidb' and opengauss_version not in ['2.0.2', '2.0.3'])
+#
+#
+#- name: Validate db_type is a valid option
+#  fail:
+#    msg: "`db_type` value must be 'opengauss', 'panweidb'."
+#  when:
+#    - db_type not in ['opengauss', 'panweidb']
+#
+#- name: Validate panweidb_dbcompatibility is a valid option
+#  fail:
+#    msg: "`panweidb_dbcompatibility` value must be 'A', 'B', 'C', 'PG'."
+#  when:
+#    - panweidb_dbcompatibility not in ['A', 'B', 'C', 'PG']

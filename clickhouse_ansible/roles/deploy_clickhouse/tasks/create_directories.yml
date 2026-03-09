@@ -1,0 +1,56 @@
+- name: Ensure group "clickhouse" exists
+  ansible.builtin.group:
+    name: "{{ clickhouse_group }}"
+    gid: "{{ clickhouse_gid }}"
+    state: present
+
+- name: Create clickhouse user if not exists
+  ansible.builtin.user:
+    name: "{{ clickhouse_user }}"
+    uid: "{{ clickhouse_uid }}"
+    shell: /bin/bash
+    home: /home/{{ clickhouse_user }}
+    group: "{{ clickhouse_group }}"
+    create_home: yes
+    state: present
+
+- name: Create ClickHouse data directories
+  ansible.builtin.file:
+    path: "{{ ck_dir_item }}"
+    state: directory
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0755'
+  loop:
+    - "{{ clickhouse_data_dir }}"
+    - "{{ clickhouse_data_dir }}/tmp"
+    - "{{ clickhouse_data_dir }}/user_files"
+    - "{{ clickhouse_data_dir }}/access"
+    - "{{ clickhouse_data_dir }}/format_schemas"
+  loop_control:
+    loop_var: ck_dir_item
+  # Note: {{ clickhouse_data_dir_base }}/tmp is used for installation, {{ clickhouse_data_dir }}/tmp is for ClickHouse runtime
+
+- name: Create ClickHouse log directory
+  ansible.builtin.file:
+    path: "{{ clickhouse_log_dir }}"
+    state: directory
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0755'
+
+- name: Create ClickHouse config directory
+  ansible.builtin.file:
+    path: "{{ clickhouse_config_dir }}"
+    state: directory
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0755'
+
+- name: Create ClickHouse config.d directory
+  ansible.builtin.file:
+    path: "{{ clickhouse_config_d_dir }}"
+    state: directory
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0755'

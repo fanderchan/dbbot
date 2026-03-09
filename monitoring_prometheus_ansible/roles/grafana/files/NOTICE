@@ -1,0 +1,25 @@
+This directory contains third-party Grafana assets that are not all covered by
+the repository top-level Apache-2.0 license.
+
+Directory breakdown:
+
+1. dbbot-mysql-dashboards/
+2. dbbot-router-dashboards/
+   - Source lineage: Percona PMM dashboards
+   - Upstream project: https://github.com/percona/pmm
+   - License treatment: AGPL-3.0-only
+
+3. dbbot-node-dashboards/1860_rev37.json
+   - Source lineage: rfmoz/grafana-dashboards, Grafana dashboard 1860
+   - Upstream project: https://github.com/rfmoz/grafana-dashboards
+   - Upstream dashboard page: https://grafana.com/grafana/dashboards/1860
+   - License treatment: Apache-2.0
+
+4. natel-discrete-panel.tar.gz
+   - Source lineage: Natel Energy grafana-discrete-panel
+   - Upstream project: https://github.com/NatelEnergy/grafana-discrete-panel
+   - License treatment: MIT
+   - The bundled archive already includes its own LICENSE file.
+
+When redistributing these assets, preserve the upstream attribution and
+license notices instead of assuming the repository default license applies.

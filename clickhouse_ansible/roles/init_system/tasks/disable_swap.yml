@@ -1,0 +1,32 @@
+- name: Check current swap status
+  ansible.builtin.command: swapon --show
+  register: swap_status
+  changed_when: false
+  failed_when: false
+
+- name: Disable swap temporarily
+  ansible.builtin.command: swapoff -a
+  when: swap_status.stdout != ""
+  changed_when: true
+
+- name: Set vm.swappiness to 1
+  ansible.builtin.lineinfile:
+    path: /etc/sysctl.d/80-dbbot-clickhouse-swap.conf
+    regexp: '^vm.swappiness'
+    line: 'vm.swappiness = 1'
+    create: yes
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply sysctl settings
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/80-dbbot-clickhouse-swap.conf
+  changed_when: true
+  ignore_errors: true
+
+- name: Comment out swap entries in /etc/fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*swap.*)'
+    replace: '#\1'
+    backup: yes

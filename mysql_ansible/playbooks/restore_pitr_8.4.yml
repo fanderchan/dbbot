@@ -1,0 +1,38 @@
+- name: MySQL 8.4 point-in-time recovery (clone + binlog)
+  hosts: dbbot_mysql
+  become: true
+  any_errors_fatal: true
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_restore_pitr_8.4.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_restore_pitr_8.4.yml
+  vars:
+    roles_to_execute:
+      - "../roles/mysql_server"
+      - "../roles/restore_pitr_84"
+  pre_tasks:
+    - name: Import tasks to validate setting in common_config.yml
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Validate restore PITR 8.4 settings
+      ansible.builtin.import_tasks: pre_tasks/validate_restore_pitr_8_4.yml
+
+    - name: Import confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+
+  tasks:
+    - name: Install MySQL server for new_instance restore
+      ansible.builtin.include_role:
+        name: "../roles/mysql_server"
+        tasks_from: restore_prepare.yml
+      when: restore_mode == 'new_instance'
+
+    - name: Include restore_pitr_84 role
+      ansible.builtin.include_role:
+        name: "../roles/restore_pitr_84"

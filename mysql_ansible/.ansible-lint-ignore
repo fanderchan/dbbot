@@ -1,0 +1,6 @@
+#confirmation.yml var-naming[no-role-prefix]
+#validate_greatsql_ha.yml var-naming[no-role-prefix]
+#validate_master_slave.yml var-naming[no-role-prefix]
+#validate_mgr.yml var-naming[no-role-prefix]
+#validate_mha.yml var-naming[no-role-prefix]
+#validate_passwords.yml var-naming[no-role-prefix]

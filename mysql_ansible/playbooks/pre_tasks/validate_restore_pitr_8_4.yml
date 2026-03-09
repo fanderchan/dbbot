@@ -1,0 +1,95 @@
+---
+- name: Validate restore_mode value
+  ansible.builtin.assert:
+    that:
+      - restore_mode in ['new_instance', 'existing_instance']
+    fail_msg: "restore_mode must be new_instance or existing_instance"
+
+- name: Validate db_type for restore_pitr_8.4
+  ansible.builtin.assert:
+    that:
+      - db_type == 'mysql'
+    fail_msg: "restore_pitr_8.4 supports db_type=mysql only"
+
+- name: Validate mysql_version is 8.4.x
+  ansible.builtin.assert:
+    that:
+      - mysql_version is match('^8\\.4\\.')
+    fail_msg: "mysql_version must be 8.4.x for restore_pitr_8.4"
+
+- name: Validate backup_snapshot_id
+  ansible.builtin.assert:
+    that:
+      - backup_snapshot_id | length > 0
+    fail_msg: "backup_snapshot_id must be set"
+
+- name: Validate backup_source_mysql_port range
+  ansible.builtin.assert:
+    that:
+      - backup_source_mysql_port | int >= 1024
+      - backup_source_mysql_port | int <= 65535
+    fail_msg: "backup_source_mysql_port must be between 1024 and 65535"
+
+- name: Validate restore_target_mysql_port range
+  ansible.builtin.assert:
+    that:
+      - restore_target_mysql_port | int >= 1024
+      - restore_target_mysql_port | int <= 65535
+    fail_msg: "restore_target_mysql_port must be between 1024 and 65535"
+
+- name: Validate enable_pitr is boolean
+  ansible.builtin.assert:
+    that:
+      - enable_pitr is boolean
+    fail_msg: "enable_pitr must be boolean"
+
+- name: Validate pitr_target_gtid_inclusive is boolean
+  ansible.builtin.assert:
+    that:
+      - pitr_target_gtid_inclusive is boolean
+    fail_msg: "pitr_target_gtid_inclusive must be boolean"
+
+- name: Validate restore_allow_nonempty_datadir is boolean
+  ansible.builtin.assert:
+    that:
+      - restore_allow_nonempty_datadir is boolean
+    fail_msg: "restore_allow_nonempty_datadir must be boolean"
+
+- name: Validate PITR target selection
+  ansible.builtin.assert:
+    that:
+      - (pitr_target_time | length > 0 and pitr_target_gtid | length == 0) or
+        (pitr_target_time | length == 0 and pitr_target_gtid | length > 0)
+    fail_msg: "When enable_pitr=true, set exactly one of pitr_target_time or pitr_target_gtid"
+  when: enable_pitr | bool
+
+- name: Validate pitr_target_time format
+  ansible.builtin.assert:
+    that:
+      - pitr_target_time is match('^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$')
+    fail_msg: "pitr_target_time must be in format YYYY-MM-DD HH:MM:SS"
+  when:
+    - enable_pitr | bool
+    - pitr_target_time | length > 0
+
+- name: Validate pitr_target_gtid format
+  ansible.builtin.assert:
+    that:
+      - pitr_target_gtid is match('^[0-9a-fA-F-]+:[0-9]+$')
+    fail_msg: "pitr_target_gtid must be a single GTID (uuid:seq)"
+  when:
+    - enable_pitr | bool
+    - pitr_target_gtid | length > 0
+
+- name: Validate restore_mysql_user and restore_mysql_password
+  ansible.builtin.assert:
+    that:
+      - restore_mysql_user | length > 0
+      - restore_mysql_password | length > 0
+    fail_msg: "restore_mysql_user and restore_mysql_password must be set"
+
+- name: Validate restore_mysql_start_timeout
+  ansible.builtin.assert:
+    that:
+      - restore_mysql_start_timeout | int > 0
+    fail_msg: "restore_mysql_start_timeout must be > 0"

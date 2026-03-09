@@ -1,0 +1,19 @@
+- name: Ensure node_exporter group exists
+  ansible.builtin.group:
+    name: "{{ node_exporter_run_user_group }}"
+    state: present
+
+- name: Create node_exporter user if it does not exist
+  ansible.builtin.user:
+    name: "{{ node_exporter_run_user }}"
+    group: "{{ node_exporter_run_user_group }}"
+    system: true
+    state: present
+
+- name: Create node_exporter installation directory on target server
+  ansible.builtin.file:
+    path: "{{ node_exporter_install_dir }}"
+    state: directory
+    owner: "{{ node_exporter_run_user }}"
+    group: "{{ node_exporter_run_user_group }}"
+    mode: '0755'

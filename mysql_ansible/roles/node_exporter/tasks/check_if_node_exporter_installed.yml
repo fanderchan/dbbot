@@ -1,0 +1,10 @@
+- name: Check if node_exporter is already installed on target server
+  ansible.builtin.stat:
+    path: "{{ node_exporter_install_dir }}/node_exporter"
+  register: node_exporter_stat
+
+# - name: Fail if node_exporter is already installed
+  # ansible.builtin.fail:
+    # msg: "node_exporter is already installed. Please uninstall it manually if reinstallation is required."
+  # when: node_exporter_stat.stat.exists
+# 

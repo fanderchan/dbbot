@@ -1,0 +1,166 @@
+log_info() {
+    echo "$(date +'%F %T.%4N')|${FILE_NAME}|${PROCESS_ID}|[info]| $1"
+}
+
+log_warn() {
+    echo "$(date +'%F %T.%4N')|${FILE_NAME}|${PROCESS_ID}|[warn]| $1"
+}
+
+log_error() {
+    echo "$(date +'%F %T.%4N')|${FILE_NAME}|${PROCESS_ID}|[error]| $1"
+}
+
+# Safely remove temporary files with error logging
+safe_remove_file() {
+    local file_path="$1"
+    if [ -f "$file_path" ]; then
+        if ! rm -f "$file_path" >/dev/null 2>&1; then
+            log_warn "Failed to remove temporary file: $file_path"
+        fi
+    fi
+}
+
+start_sql_thread() {
+    ${MYSQL_LOCAL_CMD} -e "start slave sql_thread;"
+    if (( $? == 0 )); then
+        log_info "Slave SQL thread started successfully. Checking slave status."
+        ${MYSQL_LOCAL_CMD} -e "show slave status \G;"
+    else
+        log_info "Failed to start slave SQL thread. Exiting script."
+        log_info "Keepalived ending master status and exiting script."
+        exit 1
+    fi   
+}
+
+# Check slave replication status and extract position information
+# This function sets global variables: READFILE, EXECFILE, READPOS, EXECPOS
+get_slave_delay_status(){
+    # slave status
+    ${MYSQL_LOCAL_CMD} -e "show slave status \G" > "${sqlpath}/tmp_local_slave.txt"
+    log_info "Showing slave status for local MySQL"
+    cat "${sqlpath}/tmp_local_slave.txt"
+
+    # Extract required data
+    while read -r line
+    do
+        case "$line" in
+            *"Master_Log_File:"*) READFILE=${line#*: };;
+            *"Relay_Master_Log_File:"*) EXECFILE=${line#*: };;
+            *"Exec_Master_Log_Pos:"*) EXECPOS=${line#*: };;
+            *"Read_Master_Log_Pos:"*) READPOS=${line#*: };;
+            *"Slave_IO_Running:"*) IO_RUNNING=${line#*: };;
+            *"Slave_SQL_Running:"*) SQL_RUNNING=${line#*: };;
+        esac
+    done < "${sqlpath}/tmp_local_slave.txt"
+
+    log_info "Slave read position: ${READPOS}"
+    log_info "Slave execution position: ${EXECPOS}"
+    log_info "Slave read file: ${READFILE}"
+    log_info "Slave execution file: ${EXECFILE}"
+    log_info "Slave_IO_Running: ${IO_RUNNING}"
+    log_info "Slave_SQL_Running: ${SQL_RUNNING}"
+    
+    # Return 0 if both threads are running, 1 otherwise
+    if [[ "${IO_RUNNING}" == "Yes" && "${SQL_RUNNING}" == "Yes" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Wait until the SQL thread has caught up with the IO thread
+# IMPORTANT: This function requires get_slave_delay_status to be called first
+# to set the necessary position variables
+wait_until_sql_thread_catches_up() {
+    local max_wait_iterations=60  # 5 minute timeout (5 seconds * 60)
+    local current_iteration=0
+    
+    # Ensure we have the latest replication status before starting
+    get_slave_delay_status
+    
+    while true
+    do
+        if [ "${READFILE}" == "${EXECFILE}" ] && [ "${READPOS}" == "${EXECPOS}" ];then
+            log_info "Slave SQL thread has caught up with IO thread. Continuing."
+            break
+        else
+            log_info "Slave SQL thread has not caught up with IO thread. Waiting 5 seconds."
+            sleep 5  # Wait 5 seconds
+            ((current_iteration++))
+            
+            # Add timeout check
+            if [ ${current_iteration} -ge ${max_wait_iterations} ]; then
+                log_warn "Timeout waiting for SQL thread to catch up after ${max_wait_iterations} iterations"
+                break
+            fi
+        fi
+        # Update the status information
+        get_slave_delay_status
+    done
+}
+
+# Check if replication is running correctly (both IO and SQL threads)
+is_replication_healthy() {
+    get_slave_delay_status
+    local status=$?
+    
+    if [ $status -eq 0 ]; then
+        log_info "Replication is running correctly: IO_Thread=Yes, SQL_Thread=Yes"
+        return 0
+    else
+        log_warn "Replication issue detected: IO_Thread=${IO_RUNNING}, SQL_Thread=${SQL_RUNNING}"
+        return 1
+    fi
+}
+
+check_vip_existence(){
+    # Use ip tool to directly check for specific IP address
+    WVIP_COUNT=$(ip -4 addr show | grep -w "inet ${WRITE_VIP}" | wc -l)
+    
+    if [ ${WVIP_COUNT} -eq 1 ]; then
+        log_info "VIP ${WRITE_VIP} exists on local host ${LOCAL_HOST}"
+        # Display detailed VIP information, including network interface
+        VIP_INFO=$(ip -4 addr show | grep -A 2 -w "inet ${WRITE_VIP}")
+        log_info "VIP details: ${VIP_INFO}"
+    else
+        log_warn "VIP ${WRITE_VIP} does not exist on local host ${LOCAL_HOST}"
+    fi
+}
+
+# Verify data consistency between master and slave using binlog positions instead of GTID
+# This function is designed for non-GTID replication setups
+verify_data_consistency() {
+    local master_host="$1"
+    local slave_host="$2"
+    
+    log_info "Verifying position-based replication consistency between master ${master_host} and slave ${slave_host}..."
+    
+    # Check if slave is caught up with master
+    get_slave_delay_status
+    
+    # Check if replication is running
+    if [[ "${IO_RUNNING}" != "Yes" || "${SQL_RUNNING}" != "Yes" ]]; then
+        log_error "Replication is not running properly. IO_Thread=${IO_RUNNING}, SQL_Thread=${SQL_RUNNING}"
+        return 1
+    fi
+    
+    # If we got this far and the SQL thread is caught up with the IO thread,
+    # we can consider the data consistent
+    if [ "${READFILE}" == "${EXECFILE}" ] && [ "${READPOS}" == "${EXECPOS}" ]; then
+        log_info "Position-based consistency check passed: Slave is caught up with master"
+        log_info "Current file: ${EXECFILE}, Position: ${EXECPOS}"
+        return 0
+    else
+        log_warn "Position-based consistency check failed: Slave is lagging behind"
+        log_warn "Read file: ${READFILE}, Read position: ${READPOS}"
+        log_warn "Exec file: ${EXECFILE}, Exec position: ${EXECPOS}"
+        return 1
+    fi
+}
+
+# Restart MySQL service
+restart_mysql_service() {
+    log_info "Attempting to restart local MySQL service..."
+    systemctl restart ${MYSQL_SERVICE_NAME}
+}
+

@@ -1,0 +1,69 @@
+- name: Export path env to /root/.bashrc
+  ansible.builtin.lineinfile:
+    path: /root/.bashrc
+    line: export PATH=/usr/local/bin/:/usr/local/mysql/bin/:$PATH
+    insertafter: EOF
+
+- name: Modify the MHA user
+  ansible.builtin.file:
+    dest: /usr/local/bin
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    recurse: true
+
+- name: Create directory(/etc/masterha/)
+  ansible.builtin.file:
+    dest: /etc/masterha
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0755'
+
+- name: Create directory(/var/log/masterha)
+  ansible.builtin.file:
+    dest: /var/log/masterha
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0755'
+
+- name: Config mha app.cnf
+  ansible.builtin.template:
+    src: ../templates/app.cnf.j2
+    dest: /etc/masterha/app.cnf
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0640'
+
+- name: Config master_ip_failover
+  ansible.builtin.template:
+    src: ../templates/master_ip_failover.j2
+    dest: /usr/local/bin/master_ip_failover
+    mode: '0755'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Config master_ip_online_change
+  ansible.builtin.template:
+    src: ../templates/master_ip_online_change.j2
+    dest: /usr/local/bin/master_ip_online_change
+    mode: '0755'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Copy start_mha.sh to /usr/local/
+  ansible.builtin.template:
+    src: ../templates/start_mha.sh.j2
+    dest: /usr/local/start_mha.sh
+    mode: '0755'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Modify the MHA user
+  ansible.builtin.file:
+    dest: /usr/local/bin
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    recurse: true

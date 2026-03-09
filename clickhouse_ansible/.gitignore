@@ -1,0 +1,37 @@
+# Ansible
+*.retry
+.vault_pass
+*.pid
+
+# Logs
+*.log
+logs/
+
+# Downloads
+downloads/*
+!downloads/README.md
+
+# Temporary files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Generated runtime artifacts
+artifacts/manifests/backup/
+artifacts/manifests/restore/
+
+# Example runtime files
+examples/*/run/

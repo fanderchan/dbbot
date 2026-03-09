@@ -1,0 +1,55 @@
+- name: Set ClickHouse package patterns for deployment
+  ansible.builtin.set_fact:
+    clickhouse_package_patterns: >-
+      {{
+        (
+          clickhouse_package_basenames
+          | default([
+              'clickhouse-common-static',
+              'clickhouse-server',
+              'clickhouse-client'
+            ])
+        )
+        | map('regex_replace', '$', '-' ~ (clickhouse_effective_version | default(clickhouse_version)) ~ '-*.tgz')
+        | list
+      }}
+  delegate_to: localhost
+  run_once: true
+
+- name: Check if ClickHouse packages directory exists (local)
+  ansible.builtin.stat:
+    path: "{{ clickhouse_packages_dir }}"
+  register: packages_dir_stat
+  delegate_to: localhost
+  run_once: true
+
+- name: Fail if packages directory does not exist
+  ansible.builtin.fail:
+    msg: "ClickHouse packages directory {{ clickhouse_packages_dir }} does not exist. Please download packages or set fcs_auto_download_packages=true"
+  when: not packages_dir_stat.stat.exists and not fcs_auto_download_packages | default(false)
+  delegate_to: localhost
+  run_once: true
+
+- name: List ClickHouse packages (local)
+  ansible.builtin.find:
+    paths: "{{ clickhouse_packages_dir }}"
+    patterns: "{{ hostvars[ansible_play_hosts_all[0]].clickhouse_package_patterns }}"
+    recurse: false
+  register: clickhouse_packages
+  delegate_to: localhost
+  run_once: true
+  when: packages_dir_stat.stat.exists
+
+- name: Display found packages
+  ansible.builtin.debug:
+    msg: "Found ClickHouse packages: {{ clickhouse_packages.files | map(attribute='path') | list }}"
+  when: 
+    - clickhouse_packages.files | length > 0
+    - clickhouse_packages is defined
+  delegate_to: localhost
+  run_once: true
+
+- name: Set ClickHouse packages fact for all hosts
+  ansible.builtin.set_fact:
+    clickhouse_packages: "{{ hostvars[ansible_play_hosts_all[0]].clickhouse_packages }}"
+  when: hostvars[ansible_play_hosts_all[0]].clickhouse_packages is defined

@@ -1,0 +1,30 @@
+---
+# Add other instances to InnoDB Cluster
+
+- name: Create add instances script
+  ansible.builtin.template:
+    src: add_instances.js.j2
+    dest: /tmp/add_instances.js
+    mode: '0600'
+  run_once: true
+
+- name: Add instances to cluster
+  ansible.builtin.command: >
+    {{ mysqlsh_path }} --no-wizard --js -f /tmp/add_instances.js
+  register: make_innodb_cluster__add_result
+  run_once: true
+  changed_when: "'successfully added' in make_innodb_cluster__add_result.stdout"
+  failed_when:
+    - make_innodb_cluster__add_result.rc != 0
+    - "'already a member' not in make_innodb_cluster__add_result.stderr"
+
+- name: Remove add instances script
+  ansible.builtin.file:
+    path: /tmp/add_instances.js
+    state: absent
+  run_once: true
+
+- name: Wait for cluster to stabilize
+  ansible.builtin.pause:
+    seconds: 10
+  run_once: true

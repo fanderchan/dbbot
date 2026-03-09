@@ -1,0 +1,11 @@
+- name: Check if using ClickHouse Keeper or standalone Zookeeper
+  ansible.builtin.set_fact:
+    use_keeper: "{{ use_clickhouse_keeper | default(false) }}"
+
+- name: Deploy ClickHouse Keeper
+  include_tasks: deploy_keeper.yml
+  when: use_keeper | bool
+
+- name: Deploy standalone Zookeeper
+  include_tasks: deploy_standalone_zookeeper.yml
+  when: not use_keeper | bool

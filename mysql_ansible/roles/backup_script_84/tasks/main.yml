@@ -1,0 +1,140 @@
+- name: Check MySQL service is running
+  ansible.builtin.shell: "systemctl is-active {{ mysql_service_name }}"
+  register: backup_script_84__service_status
+  changed_when: false
+  failed_when: backup_script_84__service_status.stdout.strip() != 'active'
+
+- name: Check backup base directory existence
+  ansible.builtin.stat:
+    path: "{{ backup_base_dir }}"
+  register: backup_script_84__backup_base_dir
+
+- name: Create backup base directory when missing
+  ansible.builtin.file:
+    path: "{{ backup_base_dir }}"
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0755'
+  when: not backup_script_84__backup_base_dir.stat.exists
+
+- name: Ensure backup script directory exists
+  ansible.builtin.file:
+    path: "{{ backup_script_dir }}"
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0755'
+
+- name: Check MySQL server version is 8.4.x
+  ansible.builtin.shell: >
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} -Nse "select version();"
+  register: backup_script_84__version
+  changed_when: false
+  failed_when: backup_script_84__version.stdout is not match('^8\\.4\\.')
+
+- name: Check clone plugin status
+  ansible.builtin.shell: >
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} -Nse
+    "select plugin_status from information_schema.plugins where plugin_name='clone';"
+  register: backup_script_84__clone_status
+  changed_when: false
+
+- name: Install clone plugin if missing
+  ansible.builtin.shell: >
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} -e
+    "install plugin clone soname 'mysql_clone.so';"
+  register: backup_script_84__clone_install
+  ignore_errors: true
+  when: backup_script_84__clone_status.stdout | trim == ""
+
+- name: Re-check clone plugin status
+  ansible.builtin.shell: >
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} -Nse
+    "select plugin_status from information_schema.plugins where plugin_name='clone';"
+  register: backup_script_84__clone_status_after
+  changed_when: false
+
+- name: Fail when clone plugin is not available
+  ansible.builtin.fail:
+    msg: "Clone plugin is not available or failed to install. This backup playbook only supports MySQL 8.4 with clone plugin."
+  when: backup_script_84__clone_status_after.stdout | trim == ""
+
+- name: Check MySQL writable state for backup user creation
+  ansible.builtin.shell: >
+    {{ mysql_software_dir }}/bin/mysql -h127.0.0.1 -P{{ mysql_port }} -u{{ mysql_admin_user }} -p'{{ mysql_admin_127_password }}'
+    -Nse "select if(@@super_read_only=1 or @@read_only=1, '0', '1');"
+  register: backup_script_84__writable
+  changed_when: false
+  failed_when: backup_script_84__writable.rc != 0
+
+- name: Set backup user creation flag
+  ansible.builtin.set_fact:
+    backup_script_84__create_user: "{{ backup_script_84__writable.stdout | trim == '1' }}"
+
+- name: Create backup user
+  ansible.builtin.import_tasks: create_backup_user.yml
+  when:
+    - fcs_backup_script_create_backup_user | bool
+    - backup_script_84__create_user | bool
+
+- name: Parse backup cron expression
+  ansible.builtin.set_fact:
+    backup_script_84__cron_parts: "{{ backup_cron.split() }}"
+
+- name: Validate backup cron expression parts
+  ansible.builtin.assert:
+    that:
+      - backup_script_84__cron_parts | length == 5
+    fail_msg: "backup_cron must have 5 fields: minute hour day_of_month month day_of_week"
+
+- name: Deploy clone backup script
+  ansible.builtin.template:
+    src: "backup_clone.sh.j2"
+    dest: "{{ backup_script_path }}"
+    mode: '0700'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Deploy backup config file
+  ansible.builtin.template:
+    src: "backup_clone.conf.j2"
+    dest: "{{ backup_config_path }}"
+    mode: '0700'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Deploy backup schedule script
+  ansible.builtin.template:
+    src: "backup_schedule.sh.j2"
+    dest: "{{ backup_schedule_script_path }}"
+    mode: '0700'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Deploy backup purge script
+  ansible.builtin.template:
+    src: "backup_purge.sh.j2"
+    dest: "{{ backup_purge_script_path }}"
+    mode: '0700'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Ensure mysql_user is allowed to use crontab
+  ansible.builtin.lineinfile:
+    path: /etc/cron.allow
+    line: "{{ mysql_user }}"
+    create: yes
+    state: present
+  become: true
+
+- name: Create cron job for MySQL clone backup
+  ansible.builtin.cron:
+    name: "MySQL{{ mysql_port }} clone backup"
+    minute: "{{ backup_script_84__cron_parts[0] }}"
+    hour: "{{ backup_script_84__cron_parts[1] }}"
+    day: "{{ backup_script_84__cron_parts[2] }}"
+    month: "{{ backup_script_84__cron_parts[3] }}"
+    weekday: "{{ backup_script_84__cron_parts[4] }}"
+    user: "{{ mysql_user }}"
+    job: "sh {{ backup_schedule_script_path }} >/dev/null 2>&1"

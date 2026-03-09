@@ -1,0 +1,14 @@
+- name: Copy edit_mysql_sudoer.sh to /tmp/
+  ansible.builtin.template:
+    src: ../templates/edit_mysql_sudoer.sh.j2
+    dest: /tmp/edit_mysql_sudoer.sh
+    mode: '0700'
+
+- name: Bash edit_mysql_sudoer.sh
+  ansible.builtin.command: bash /tmp/edit_mysql_sudoer.sh
+  changed_when: true
+
+- name: Delete edit_mysql_sudoer.sh script
+  ansible.builtin.file:
+    path: /tmp/edit_mysql_sudoer.sh
+    state: absent

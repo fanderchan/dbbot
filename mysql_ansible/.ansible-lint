@@ -1,0 +1,6 @@
+skip_list:
+  - no-relative-paths
+  - yaml[line-length]
+  - role-name[path]
+exclude_paths:
+  - playbooks/common_config.yml

@@ -1,0 +1,44 @@
+---
+# Install MySQL Shell
+
+- name: Create MySQL Shell base directory
+  ansible.builtin.file:
+    path: "{{ mysqlshell_base_dir }}"
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0755'
+
+- name: Copy MySQL Shell package to target
+  ansible.builtin.copy:
+    src: "{{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}"
+    dest: "/tmp/{{ mysqlshell_package }}"
+    mode: '0644'
+
+- name: Extract MySQL Shell package
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ mysqlshell_package }}"
+    dest: "{{ mysqlshell_base_dir }}"
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Ensure mysqlsh is executable
+  ansible.builtin.file:
+    path: "{{ mysqlshell_base_dir }}/bin/mysqlsh"
+    mode: '0755'
+
+- name: Add MySQL Shell to PATH in /etc/profile
+  ansible.builtin.lineinfile:
+    path: /etc/profile
+    line: 'export PATH={{ mysqlshell_base_dir }}/bin:$PATH'
+    insertafter: EOF
+    state: present
+
+- name: Cleanup temp package
+  ansible.builtin.file:
+    path: "/tmp/{{ mysqlshell_package }}"
+    state: absent
+

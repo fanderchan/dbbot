@@ -1,0 +1,164 @@
+groups:
+- name: MySQL报警规则
+  rules:
+  - alert: MySQL活跃线程数过多
+    expr: label_replace(mysql_global_status_threads_running, "host", "$1", "instance", "(.*):.*") > on(host) group_left() (2 * count by (host) (label_replace(node_cpu_seconds_total{mode="idle"}, "host", "$1", "instance", "(.*):.*")))
+    for: 5m
+    labels:
+      severity: low
+    annotations:
+      summary: "MySQL活跃线程数过多"
+      description: "MySQL的活跃线程数超过CPU核心数的2倍，持续时间超过5分钟。当前线程数：{{ $value }}"
+
+  - alert: MySQL查询率过高
+    expr: label_replace(rate(mysql_global_status_queries[5m]), "host", "$1", "instance", "(.*):.*") > on(host) group_left() (2000 * count by (host) (label_replace(node_cpu_seconds_total{mode="idle"}, "host", "$1", "instance", "(.*):.*")))
+    for: 5m
+    labels:
+      severity: low
+    annotations:
+      summary: "MySQL查询率过高"
+      description: "5分钟内，MySQL平均每秒查询次数超过CPU核心数×2000，持续时间超过5分钟。当前查询率：{{ $value }}"
+
+  - alert: MySQL实例异常
+    expr: mysql_up == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "MySQL实例异常"
+      description: "MySQL实例不可用，状态为0。"
+
+  - alert: MySQL连接使用率高(低级)
+    expr: (mysql_global_status_threads_connected / mysql_global_variables_max_connections) > 0.75
+    for: 5m
+    labels:
+      severity: low
+    annotations:
+      summary: "MySQL连接使用率高"
+      description: "MySQL连接数超过总连接数的75%，持续时间超过5分钟。当前连接使用率：{{ $value }}"
+
+  - alert: MySQL连接使用率高(高级)
+    expr: (mysql_global_status_threads_connected / mysql_global_variables_max_connections) > 0.9
+    for: 1m
+    labels:
+      severity: high
+    annotations:
+      summary: "MySQL连接使用率高"
+      description: "MySQL连接数超过总连接数的90%，持续时间超过1分钟。当前连接使用率：{{ $value }}"
+
+  - alert: MySQL临时表过多
+    expr: rate(mysql_global_status_created_tmp_tables[5m]) / (rate(mysql_global_status_queries[5m]) + 1) > 0.2
+    for: 5m
+    labels:
+      severity: medium
+    annotations:
+      summary: "MySQL临时表过多"
+      description: "MySQL临时表占查询比例超过20%，持续时间超过5分钟。当前比例：{{ $value }}"
+
+  - alert: MySQL慢查询过多
+    expr: rate(mysql_global_status_slow_queries[5m]) / (rate(mysql_global_status_queries[5m]) + 1) > 0.01
+    for: 10m
+    labels:
+      severity: low
+    annotations:
+      summary: "MySQL慢查询过多"
+      description: "MySQL慢查询占比超过1%，持续时间超过10分钟。当前比例：{{ $value }}"
+
+  - alert: MySQL打开文件数过多
+    expr: (mysql_global_status_open_files / mysql_global_variables_open_files_limit) > 0.8
+    for: 5m
+    labels:
+      severity: low
+    annotations:
+      summary: "MySQL打开文件数过多"
+      description: "MySQL打开文件数接近上限（超过80%），持续时间超过5分钟。当前使用率：{{ $value }}"
+
+  - alert: MySQL打开表数过多
+    expr: rate(mysql_global_status_table_open_cache_misses[5m]) / (rate(mysql_global_status_table_open_cache_hits[5m]) + rate(mysql_global_status_table_open_cache_misses[5m]) + 1) > 0.1
+    for: 10m
+    labels:
+      severity: low
+    annotations:
+      summary: "MySQL打开表数过多"
+      description: "MySQL表缓存未命中率超过10%，持续时间超过10分钟。当前未命中率：{{ $value }}"
+
+  - alert: MySQL表锁等待时间过长
+    expr: rate(mysql_global_status_table_locks_waited[5m]) / (rate(mysql_global_status_table_locks_waited[5m]) + rate(mysql_global_status_table_locks_immediate[5m]) + 1) > 0.05
+    for: 5m
+    labels:
+      severity: medium
+    annotations:
+      summary: "MySQL表锁等待时间过长"
+      description: "MySQL表锁等待占比超过5%，持续时间超过5分钟。当前占比：{{ $value }}"
+
+  - alert: MySQL缓冲池命中率过低
+    expr: (1 - (mysql_global_status_innodb_buffer_pool_reads / (mysql_global_status_innodb_buffer_pool_read_requests + mysql_global_status_innodb_buffer_pool_reads))) < 0.97
+    for: 30m
+    labels:
+      severity: low
+    annotations:
+      summary: "MySQL缓冲池命中率过低"
+      description: "MySQL的缓冲池命中率低于97%，持续时间超过30分钟。当前命中率：{{ $value }}"
+
+  - alert: MySQL临时磁盘表使用率高
+    expr: rate(mysql_global_status_created_tmp_disk_tables[5m]) / (rate(mysql_global_status_created_tmp_tables[5m]) + 1) > 0.2
+    for: 10m
+    labels:
+      severity: medium
+    annotations:
+      summary: "MySQL临时磁盘表使用率高"
+      description: "MySQL临时磁盘表占临时表比例超过20%，持续时间超过10分钟。当前比例：{{ $value }}"
+
+  - alert: MySQL复制延迟(低级)
+    expr: mysql_slave_status_seconds_behind_master > 120
+    for: 5m
+    labels:
+      severity: low
+    annotations:
+      summary: "MySQL复制延迟"
+      description: "MySQL复制延迟超过120秒，持续超过5分钟。当前复制延迟：{{ $value }}"
+
+  - alert: MySQL复制延迟(中级)
+    expr: mysql_slave_status_seconds_behind_master > 600
+    for: 5m
+    labels:
+      severity: medium
+    annotations:
+      summary: "MySQL复制延迟"
+      description: "MySQL复制延迟超过600秒，持续超过5分钟。当前复制延迟：{{ $value }}"
+
+  - alert: MySQL连接超时
+    expr: increase(mysql_global_status_aborted_connects[5m]) > 20
+    for: 5m
+    labels:
+      severity: medium
+    annotations:
+      summary: "MySQL连接超时"
+      description: "MySQL连接中止次数在5分钟内超过20次，持续时间超过5分钟。当前增量：{{ $value }}"
+
+  - alert: MySQL InnoDB缓冲池脏页比例过高
+    expr: (mysql_global_status_innodb_buffer_pool_bytes_dirty / mysql_global_status_innodb_buffer_pool_bytes_data) > 0.3
+    for: 10m
+    labels:
+      severity: low
+    annotations:
+      summary: "MySQL InnoDB缓冲池脏页比例过高"
+      description: "MySQL InnoDB缓冲池脏页比例超过30%，持续时间超过10分钟。当前脏页比例：{{ $value }}"
+
+  - alert: MySQL复制IO线程状态异常
+    expr: mysql_slave_status_slave_io_running == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "MySQL复制IO线程状态异常"
+      description: "MySQL复制IO线程状态为0。"
+
+  - alert: MySQL复制SQL线程状态异常
+    expr: mysql_slave_status_slave_sql_running == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "MySQL复制SQL线程状态异常"
+      description: "MySQL线程状态为0。"

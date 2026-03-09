@@ -1,0 +1,35 @@
+{% if master_ip in ansible_all_ipv4_addresses %}
+create user {{mysql_rple_user}}@'{{ sub_nets }}' identified by '{{mysql_rple_password}}';
+{% if mysql_version.startswith('8.4') and db_type == 'mysql' %}
+grant replication slave, replication client on *.* to {{mysql_rple_user}}@'{{ sub_nets }}';
+grant SYSTEM_USER on *.* to {{mysql_rple_user}}@'{{ sub_nets }}';
+{% else %}
+grant replication slave, replication client on *.* to {{mysql_rple_user}}@'{{ sub_nets }}';
+{% endif %}
+
+{% else %}
+select sleep(10);
+
+set @@global.super_read_only=on;
+
+{% if mysql_version.startswith('8.4') and db_type == 'mysql' %}
+change replication source to
+    source_host='{{master_ip}}',
+    source_port={{mysql_port}},
+    source_user='{{mysql_rple_user}}',
+    source_password='{{mysql_rple_password}}',
+    source_auto_position=1,
+    get_source_public_key=1;
+
+start replica;
+{% else %}
+change master to
+    master_host='{{master_ip}}',
+    master_port={{mysql_port}},
+    master_user='{{mysql_rple_user}}',
+    master_password='{{mysql_rple_password}}',
+    master_auto_position=1;
+
+start slave;
+{% endif %}
+{% endif %}

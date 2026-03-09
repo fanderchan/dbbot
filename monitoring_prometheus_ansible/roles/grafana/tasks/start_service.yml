@@ -1,0 +1,5 @@
+- name: Start Grafana service
+  ansible.builtin.systemd:
+    name: grafana
+    state: started
+    daemon_reload: true

@@ -1,0 +1,32 @@
+---
+# MySQL Router Main Tasks
+# Install and configure MySQL Router
+
+- name: Create router user and group
+  ansible.builtin.import_tasks: create_user.yml
+
+- name: Create router directories
+  ansible.builtin.import_tasks: create_directories.yml
+
+- name: Install MySQL Router
+  ansible.builtin.import_tasks: install_router.yml
+
+# Note: Router account is created by make_innodb_cluster role using cluster.setupRouterAccount()
+# Reference: https://dev.mysql.com/doc/mysql-shell/8.0/en/configuring-router-user.html
+
+- name: Bootstrap MySQL Router
+  ansible.builtin.import_tasks: bootstrap_router.yml
+
+- name: Configure systemd service
+  ansible.builtin.import_tasks: config_service.yml
+
+- name: Start MySQL Router service
+  ansible.builtin.import_tasks: start_service.yml
+
+- name: Touch router_finish.flag
+  ansible.builtin.file:
+    path: "{{ router_data_dir }}/router_finish.flag"
+    owner: "{{ router_user }}"
+    group: "{{ router_group }}"
+    state: touch
+    mode: '0644'

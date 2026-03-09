@@ -1,0 +1,25 @@
+- name: Create systemd service for mysqld_exporter
+  ansible.builtin.template:
+    src: >-
+      {%- if mysqld_exporter_install_type == 'dbbot' and db_type == 'mysql' -%}
+        {{ '../templates/mysqld_exporter_dbbot_version_for_mysql.service.j2' | trim }}
+      {%- elif mysqld_exporter_install_type == 'package' and db_type == 'mysql' -%}
+        {{ '../templates/mysqld_exporter_package_version_for_mysql.service.j2' | trim }}
+      {%- elif mysqld_exporter_install_type == 'pmm' and db_type == 'mysql' -%}
+        {{ '../templates/mysqld_exporter_pmm_version_for_mysql.service.j2' | trim }}
+      {%- elif mysqld_exporter_install_type == 'pmm' and (db_type == 'percona' or db_type == 'greatsql') -%}
+        {{ '../templates/mysqld_exporter_pmm_version_for_percona_greatsql.service.j2' | trim }}
+      {%- else -%}
+        {{ '../templates/mysqld_exporter.service.j2' | trim }}
+      {%- endif -%}
+    dest: "{{ mysqld_exporter_service_file }}"
+    mode: '0644'
+  notify:
+    - Reload systemd
+
+- name: Start and enable mysqld_exporter service
+  ansible.builtin.systemd:
+    name: "mysqld{{ mysql_port }}_exporter"
+    enabled: true
+    state: started
+    daemon_reload: true

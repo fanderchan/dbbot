@@ -1,0 +1,48 @@
+- name: Configure prometheus Server
+  ansible.builtin.template:
+    src: ../templates/prometheus.yml.j2
+    dest: /usr/local/prometheus/prometheus.yml
+    owner: "{{ prometheus_run_user }}"
+    group: "{{ prometheus_run_user_group }}"
+    mode: '0644'
+
+- name: Copy rules directory to prometheus server directory
+  ansible.builtin.copy:
+    src: ../files/rules/
+    dest: /usr/local/prometheus/rules/
+    owner: "{{ prometheus_run_user }}"
+    group: "{{ prometheus_run_user_group }}"
+    mode: '0755'
+    remote_src: no
+    directory_mode: '0755'
+
+- name: Copy mysqld_exporter_targets.yml to Prometheus server directory
+  ansible.builtin.copy:
+    src: ../files/mysqld_exporter_targets.yml
+    dest: /usr/local/prometheus/mysqld_exporter_targets.yml
+    owner: "{{ prometheus_run_user }}"
+    group: "{{ prometheus_run_user_group }}"
+    mode: '0644'
+    remote_src: no
+
+- name: Copy node_exporter_targets.yml to Prometheus server directory
+  ansible.builtin.copy:
+    src: ../files/node_exporter_targets.yml
+    dest: /usr/local/prometheus/node_exporter_targets.yml
+    owner: "{{ prometheus_run_user }}"
+    group: "{{ prometheus_run_user_group }}"
+    mode: '0644'
+    remote_src: no
+
+- name: Copy mysqlrouter_exporter_targets.yml to Prometheus server directory
+  ansible.builtin.copy:
+    src: ../files/mysqlrouter_exporter_targets.yml
+    dest: /usr/local/prometheus/mysqlrouter_exporter_targets.yml
+    owner: "{{ prometheus_run_user }}"
+    group: "{{ prometheus_run_user_group }}"
+    mode: '0644'
+    remote_src: no
+
+- name: Validate Prometheus config and rules
+  ansible.builtin.command: /usr/local/prometheus/promtool check config /usr/local/prometheus/prometheus.yml
+  changed_when: false

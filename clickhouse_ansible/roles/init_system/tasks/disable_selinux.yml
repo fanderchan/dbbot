@@ -1,0 +1,18 @@
+- name: Check yum and install libselinux-python3 (RedHat family)
+  ansible.builtin.yum:
+    name: libselinux-python3
+    state: present
+    use_backend: auto
+  ignore_errors: false
+  when: ansible_os_family == "RedHat"
+
+- name: Set SELinux to permissive mode temporarily
+  ansible.builtin.command: setenforce 0
+  changed_when: true
+  failed_when: false
+  when: ansible_os_family == "RedHat"
+
+- name: Disable SELinux permanently
+  ansible.posix.selinux:
+    state: disabled
+  when: ansible_os_family == "RedHat"

@@ -1,0 +1,42 @@
+- name: Import tasks to prepare packages
+  ansible.builtin.import_tasks: prepare_packages.yml
+
+- name: Import tasks to create directories
+  ansible.builtin.import_tasks: create_directories.yml
+
+- name: Import tasks to install ClickHouse
+  ansible.builtin.import_tasks: install_clickhouse.yml
+  when: ck_run_host_tasks | default(true)
+
+- name: Import tasks to calculate performance parameters
+  ansible.builtin.import_tasks: calculate_params.yml
+
+- name: Import tasks to configure server
+  ansible.builtin.import_tasks: config_server.yml
+
+- name: Import tasks to configure cluster
+  ansible.builtin.import_tasks: config_cluster.yml
+
+- name: Import tasks to remove Keeper config when not used
+  ansible.builtin.import_tasks: remove_keeper.yml
+
+- name: Import tasks to configure SSL
+  ansible.builtin.import_tasks: config_ssl.yml
+  when:
+    - ck_run_host_tasks | default(true)
+    - clickhouse_enable_ssl | default(false)
+
+- name: Import tasks to create service
+  ansible.builtin.import_tasks: create_service.yml
+
+- name: Import tasks to start service
+  ansible.builtin.import_tasks: start_service.yml
+
+- name: Import tasks to create fast login for clickhouse user
+  ansible.builtin.import_tasks: create_clickhouse_fast_login.yml
+  when:
+    - fcs_create_clickhouse_fast_login | default(true) | bool
+    - ck_run_host_tasks | default(true)
+
+- name: Import tasks to verify cluster
+  ansible.builtin.import_tasks: verify_cluster.yml

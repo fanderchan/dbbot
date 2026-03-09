@@ -1,0 +1,8 @@
+---
+# Handlers for MySQL Router HA role
+
+- name: Restart keepalived
+  ansible.builtin.systemd:
+    name: keepalived
+    state: restarted
+

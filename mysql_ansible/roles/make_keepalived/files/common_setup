@@ -1,0 +1,86 @@
+set -o pipefail
+
+BASE_HOME=$(dirname "$0")
+FILE_NAME=$(basename "$0")
+PROCESS_ID="$$"
+CONF_FILE="${BASE_HOME}/../master_slave.cfg"
+
+# Load MySQL config file 
+if [ -f "${CONF_FILE}" ]; then
+    source "${CONF_FILE}"
+else
+    echo "Config file '${CONF_FILE}' not found. Exiting..."
+    exit 1
+fi
+
+# Load common functions file
+if [ -f "${BASE_HOME}/common_functions" ]; then
+    source ${BASE_HOME}/common_functions
+else
+    echo "Common functions file 'common_functions' not found. Exiting..."
+    exit 1
+fi
+
+# Create logfile path if not exists
+LOGFILE_PATH=$(dirname "${LOGFILE}")
+if ! mkdir -p "${LOGFILE_PATH}" 2>/dev/null; then
+    echo "ERROR: Failed to create log directory ${LOGFILE_PATH}. Please check permissions."
+    exit 1
+fi
+
+# Verify log directory is writable
+if [ ! -w "${LOGFILE_PATH}" ]; then
+    echo "ERROR: Log directory ${LOGFILE_PATH} is not writable. Please check permissions."
+    exit 1
+fi
+
+# Create SQL work directory if it doesn't exist
+if [ ! -d ${sqlpath} ]; then
+    echo "Creating SQL work directory: ${sqlpath}"
+    mkdir -p ${sqlpath} || {
+        echo "ERROR: Failed to create directory: ${sqlpath}"
+        exit 1
+    }
+fi
+
+# Ensure work directory has correct permissions
+chmod 700 ${sqlpath} 2>/dev/null
+
+##record scripts running logs
+exec >> ${LOGFILE} 2>&1
+
+# Check if this script is already running. (Non-reentrant)
+log_info "Checking if script is running: ps -ef | grep \"$0\" | grep -v ${PROCESS_ID} | grep -v grep | wc -l"
+check_running=`ps -ef | grep "$0" | grep -v ${PROCESS_ID} | grep -v grep |wc -l`
+if [ ${check_running} -ge 1 ]; then
+    log_warn "Script $0 is already running. Instances running: ${check_running}. Exiting."
+    exit 0
+else
+    log_info "Script $0 is not running. Instances running: ${check_running}. Continuing to switch."
+fi
+
+# Improvement: safer MySQL command definitions (avoid showing passwords in logs)
+# Pass the password via environment variable instead of command-line arguments
+export MYSQL_PWD="${MYSQL_HA_PWD}"
+
+# Defined CMD - password handling approach
+MYSQL_LOCAL_CMD="${MYSQL_CMD} -u${MYSQL_HA_USER} -p${MYSQL_HA_PWD} -P${MYSQL_PORT} -h${LOCAL_HOST} --protocol=tcp"
+#log_info "MYSQL_LOCAL_CMD: ${MYSQL_CMD} -u${MYSQL_HA_USER} -p****** -P${MYSQL_PORT} -h${LOCAL_HOST} --protocol=tcp"
+
+MYSQL_REMOTE_CMD="${MYSQL_CMD} -u${MYSQL_HA_USER} -p${MYSQL_HA_PWD} -P${MYSQL_PORT} -h${REMOTE_HOST} --protocol=tcp"
+#log_info "MYSQL_REMOTE_CMD: ${MYSQL_CMD} -u${MYSQL_HA_USER} -p****** -P${MYSQL_PORT} -h${REMOTE_HOST} --protocol=tcp"
+
+MYSQL_VIP_CMD="${MYSQL_CMD} -u${MYSQL_HA_USER} -p${MYSQL_HA_PWD} -P${MYSQL_PORT} -h${WRITE_VIP} --protocol=tcp"
+#log_info "MYSQL_VIP_CMD: ${MYSQL_CMD} -u${MYSQL_HA_USER} -p****** -P${MYSQL_PORT} -h${WRITE_VIP} --protocol=tcp"
+
+MYSQLPING_LOCAL_CMD="${MYSQLADMIN_CMD} -u${MYSQL_HA_USER} -p${MYSQL_HA_PWD} -P${MYSQL_PORT} -h${LOCAL_HOST} ping"
+#log_info "MYSQLPING_LOCAL_CMD: ${MYSQLADMIN_CMD} -u${MYSQL_HA_USER} -p****** -P${MYSQL_PORT} -h${LOCAL_HOST} ping"
+
+MYSQLPING_REMOTE_CMD="${MYSQLADMIN_CMD} -u${MYSQL_HA_USER} -p${MYSQL_HA_PWD} -P${MYSQL_PORT} -h${REMOTE_HOST} ping"
+#log_info "MYSQLPING_REMOTE_CMD: ${MYSQLADMIN_CMD} -u${MYSQL_HA_USER} -p****** -P${MYSQL_PORT} -h${REMOTE_HOST} ping"
+
+MYSQLPING_VIP_CMD="${MYSQLADMIN_CMD} -u${MYSQL_HA_USER} -p${MYSQL_HA_PWD} -P${MYSQL_PORT} -h${WRITE_VIP} ping"
+#log_info "MYSQLPING_VIP_CMD: ${MYSQLADMIN_CMD} -u${MYSQL_HA_USER} -p****** -P${MYSQL_PORT} -h${WRITE_VIP} ping"
+
+MYSQLSHUTDOWN_LOCAL_CMD="${MYSQLADMIN_CMD} -u${MYSQL_HA_USER} -p${MYSQL_HA_PWD} -P${MYSQL_PORT} -h${LOCAL_HOST} --protocol=tcp shutdown"
+#log_info "MYSQLSHUTDOWN_LOCAL_CMD: ${MYSQLADMIN_CMD} -u${MYSQL_HA_USER} -p****** -P${MYSQL_PORT} -h${LOCAL_HOST} --protocol=tcp shutdown"

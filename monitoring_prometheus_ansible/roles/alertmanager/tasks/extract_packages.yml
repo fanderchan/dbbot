@@ -1,0 +1,24 @@
+- name: Ensure /usr/local/alertmanager directory exists
+  ansible.builtin.file:
+    path: /usr/local/alertmanager
+    state: directory
+    owner: "{{ alertmanager_run_user }}"
+    group: "{{ alertmanager_run_user_group }}"
+    mode: '0755'
+
+- name: Extract alertmanager tarball
+  ansible.builtin.unarchive:
+    creates: "/tmp/unarchive_alertmanager_package_finished"
+    copy: false
+    src: /tmp/{{ alertmanager_package }}
+    dest: /usr/local/alertmanager
+    owner: "{{ alertmanager_run_user }}"
+    group: "{{ alertmanager_run_user_group }}"
+    extra_opts:
+      - --strip-components=1
+
+- name: Touch unarchive_alertmanager_package_finished file
+  ansible.builtin.file:
+    path: "/tmp/unarchive_alertmanager_package_finished"
+    mode: '0755'
+    state: touch

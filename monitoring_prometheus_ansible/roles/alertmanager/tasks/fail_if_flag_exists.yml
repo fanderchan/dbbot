@@ -1,0 +1,11 @@
+- name: Check if flag exists or not
+  ansible.builtin.find:
+    paths: "/tmp"
+    patterns: 'alertmanager_finish.flag'
+  register: alertmanager__p
+
+- name: Fail if flag exists
+  ansible.builtin.fail:
+    msg: "Fail because flag exists, please remove the flag manually first!"
+  when: alertmanager__p.matched
+

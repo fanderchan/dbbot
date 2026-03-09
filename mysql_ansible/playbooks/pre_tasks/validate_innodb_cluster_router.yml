@@ -1,0 +1,70 @@
+---
+# InnoDB Cluster Router Configuration Validation
+
+- name: Validate router_bootstrap_server is defined
+  ansible.builtin.fail:
+    msg: "router_bootstrap_server is not defined. Please specify cluster node address in configuration file"
+  when: router_bootstrap_server is not defined or router_bootstrap_server == ""
+
+- name: Validate router_ports is defined
+  ansible.builtin.fail:
+    msg: "router_ports dictionary is not defined. Please configure router_ports in your vars file"
+  when: router_ports is not defined
+
+- name: Validate router ports are valid
+  ansible.builtin.assert:
+    that:
+      - router_ports.rw.port | int >= 1024
+      - router_ports.rw.port | int <= 65535
+      - router_ports.ro.port | int >= 1024
+      - router_ports.ro.port | int <= 65535
+      - router_ports.rw_x.port | int >= 1024
+      - router_ports.rw_x.port | int <= 65535
+      - router_ports.ro_x.port | int >= 1024
+      - router_ports.ro_x.port | int <= 65535
+      - router_ports.rw_split.port | int >= 1024
+      - router_ports.rw_split.port | int <= 65535
+      - router_ports.http.port | int >= 1024
+      - router_ports.http.port | int <= 65535
+    fail_msg: "Router ports must be within range 1024-65535"
+
+- name: Validate router ports are different
+  ansible.builtin.fail:
+    msg: "Router ports cannot be the same. Please ensure all ports are unique"
+  when: >
+    router_ports.rw.port == router_ports.ro.port or
+    router_ports.rw.port == router_ports.rw_x.port or
+    router_ports.rw.port == router_ports.ro_x.port or
+    router_ports.rw.port == router_ports.rw_split.port or
+    router_ports.rw.port == router_ports.http.port or
+    router_ports.ro.port == router_ports.rw_x.port or
+    router_ports.ro.port == router_ports.ro_x.port or
+    router_ports.ro.port == router_ports.rw_split.port or
+    router_ports.ro.port == router_ports.http.port or
+    router_ports.rw_x.port == router_ports.ro_x.port or
+    router_ports.rw_x.port == router_ports.rw_split.port or
+    router_ports.rw_x.port == router_ports.http.port or
+    router_ports.ro_x.port == router_ports.rw_split.port or
+    router_ports.ro_x.port == router_ports.http.port or
+    router_ports.rw_split.port == router_ports.http.port
+
+- name: Display Router configuration summary
+  ansible.builtin.debug:
+    msg: "{{ (
+            [
+              '======================================================',
+              'MySQL Router Configuration Summary',
+              '======================================================',
+              'Bootstrap Server: ' ~ router_bootstrap_server ~ ':' ~ (mysql_port | string),
+              '',
+              'Enabled Ports:'
+            ]
+            + (['  - RW (Read-Write):     ' ~ (router_ports.rw.port | string)] if router_ports.rw.enabled else [])
+            + (['  - RO (Read-Only):      ' ~ (router_ports.ro.port | string)] if router_ports.ro.enabled else [])
+            + (['  - RW X Protocol:       ' ~ (router_ports.rw_x.port | string)] if router_ports.rw_x.enabled else [])
+            + (['  - RO X Protocol:       ' ~ (router_ports.ro_x.port | string)] if router_ports.ro_x.enabled else [])
+            + (['  - RW Split:            ' ~ (router_ports.rw_split.port | string)] if router_ports.rw_split.enabled else [])
+            + (['  - REST API:            ' ~ (router_ports.http.port | string)] if router_ports.http.enabled else [])
+            + ['======================================================']
+          ) }}"
+  run_once: true

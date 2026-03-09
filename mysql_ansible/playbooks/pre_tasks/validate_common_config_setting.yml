@@ -1,0 +1,172 @@
+- name: Build dbbot password policy list
+  ansible.builtin.set_fact:
+    dbbot_password_policies:
+      - key: mysql_user_password
+        value: "{{ mysql_user_password }}"
+        default_value: "Dbbot_{{ mysql_user }}@9999"
+        enabled: true
+      - key: mysql_admin_password
+        value: "{{ mysql_admin_password }}"
+        default_value: "Dbbot_{{ mysql_admin_user }}@8888"
+        enabled: true
+      - key: mysql_admin_127_password
+        value: "{{ mysql_admin_127_password }}"
+        default_value: "Dbbot_{{ mysql_admin_user }}@8888"
+        enabled: true
+      - key: mysql_rple_password
+        value: "{{ mysql_rple_password }}"
+        default_value: "Dbbot_{{ mysql_rple_user }}@8888"
+        enabled: true
+      - key: mysql_mha_password
+        value: "{{ mysql_mha_password }}"
+        default_value: "Dbbot_{{ mysql_mha_user }}@8888"
+        enabled: true
+      - key: mysql_backup_password
+        value: "{{ mysql_backup_password }}"
+        default_value: "Dbbot_{{ mysql_backup_user }}@8888"
+        enabled: true
+      - key: mysql_mgr_password
+        value: "{{ mysql_mgr_password }}"
+        default_value: "Dbbot_{{ mysql_mgr_user }}@8888"
+        enabled: true
+      - key: mysql_monitor_password
+        value: "{{ mysql_monitor_password }}"
+        default_value: "Dbbot_{{ mysql_monitor_user }}@8888"
+        enabled: true
+      - key: mysql_kha_password
+        value: "{{ mysql_kha_password }}"
+        default_value: "Dbbot_{{ mysql_kha_user }}@8888"
+        enabled: true
+      - key: mysql_cluster_admin_password
+        value: "{{ mysql_cluster_admin_password }}"
+        default_value: "Dbbot_{{ mysql_cluster_admin_user }}@8888"
+        enabled: true
+      - key: mysql_router_password
+        value: "{{ mysql_router_password }}"
+        default_value: "Dbbot_{{ mysql_router_user }}@8888"
+        enabled: true
+      - key: router_rest_api_file_password
+        value: "{{ router_rest_api_file_password | default('') }}"
+        default_value: "Dbbot_{{ router_rest_api_file_user | default('router_api_user') }}@8888"
+        enabled: "{{ router_rest_api_file_password is defined }}"
+      - key: mysqlrouter_exporter_api_password
+        value: "{{ mysqlrouter_exporter_api_password | default('') }}"
+        default_value: "Dbbot_{{ router_rest_api_file_user | default('router_api_user') }}@8888"
+        enabled: "{{ mysqlrouter_exporter_api_password is defined }}"
+  no_log: true
+
+- name: Validate passwords
+  block:
+    - name: Check if password meets complexity requirements
+      ansible.builtin.assert:
+        that:
+          - password.value | length >= 8
+          - password.value | regex_search('[a-z]') is not none
+          - password.value | regex_search('[A-Z]') is not none
+          - password.value | regex_search('[0-9]') is not none
+          - password.value | regex_search('[!@#$%^&*()]') is not none
+      register: password_check
+      loop: "{{ dbbot_password_policies }}"
+      loop_control:
+        loop_var: password
+      when: password.enabled | bool
+      no_log: true
+      ignore_errors: true
+
+    - name: Print custom error message
+      ansible.builtin.fail:
+        msg: >-
+          Password for {{
+            password_check.results
+            | selectattr('failed', 'defined')
+            | selectattr('failed')
+            | map(attribute='password.key')
+            | list
+            | join(', ')
+          }} in common_config.yml does not meet complexity requirements:
+          at least 8 characters long, at least 1 digit, at least 1 uppercase letter,
+          at least 1 lowercase letter, at least 1 special character.
+      when: >-
+        (password_check.results
+        | selectattr('failed', 'defined')
+        | selectattr('failed')
+        | list
+        | length) > 0
+
+- name: Initialize dbbot default password hit list
+  ansible.builtin.set_fact:
+    dbbot_default_password_hits: []
+  no_log: true
+
+- name: Collect dbbot default passwords currently in use
+  ansible.builtin.set_fact:
+    dbbot_default_password_hits: "{{ dbbot_default_password_hits + [password.key] }}"
+  loop: "{{ dbbot_password_policies }}"
+  loop_control:
+    loop_var: password
+  when:
+    - password.enabled | bool
+    - password.value == password.default_value
+  no_log: true
+
+- name: Block deployment when dbbot public default passwords are used
+  ansible.builtin.fail:
+    msg: >-
+      Detected dbbot public default password(s): {{ dbbot_default_password_hits | join(', ') }}.
+      Set fcs_allow_dbbot_default_passwd=true to explicitly allow these defaults,
+      or customize the password values in common_config.yml / vars files before running the playbook.
+  when:
+    - not (fcs_allow_dbbot_default_passwd | bool)
+    - dbbot_default_password_hits | length > 0
+
+- name: Validate fcs_ settings are boolean
+  fail:
+    msg: "{{ item }} value is not a boolean."
+  loop:
+    - fcs_skip_db_mount_verification
+    - fcs_skip_check_ntpd_or_chrony_running
+    - fcs_auto_download_packages
+    - fcs_allow_dbbot_default_passwd
+    - fcs_create_mysql_fast_login
+    - fcs_backup_script_create_backup_user
+    - fcs_role_mysqld_exporter_create_monitor_user
+    - fcs_mysql_use_jemalloc
+    - fcs_use_greatsql_ha
+  when:
+    - vars[item] is not boolean
+
+- name: Validate mysql_port is within range
+  fail:
+    msg: "`mysql_port` value must within the range 1024 to 65535."
+  when:
+    - (mysql_port | int) < 1024 or (mysql_port | int) > 65535
+
+- name: Validate mysql_version is within range
+  fail:
+    msg: "`mysql_version`: {{ mysql_version }} for {{ db_type }} is not test so not support!"
+  when: 
+    - db_type == 'greatsql' and mysql_version not in ['8.0.32-24', '8.0.32-25', '8.0.32-26', '8.0.32-27']
+   
+- name: Validate mysql_version is within range
+  fail:
+    msg: "`mysql_version`: {{ mysql_version }} for {{ db_type }} is not test so not support!"
+  when:
+    -  db_type == 'mysql' and (
+        (mysql_version.startswith('5.7') and mysql_version is version('5.7.26', '<')) or
+        (mysql_version.startswith('8.0') and mysql_version is version('8.0.21', '<')) or
+        (mysql_version.startswith('8.4') and mysql_version is version('8.4.0', '<')) or
+        (not (mysql_version.startswith('5.7') or mysql_version.startswith('8.0') or mysql_version.startswith('8.4')))
+      )
+
+- name: Validate db_type is a valid option
+  fail:
+    msg: "`db_type` value must be 'mysql', 'percona', or 'greatsql'."
+  when:
+    - db_type not in ['mysql', 'percona', 'greatsql']
+
+- name: Validate server_specs is a valid option
+  fail:
+    msg: "`server_specs` value must be 'auto' or follow the 'XcYg' format (e.g., '4c8g', '16c32g')."
+  when:
+    - server_specs != "auto"
+    - server_specs is not match("^[0-9]+c[0-9]+g$")

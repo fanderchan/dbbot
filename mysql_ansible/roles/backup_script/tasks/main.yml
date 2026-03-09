@@ -1,0 +1,27 @@
+- name: Create backup user
+  ansible.builtin.import_tasks: create_backup_user.yml
+  when: fcs_backup_script_create_backup_user | bool
+
+- name: Config backup script
+  ansible.builtin.template:
+    src: "templates/backup.sh.j2"
+    dest: "{{ mysql_data_dir_base }}/backup{{ mysql_port }}.sh"
+    mode: '0755'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Ensure mysql_user is allowed to use crontab
+  ansible.builtin.lineinfile:
+    path: /etc/cron.allow
+    line: "{{ mysql_user }}"
+    create: yes
+    state: present
+  become: true
+
+- name: Creates a cron job in mysql user's crontab
+  ansible.builtin.cron:
+    name: "MySQL{{ mysql_port }} auto backup"
+    minute: "0"
+    hour: "2"
+    user: "{{ mysql_user }}"
+    job: "sh {{ mysql_data_dir_base }}/backup{{ mysql_port }}.sh >/dev/null 2>&1"

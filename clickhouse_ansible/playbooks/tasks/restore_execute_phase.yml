@@ -1,0 +1,92 @@
+---
+- name: Validate restore phase object clause
+  ansible.builtin.assert:
+    that:
+      - restore_phase.object_clause | default('') | trim | length > 0
+    fail_msg: "restore phase {{ restore_phase.name | default('unknown') }} has empty object_clause."
+
+- name: Set restore phase task id
+  ansible.builtin.set_fact:
+    restore_task_id_current: >-
+      {{
+        restore_run_id_effective ~
+        '_s' ~ (current_node_shard | string) ~
+        '_r' ~ (current_node_replica | string) ~
+        (('_' ~ (restore_phase.id_suffix | string)) if ((restore_phase.id_suffix | default('') | string | length) > 0) else '') ~
+        ('_ddl' if (restore_structure_only_execution | bool) else '')
+      }}
+    restore_allow_non_empty_tables_effective: >-
+      {{ (restore_allow_non_empty_tables | bool) or (restore_structure_only_execution | bool) }}
+
+- name: Build restore phase SQL
+  ansible.builtin.set_fact:
+    restore_sql_current: >-
+      RESTORE {{ restore_phase.object_clause }}
+      FROM Disk('{{ restore_storage_disk_effective }}', '{{ restore_source_rel_path }}')
+      SETTINGS id='{{ restore_task_id_current }}'
+      {% if restore_structure_only_execution | bool %}, structure_only=1{% endif %}
+      {% if restore_allow_non_empty_tables_effective | bool %}, allow_non_empty_tables=true{% endif %}
+      {% if restore_allow_different_table_def | bool %}, allow_different_table_def=true{% endif %}
+      {% if restore_async | bool %}ASYNC{% endif %};
+
+- name: Start restore phase
+  ansible.builtin.shell: |
+    clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+      --multiquery -q "
+        SET distributed_ddl_output_mode='none';
+        {{ restore_sql_current }}
+      "
+  register: restore_phase_start_result
+  changed_when: true
+  failed_when: restore_phase_start_result.rc != 0
+
+- name: Wait restore phase status to finish
+  ansible.builtin.shell: |
+    clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+      -q "
+        SELECT id, name, status, error, num_files, compressed_size, uncompressed_size, start_time, end_time
+        FROM system.backups
+        WHERE id='{{ restore_task_id_current }}'
+        FORMAT JSONEachRow
+      "
+  register: restore_phase_status_query
+  changed_when: false
+  retries: "{{ restore_poll_retries | int }}"
+  delay: "{{ restore_poll_delay_seconds | int }}"
+  until: restore_phase_status_query.stdout is search('RESTORED') or restore_phase_status_query.stdout is search('RESTORE_FAILED')
+
+- name: Parse restore phase status JSON
+  ansible.builtin.set_fact:
+    restore_phase_status_json: "{{ (restore_phase_status_query.stdout_lines | select('match', '^\\{') | list | first | default('{}')) | from_json }}"
+
+- name: Fail if restore phase is failed
+  ansible.builtin.fail:
+    msg: >-
+      Restore phase {{ restore_phase.name | default('unknown') }} failed on {{ inventory_hostname }}:
+      {{ restore_phase_status_json.error | default('unknown error') }}
+  when: restore_phase_status_json.status | default('') != 'RESTORED'
+
+- name: Append restore phase status
+  ansible.builtin.set_fact:
+    restore_phase_statuses: >-
+      {{
+        (restore_phase_statuses | default([]))
+        +
+        [
+          {
+            'name': (restore_phase.name | default('phase')),
+            'id': restore_task_id_current,
+            'object_clause': (restore_phase.object_clause | default('')),
+            'status': (restore_phase_status_json.status | default('UNKNOWN')),
+            'error': (restore_phase_status_json.error | default('')),
+            'num_files': (restore_phase_status_json.num_files | default(0)),
+            'compressed_size': (restore_phase_status_json.compressed_size | default(0)),
+            'uncompressed_size': (restore_phase_status_json.uncompressed_size | default(0)),
+            'start_time': (restore_phase_status_json.start_time | default('')),
+            'end_time': (restore_phase_status_json.end_time | default(''))
+          }
+        ]
+      }}
+    restore_status_json: "{{ restore_phase_status_json }}"
+    restore_task_id: "{{ restore_task_id_current }}"
+    restore_sql: "{{ restore_sql_current }}"

@@ -1,0 +1,183 @@
+# Verify yum connectivity by employing "install libselinux-python3"; when utilizing Python3, libselinux-python3 proves beneficial for configuring the target machine's SELinux settings.
+- name: Check yum and install libselinux-python3
+  ansible.builtin.yum:
+    name: libselinux-python3
+    state: present
+    use_backend: auto
+  ignore_errors: false
+
+- name: Install ncurses-compat-libs if necessary
+  ansible.builtin.yum:
+    name: ncurses-compat-libs
+    state: present
+    enablerepo: "{{ 'devel' if os_type == 'Rocky9' else omit }}"
+  when: os_type in ['Rocky9', 'BigCloud21', 'openEuler24', 'openEuler22', 'openEuler20', 'CentOS8', 'RedHat8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10']
+
+- name: Intall tar for openEuler20
+  ansible.builtin.yum:
+    name: tar
+    state: present
+
+- name: Set SeLinux disabled
+  ansible.posix.selinux:
+    state: disabled
+
+- name: Stop and Disabled Firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    state: stopped
+    enabled: false
+
+- name: Check if NTP or Chrony is running
+  when: not fcs_skip_check_ntpd_or_chrony_running
+  block:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert NTP or Chrony is running and only one is enabled
+      ansible.builtin.assert:
+        that:
+          - "('ntp.service' in ansible_facts.services and ansible_facts.services['ntp.service'].state == 'running') or
+             ('chronyd.service' in ansible_facts.services and ansible_facts.services['chronyd.service'].state == 'running')"
+          - "('ntp.service' in ansible_facts.services and ansible_facts.services['ntp.service'].status == 'enabled') !=
+             ('chronyd.service' in ansible_facts.services and ansible_facts.services['chronyd.service'].status == 'enabled')"
+        fail_msg: "Either NTP and Chrony are both not running, or both are running/enabled. Please ensure only one of them is running and enabled."
+
+  rescue:
+    - name: Fail if neither NTP nor Chrony is running or if both are running/enabled
+      ansible.builtin.fail:
+        msg: "Either NTP and Chrony are both not running, or both are running/enabled. Please ensure only one of them is running and enabled."
+
+- name: Check whether NUMA is turned off
+  ansible.builtin.command: grep -q 'numa=off' /proc/cmdline
+  register: pre_check_and_set__numa_off
+  changed_when: false
+  failed_when: false
+
+- name: Show warning if NUMA is not turned off
+  ansible.builtin.debug:
+    msg: "Warning: NUMA is not turned off."
+  when: pre_check_and_set__numa_off.rc != 0
+
+- name: Deploy managed sysctl config
+  ansible.builtin.template:
+    src: ../templates/100-mysql.conf.j2
+    dest: /etc/sysctl.d/100-mysql.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply managed sysctl config only
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/100-mysql.conf
+  changed_when: true
+
+- name: Check disk mount (data disk separate and xfs formatted)
+  when: not fcs_skip_db_mount_verification
+  block:
+    - name: Extract parent directories of mysql_data_dir_base
+      ansible.builtin.set_fact:
+        pre_check_and_set__mysql_data_dir_base_parents: "{{ mysql_data_dir_base | parent_dirs }}"
+
+    - name: Remove root '/' from parent directories list
+      ansible.builtin.set_fact:
+        pre_check_and_set__mysql_data_dir_base_parents: "{{ pre_check_and_set__mysql_data_dir_base_parents[:-1] }}"
+
+#    - name: Debug output
+#      ansible.builtin.debug:
+#        var: pre_check_and_set__mysql_data_dir_base_parents
+
+    - name: Check if mount points exist for pre_check_and_set__mysql_data_dir_base_parents list
+      ansible.builtin.stat:
+        path: "{{ mount_dir }}"
+      register: mount_point_check_result
+      loop: "{{ pre_check_and_set__mysql_data_dir_base_parents }}"
+      loop_control:
+        loop_var: mount_dir
+      failed_when: 
+        - mount_point_check_result.stat.exists == false
+        - mount_point_check_result.stat.isdir == false
+    
+    - name: Find the first matching mount point for mysql_data_dir_base and its parents
+      ansible.builtin.set_fact:
+        pre_check_and_set__mount_point: "{{ mount }}"
+      loop: "{{ ansible_mounts }}"
+      when: mount.mount in pre_check_and_set__mysql_data_dir_base_parents
+      loop_control:
+        loop_var: mount
+      check_mode: no
+      changed_when: false
+      register: mount_point_search_result
+      until: mount_point_search_result is defined
+      ignore_errors: yes
+    
+    - name: Debug output for mount point
+      ansible.builtin.debug:
+        msg: "Found mount point: {{ pre_check_and_set__mount_point.mount }} with filesystem type: {{ pre_check_and_set__mount_point.fstype }}"
+      when: pre_check_and_set__mount_point is defined
+
+    - name: Assert mount point is using xfs filesystem
+      ansible.builtin.assert:
+        that: 
+          - pre_check_and_set__mount_point is defined
+          - pre_check_and_set__mount_point.fstype == 'xfs'
+        fail_msg: "Mount point is not using xfs filesystem"
+      when: pre_check_and_set__mount_point is defined
+
+  rescue:
+    - name: Fail if mount point does not exist or is not using xfs filesystem
+      ansible.builtin.fail:
+        msg: "Mount point does not exist or is not using xfs filesystem"
+
+
+- name: If it is a physical machine, double network card binding is required
+  ansible.builtin.debug:
+    msg: "{{ ansible_default_ipv4.alias }}"
+  register: pre_check_and_set__netcard_num
+  when: ansible_default_ipv4.address in ansible_all_ipv4_addresses
+
+- name: If it is a physical machine, double network card binding is required
+  ansible.builtin.debug:
+    msg: "These are physical machines, double network card binding is required, {{ pre_check_and_set__netcard_num }},{{ ansible_virtualization_type }}"
+  when: ansible_virtualization_type != "kvm" and ansible_virtualization_type != "VMware" and ansible_virtualization_type != "virtualbox" and ansible_virtualization_type != "openstack"
+  failed_when: "'bond' not in pre_check_and_set__netcard_num.msg"
+  tags:
+    - check_double_network_card
+
+- name: Add network interface alias to a temporary file
+  ansible.builtin.lineinfile:
+    path: "/tmp/net_aliases.txt"
+    line: "{{ ansible_default_ipv4.alias }}"
+    create: true
+    mode: '0644'
+
+- name: Fetch copy
+  ansible.builtin.fetch:
+    src: /tmp/net_aliases.txt
+    dest: /tmp/ssh
+
+- name: Append file /tmp/net_aliases.txt (delegate to 127.0.0.1)
+  ansible.builtin.shell: set -o pipefail && find /tmp/ssh/ -name "*.txt" -type f -exec sh -c 'cat {}' \; | sort | uniq | wc -l
+  register: pre_check_and_set__shell_output
+  changed_when: false
+  run_once: true
+  delegate_to: 127.0.0.1
+
+- name: Check if shell output is 1
+  ansible.builtin.assert:
+    that: pre_check_and_set__shell_output.stdout | int == 1
+    fail_msg: "Network card names are different!"
+  run_once: true
+  delegate_to: 127.0.0.1
+  when: roles_precheckandset_check_networkcardnames is not defined or roles_precheckandset_check_networkcardnames != 0
+
+- name: Delete /tmp/net_aliases.txt
+  ansible.builtin.file:
+    path: /tmp/net_aliases.txt
+    state: absent
+
+- name: Delete /tmp/ssh/ (delegate to 127.0.0.1)
+  ansible.builtin.file:
+    path: /tmp/ssh/
+    state: absent
+  run_once: true
+  delegate_to: 127.0.0.1

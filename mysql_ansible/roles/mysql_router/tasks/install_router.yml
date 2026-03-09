@@ -1,0 +1,71 @@
+---
+# Install MySQL Router
+
+- name: Check if router already installed
+  ansible.builtin.stat:
+    path: "{{ router_base_dir }}/bin/mysqlrouter"
+  register: mysql_router__installed
+
+- name: Check if router package exists
+  ansible.builtin.stat:
+    path: "{{ router_packages_dir }}/{{ router_package }}"
+  register: mysql_router__package_stat
+  delegate_to: localhost
+
+- name: Fail if router package not found
+  ansible.builtin.fail:
+    msg: "MySQL Router package not found: {{ router_packages_dir }}/{{ router_package }}"
+  when:
+    - not mysql_router__installed.stat.exists
+    - not mysql_router__package_stat.stat.exists
+
+- name: Copy router package to target
+  ansible.builtin.copy:
+    src: "{{ router_packages_dir }}/{{ router_package }}"
+    dest: "/tmp/{{ router_package }}"
+    mode: '0644'
+  when: not mysql_router__installed.stat.exists
+
+- name: Extract router package
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ router_package }}"
+    dest: "/tmp/"
+    remote_src: true
+  when: not mysql_router__installed.stat.exists
+
+- name: Get extracted directory name
+  ansible.builtin.find:
+    paths: /tmp
+    patterns: "mysql-router-{{ router_version }}*"
+    file_type: directory
+  register: mysql_router__extracted_dir
+  when: not mysql_router__installed.stat.exists
+
+- name: Move router files to base directory
+  ansible.builtin.shell: |
+    cp -r {{ mysql_router__extracted_dir.files[0].path }}/* {{ router_base_dir }}/
+  when:
+    - not mysql_router__installed.stat.exists
+    - mysql_router__extracted_dir.files | length > 0
+  changed_when: true
+
+- name: Set ownership for router directory
+  ansible.builtin.file:
+    path: "{{ router_base_dir }}"
+    owner: "{{ router_user }}"
+    group: "{{ router_group }}"
+    recurse: true
+
+- name: Create symlink for mysqlrouter binary
+  ansible.builtin.file:
+    src: "{{ router_base_dir }}/bin/mysqlrouter"
+    dest: /usr/local/bin/mysqlrouter
+    state: link
+
+- name: Cleanup temp files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/{{ router_package }}"
+  when: not mysql_router__installed.stat.exists

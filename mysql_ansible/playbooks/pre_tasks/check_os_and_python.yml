@@ -1,0 +1,33 @@
+- name: Set the OS type variable
+  ansible.builtin.set_fact:
+    os_type: "{{ ansible_distribution }}{{ ansible_distribution_major_version }}"
+
+- name: Print the OS type
+  ansible.builtin.debug:
+    msg: "The OS type of host {{ inventory_hostname }} is {{ os_type }}"
+
+- name: Assert if OS type is supported
+  ansible.builtin.assert:
+    that:
+      - os_type in ['Rocky9', 'BigCloud21', 'BigCloud7', 'BigCloud8', 'Anolis OS8', 'openEuler24', 'openEuler20', 'CentOS7', 'CentOS8', 'openEuler22', 'RedHat7', 'RedHat8', 'Kylin Linux Advanced ServerV10']
+    fail_msg: "Unsupported OS type: {{ os_type }}"
+
+- name: Check for Python 3
+  ansible.builtin.command: /usr/bin/python3 --version
+  register: pre_task__python3_result
+  failed_when: false
+  changed_when: false
+
+- name: Check for Python 2
+  ansible.builtin.command: /usr/bin/python2 --version
+  register: pre_task__python2_result
+  failed_when: false
+  changed_when: false
+
+- name: Set Python interpreter
+  ansible.builtin.set_fact:
+    ansible_python_interpreter: "{% if os_type in ['BigCloud7', 'CentOS7', 'RedHat7'] %}/usr/bin/python2{% elif pre_task__python3_result.rc == 0 %}/usr/bin/python3{% elif pre_task__python2_result.rc == 0 %}/usr/bin/python2{% else %}{{ discovered_interpreter_python }}{% endif %}"
+
+- name: Print the Python interpreter
+  ansible.builtin.debug:
+    msg: "The Python interpreter of host {{ inventory_hostname }} is {{ ansible_python_interpreter }}"

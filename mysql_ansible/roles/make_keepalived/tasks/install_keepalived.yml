@@ -1,0 +1,66 @@
+- name: Install keepalived
+  ansible.builtin.yum:
+    name: keepalived
+    state: present
+
+- name: Setup /etc/keepalived/keepalived.conf
+  ansible.builtin.template:
+    src: "../templates/keepalived.conf.j2"
+    dest: "/etc/keepalived/keepalived.conf"
+    mode: '0600'
+
+- name: Create keepalived directory
+  ansible.builtin.file:
+    path: "{{ mysql_data_dir_base }}/keepalived/bin"
+    state: directory
+    mode: '0755'
+
+- name: Setup keepalived master_slave.cfg
+  ansible.builtin.template:
+    src: "../templates/master_slave.cfg.j2"
+    dest: "{{ mysql_data_dir_base }}/keepalived/master_slave.cfg"
+    mode: '0600'
+
+- name: Copy scripts to keepalived directory
+  ansible.builtin.copy:
+    src: "{{ loop_kpscript_item.src }}"
+    dest: "{{ loop_kpscript_item.dest }}"
+    mode: '0700'
+  loop:
+    - { src: "../files/check_mysql.sh", dest: "{{ mysql_data_dir_base }}/keepalived/bin/check_mysql.sh" }
+    - { src: "../files/when_become_backup.sh", dest: "{{ mysql_data_dir_base }}/keepalived/bin/when_become_backup.sh" }
+    - { src: "../files/when_become_master.sh", dest: "{{ mysql_data_dir_base }}/keepalived/bin/when_become_master.sh" }
+    - { src: "../files/when_check_mysql_failed.sh", dest: "{{ mysql_data_dir_base }}/keepalived/bin/when_check_mysql_failed.sh" }
+    - { src: "../files/when_keepalived_normal_stop.sh", dest: "{{ mysql_data_dir_base }}/keepalived/bin/when_keepalived_normal_stop.sh" }
+    - { src: "../files/when_status_change.sh", dest: "{{ mysql_data_dir_base }}/keepalived/bin/when_status_change.sh" }
+    - { src: "../files/common_functions", dest: "{{ mysql_data_dir_base }}/keepalived/bin/common_functions" }
+    - { src: "../files/common_setup", dest: "{{ mysql_data_dir_base }}/keepalived/bin/common_setup" }
+  loop_control:
+    loop_var: loop_kpscript_item
+
+- name: Start keepalived service(master)
+  ansible.builtin.systemd:
+    name: keepalived
+    state: started
+  when: master_ip in ansible_all_ipv4_addresses
+
+- name: Check VIP status
+  ansible.builtin.shell: >
+    set -o pipefail && ip addr | grep -q "{{ vip }}"
+  register: result
+  until: result.rc == 0
+  retries: 10
+  delay: 1
+  changed_when: false
+  when: master_ip in ansible_all_ipv4_addresses
+
+- name: Start keepalived service(slave)
+  ansible.builtin.systemd:
+    name: keepalived
+    state: started
+  when: slave_ip in ansible_all_ipv4_addresses
+
+- name: Disable keepalived from starting at boot
+  ansible.builtin.systemd:
+    name: keepalived
+    enabled: false

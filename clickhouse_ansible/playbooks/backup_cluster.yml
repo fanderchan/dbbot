@@ -1,0 +1,782 @@
+---
+- name: Run Enterprise ClickHouse Backup (NFS + safe_ts manifest)
+  hosts: clickhouse_backup:clickhouse_cluster
+  become: true
+  any_errors_fatal: true
+  serial: "{{ backup_serial | default('100%') }}"
+  vars_files:
+    - vars/common_config.yml
+    - vars/cluster_config.yml
+    - vars/backup_config.yml
+
+  pre_tasks:
+    - name: Validate dedicated backup inventory filename guard (run once)
+      ansible.builtin.assert:
+        that:
+          - not backup_require_inventory_guard | bool or ((inventory_file | default('') | lower) is search(backup_inventory_guard_keyword | lower))
+        fail_msg: >-
+          backup_cluster.yml requires a dedicated backup inventory by default.
+          current_inventory={{ inventory_file | default('unknown') }},
+          expected_keyword={{ backup_inventory_guard_keyword }}.
+          Please use inventory/hosts.backup.ini or set backup_require_inventory_guard=false.
+      run_once: true
+
+    - name: Validate backup inventory purpose guard (run once)
+      ansible.builtin.assert:
+        that:
+          - not backup_require_inventory_purpose_guard | bool or ((dbbot_inventory_purpose | default('') | lower) == (backup_inventory_purpose | lower))
+        fail_msg: >-
+          backup_cluster.yml requires dbbot_inventory_purpose={{ backup_inventory_purpose }}.
+          current_inventory={{ inventory_file | default('unknown') }},
+          dbbot_inventory_purpose={{ dbbot_inventory_purpose | default('unset') }}.
+          Please use inventory/hosts.backup.ini or set backup_require_inventory_purpose_guard=false.
+      run_once: true
+
+    - name: Import tasks to validate common configuration
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    - name: Import tasks to parse topology
+      ansible.builtin.import_tasks: pre_tasks/parse_topology.yml
+
+    - name: Import tasks to check OS and Python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Calculate ClickHouse TCP port based on instance id (when not explicitly set)
+      ansible.builtin.set_fact:
+        clickhouse_tcp_port: "{{ (clickhouse_tcp_port_base | default(9000) | int) + (current_node_instance_id | int - 1) }}"
+      when: clickhouse_tcp_port is not defined
+
+    - name: Build backup object clause (run once)
+      ansible.builtin.set_fact:
+        backup_object_clause: "{{ (backup_db_clauses + backup_table_clauses) | join(', ') }}"
+      vars:
+        backup_db_clauses: "{{ backup_databases | default([]) | map('regex_replace', '^(.*)$', 'DATABASE \\1') | list }}"
+        backup_table_clauses: "{{ backup_tables | default([]) | map('regex_replace', '^(.*)$', 'TABLE \\1') | list }}"
+      run_once: true
+
+    - name: Debug backup object clause (run once)
+      ansible.builtin.debug:
+        var: backup_object_clause
+      when: backup_debug_internal | bool
+      run_once: true
+
+    - name: Validate full cluster scope when partial backup is disabled
+      ansible.builtin.assert:
+        that:
+          - backup_allow_partial_cluster | bool or ((ansible_play_hosts_all | length) == (groups['clickhouse_cluster'] | default([]) | length))
+        fail_msg: "backup_cluster.yml requires full clickhouse_cluster scope. Remove --limit or set backup_allow_partial_cluster=true."
+      run_once: true
+
+    - name: Validate backup objects are configured
+      ansible.builtin.assert:
+        that:
+          - backup_object_clause | trim | length > 0
+        fail_msg: "Please set backup_databases and/or backup_tables in vars/backup_config.yml."
+      run_once: true
+
+    - name: Validate config snapshot source paths when enabled (run once)
+      ansible.builtin.assert:
+        that:
+          - backup_config_source_paths | default([]) | length > 0
+        fail_msg: "backup_include_config_files=true requires backup_config_source_paths."
+      when: backup_include_config_files | bool
+      run_once: true
+
+    - name: Count non-replicated local tables in backup scope (run once)
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "
+            WITH
+              arrayFilter(x -> x != '', splitByChar(',', '{{ backup_databases | default([]) | join(',') }}')) AS backup_dbs,
+              arrayFilter(x -> x != '', splitByChar(',', '{{ backup_tables | default([]) | join(',') }}')) AS backup_tables_fqn
+            SELECT count()
+            FROM system.tables
+            WHERE
+              (
+                (length(backup_dbs) > 0 AND has(backup_dbs, database))
+                OR
+                (length(backup_tables_fqn) > 0 AND has(backup_tables_fqn, concat(database, '.', name)))
+              )
+              AND engine NOT LIKE 'Replicated%'
+              AND engine NOT IN ('Distributed', 'MaterializedView', 'View', 'Dictionary')
+          "
+      register: backup_non_replicated_local_count
+      changed_when: false
+      failed_when: backup_non_replicated_local_count.rc != 0
+      when: backup_require_replicated_tables | bool
+      run_once: true
+
+    - name: Show non-replicated local table samples in backup scope (run once)
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "
+            WITH
+              arrayFilter(x -> x != '', splitByChar(',', '{{ backup_databases | default([]) | join(',') }}')) AS backup_dbs,
+              arrayFilter(x -> x != '', splitByChar(',', '{{ backup_tables | default([]) | join(',') }}')) AS backup_tables_fqn
+            SELECT concat(database, '.', name, ' [', engine, ']')
+            FROM system.tables
+            WHERE
+              (
+                (length(backup_dbs) > 0 AND has(backup_dbs, database))
+                OR
+                (length(backup_tables_fqn) > 0 AND has(backup_tables_fqn, concat(database, '.', name)))
+              )
+              AND engine NOT LIKE 'Replicated%'
+              AND engine NOT IN ('Distributed', 'MaterializedView', 'View', 'Dictionary')
+            ORDER BY database, name
+            LIMIT {{ backup_non_replicated_tables_sample_limit | int }}
+          "
+      register: backup_non_replicated_local_samples
+      changed_when: false
+      when:
+        - backup_require_replicated_tables | bool
+        - backup_non_replicated_local_count.stdout | trim | int > 0
+      run_once: true
+
+    - name: Fail when non-replicated local tables exist in backup scope
+      ansible.builtin.fail:
+        msg: >-
+          Found {{ backup_non_replicated_local_count.stdout | trim }} non-replicated local tables in current backup scope.
+          sample={{ backup_non_replicated_local_samples.stdout_lines | default([]) }}.
+          Please migrate these tables to Replicated* engines or exclude them from backup objects.
+      when:
+        - backup_require_replicated_tables | bool
+        - backup_non_replicated_local_count.stdout | trim | int > 0
+      run_once: true
+
+    - name: Validate checkpoint mode
+      ansible.builtin.assert:
+        that:
+          - backup_checkpoint_mode in ['table', 'file']
+        fail_msg: "backup_checkpoint_mode must be one of: table, file."
+      run_once: true
+
+    - name: Validate playbook is not running in check mode
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+        fail_msg: "backup_cluster.yml does not support --check (contains async/polling backup workflow)."
+      run_once: true
+
+    - name: Validate incremental backup base batch id
+      ansible.builtin.assert:
+        that:
+          - backup_mode in ['full', 'incremental']
+          - backup_mode != 'incremental' or (backup_base_batch_id | trim | length > 0)
+        fail_msg: "backup_mode=incremental requires backup_base_batch_id."
+      run_once: true
+
+    - name: Validate replication health wait parameters
+      ansible.builtin.assert:
+        that:
+          - backup_replication_health_wait_seconds | int >= 0
+          - backup_replication_health_check_interval_seconds | int > 0
+        fail_msg: >-
+          Invalid replication health wait settings:
+          backup_replication_health_wait_seconds={{ backup_replication_health_wait_seconds }},
+          backup_replication_health_check_interval_seconds={{ backup_replication_health_check_interval_seconds }}.
+      when: backup_require_replication_healthy | bool
+      run_once: true
+
+    - name: Set effective backup batch id (run once)
+      ansible.builtin.set_fact:
+        backup_batch_id_effective: >-
+          {{
+            backup_batch_id
+            if (backup_batch_id | default('') | trim | length > 0)
+            else (lookup('pipe', "TZ='Asia/Shanghai' date +%Y%m%dT%H%M%S") ~ '_CST_bk')
+          }}
+      run_once: true
+
+    - name: Set shard list (run once)
+      ansible.builtin.set_fact:
+        backup_shards: "{{ clickhouse_all_nodes | map(attribute='shard') | unique | sort | list }}"
+      run_once: true
+
+    - name: Debug shard list (run once)
+      ansible.builtin.debug:
+        var: backup_shards
+      when: backup_debug_internal | bool
+      run_once: true
+
+    - name: Initialize selected backup host map (run once)
+      ansible.builtin.set_fact:
+        backup_selected_host_by_shard: {}
+      run_once: true
+
+    - name: Select fallback backup host per shard (lowest replica) (run once)
+      ansible.builtin.set_fact:
+        backup_selected_host_by_shard: "{{ backup_selected_host_by_shard | combine({ (item | string): selected_host }) }}"
+      vars:
+        shard_nodes: "{{ clickhouse_all_nodes | selectattr('shard', 'equalto', item | int) | sort(attribute='replica') | list }}"
+        selected_host: "{{ shard_nodes[0].name if (shard_nodes | length > 0) else '' }}"
+      loop: "{{ backup_shards }}"
+      loop_control:
+        label: "shard={{ item }}"
+      run_once: true
+
+    - name: Prefer configured replica number when available (run once)
+      ansible.builtin.set_fact:
+        backup_selected_host_by_shard: "{{ backup_selected_host_by_shard | combine({ (item.shard | string): item.name }) }}"
+      loop: "{{ clickhouse_all_nodes | sort(attribute='replica') | list }}"
+      loop_control:
+        label: "host={{ item.name }}, shard={{ item.shard }}, replica={{ item.replica }}"
+      when: item.replica | int == backup_prefer_replica | int
+      run_once: true
+
+    - name: Apply explicit per-shard host overrides (run once)
+      ansible.builtin.set_fact:
+        backup_selected_host_by_shard: "{{ backup_selected_host_by_shard | combine({ (item.key | string): item.value }) }}"
+      loop: "{{ backup_shard_host_override | default({}) | dict2items }}"
+      loop_control:
+        label: "shard={{ item.key }} -> {{ item.value }}"
+      run_once: true
+
+    - name: Debug selected backup host map (run once)
+      ansible.builtin.debug:
+        var: backup_selected_host_by_shard
+      when: backup_debug_internal | bool
+      run_once: true
+
+    - name: Build selected backup nodes list (run once)
+      ansible.builtin.set_fact:
+        backup_selected_nodes: >-
+          {{
+            clickhouse_all_nodes
+            | selectattr('name', 'in', (backup_selected_host_by_shard | dict2items | map(attribute='value') | list))
+            | list
+          }}
+      run_once: true
+
+    - name: Validate selected backup hosts
+      ansible.builtin.assert:
+        that:
+          - backup_selected_host_by_shard | length == backup_shards | length
+          - (backup_selected_host_by_shard | dict2items | selectattr('value', 'ne', '') | list | length) == (backup_shards | length)
+          - backup_selected_nodes | length == backup_shards | length
+          - (backup_selected_nodes | map(attribute='name') | unique | list | length) == (backup_shards | length)
+        fail_msg: "Failed to build backup selected nodes, please check backup_shard_host_override."
+      run_once: true
+
+    - name: Distribute run-once facts to all hosts
+      ansible.builtin.set_fact:
+        backup_object_clause: "{{ hostvars[ansible_play_hosts_all[0]].backup_object_clause }}"
+        backup_batch_id_effective: "{{ hostvars[ansible_play_hosts_all[0]].backup_batch_id_effective }}"
+        backup_shards: "{{ hostvars[ansible_play_hosts_all[0]].backup_shards }}"
+        backup_selected_nodes: "{{ hostvars[ansible_play_hosts_all[0]].backup_selected_nodes }}"
+
+    - name: Mark whether current host is backup source
+      ansible.builtin.set_fact:
+        backup_selected_for_execution: >-
+          {{ (backup_selected_nodes | selectattr('name', 'equalto', inventory_hostname) | list | length) > 0 }}
+        backup_selected_node_info: >-
+          {{ (backup_selected_nodes | selectattr('name', 'equalto', inventory_hostname) | list | first | default({})) }}
+
+    - name: Set backup paths for selected hosts
+      ansible.builtin.set_fact:
+        backup_task_id: "{{ backup_batch_id_effective }}_s{{ current_node_shard }}_r{{ current_node_replica }}"
+        backup_target_rel_path: "{{ backup_root_prefix }}/{{ backup_batch_id_effective }}/shard{{ current_node_shard }}_replica{{ current_node_replica }}"
+        backup_base_rel_path: "{{ backup_root_prefix }}/{{ backup_base_batch_id }}/shard{{ current_node_shard }}_replica{{ current_node_replica }}"
+      when: backup_selected_for_execution
+
+    - name: Show selected backup topology (run once)
+      ansible.builtin.debug:
+        msg:
+          - "backup_batch_id={{ backup_batch_id_effective }}"
+          - "backup_mode={{ backup_mode }}"
+          - "selected={{ backup_selected_nodes }}"
+      run_once: true
+
+  tasks:
+    - name: Check ClickHouse backup disk exists on selected host
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "SELECT count() FROM system.disks WHERE name='{{ backup_storage_disk }}'"
+      register: backup_disk_check
+      changed_when: false
+      failed_when: backup_disk_check.rc != 0 or (backup_disk_check.stdout | trim | int) == 0
+      when: backup_selected_for_execution
+
+    - name: Ensure backup root prefix directory exists and is owned by clickhouse user
+      ansible.builtin.file:
+        path: "{{ backup_mount_dir }}/{{ backup_root_prefix }}"
+        state: directory
+        owner: "{{ clickhouse_user }}"
+        group: "{{ clickhouse_group }}"
+        mode: "0770"
+      when: backup_selected_for_execution
+
+    - name: Validate clickhouse user can write backup root prefix
+      ansible.builtin.shell: |
+        test -w "{{ backup_mount_dir }}/{{ backup_root_prefix }}"
+      changed_when: false
+      become_user: "{{ clickhouse_user }}"
+      register: backup_root_prefix_writable_check
+      failed_when: backup_root_prefix_writable_check.rc != 0
+      when: backup_selected_for_execution
+
+    - name: Check replication health before backup
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "SELECT count() FROM system.replicas WHERE is_readonly != 0 OR queue_size > {{ backup_max_replication_queue | int }}"
+      register: backup_replica_health
+      changed_when: false
+      retries: >-
+        {{
+          [
+            1,
+            (
+              (
+                (backup_replication_health_wait_seconds | int)
+                + (backup_replication_health_check_interval_seconds | int)
+                - 1
+              )
+              // (backup_replication_health_check_interval_seconds | int)
+            )
+          ] | max
+        }}
+      delay: "{{ backup_replication_health_check_interval_seconds | int }}"
+      until: backup_replica_health.rc == 0 and (backup_replica_health.stdout | trim | int) == 0
+      failed_when: backup_replica_health.rc != 0 or (backup_replica_health.stdout | trim | int) > 0
+      when:
+        - backup_selected_for_execution
+        - backup_require_replication_healthy | bool
+
+    - name: Ensure checkpoint database exists (run once)
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          --multiquery -q "
+            SET distributed_ddl_output_mode='none';
+            CREATE DATABASE IF NOT EXISTS {{ backup_checkpoint_db }} ON CLUSTER '{{ clickhouse_cluster_name }}';
+          "
+      changed_when: false
+      when: backup_checkpoint_mode == 'table'
+      run_once: true
+
+    - name: Ensure checkpoint table exists (run once)
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          --multiquery -q "
+            SET distributed_ddl_output_mode='none';
+            CREATE TABLE IF NOT EXISTS {{ backup_checkpoint_db }}.{{ backup_checkpoint_table }} ON CLUSTER '{{ clickhouse_cluster_name }}'
+            (
+              batch_id String,
+              shard_num UInt8,
+              replica_name String,
+              marker_ts DateTime64(3),
+              host String,
+              tcp_port UInt16
+            )
+            ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/{{ backup_checkpoint_db }}/{{ backup_checkpoint_table }}', '{replica}')
+            ORDER BY (batch_id, shard_num, replica_name, marker_ts);
+          "
+      changed_when: false
+      when: backup_checkpoint_mode == 'table'
+      run_once: true
+
+    - name: Write per-shard checkpoint marker
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "
+            INSERT INTO {{ backup_checkpoint_db }}.{{ backup_checkpoint_table }}
+            VALUES (
+              '{{ backup_batch_id_effective }}',
+              {{ current_node_shard | int }},
+              '{{ current_node_replica_name }}',
+              now64(3),
+              hostName(),
+              tcpPort()
+            )
+          "
+      changed_when: true
+      when:
+        - backup_selected_for_execution
+        - backup_checkpoint_mode == 'table'
+
+    - name: Capture per-shard marker without DB writes
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "SELECT toString(now64(3))"
+      register: backup_runtime_marker_query
+      changed_when: false
+      failed_when: backup_runtime_marker_query.rc != 0 or (backup_runtime_marker_query.stdout | trim | length) == 0
+      when:
+        - backup_selected_for_execution
+        - backup_checkpoint_mode == 'file'
+
+    - name: Set runtime marker fact
+      ansible.builtin.set_fact:
+        backup_runtime_marker_ts: "{{ backup_runtime_marker_query.stdout | trim }}"
+      when:
+        - backup_selected_for_execution
+        - backup_checkpoint_mode == 'file'
+
+    - name: Build BACKUP SQL for selected host
+      ansible.builtin.set_fact:
+        backup_sql: >-
+          BACKUP {{ backup_object_clause }}
+          TO Disk('{{ backup_storage_disk }}', '{{ backup_target_rel_path }}')
+          SETTINGS id='{{ backup_task_id }}'
+          {% if backup_mode == 'incremental' %}, base_backup=Disk('{{ backup_storage_disk }}', '{{ backup_base_rel_path }}'){% endif %}
+          {% if backup_max_bandwidth | int > 0 %}, max_backup_bandwidth={{ backup_max_bandwidth | int }}{% endif %}
+          {% if backup_max_bandwidth_for_server | int > 0 %}, max_backup_bandwidth_for_server={{ backup_max_bandwidth_for_server | int }}{% endif %}
+          {% if backup_async | bool %}ASYNC{% endif %};
+      when: backup_selected_for_execution
+
+    - name: Debug BACKUP SQL on selected host
+      ansible.builtin.debug:
+        msg:
+          - "host={{ inventory_hostname }}"
+          - "{{ backup_sql }}"
+      when:
+        - backup_selected_for_execution
+        - backup_debug_show_sql | bool
+
+    - name: Start backup on selected host
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          --multiquery -q "
+            SET distributed_ddl_output_mode='none';
+            {{ backup_sql }}
+          "
+      register: backup_start_result
+      changed_when: true
+      failed_when: backup_start_result.rc != 0
+      when: backup_selected_for_execution
+
+    - name: Wait backup status to finish
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "
+            SELECT id, name, status, error, num_files, compressed_size, uncompressed_size, start_time, end_time
+            FROM system.backups
+            WHERE id='{{ backup_task_id }}'
+            FORMAT JSONEachRow
+          "
+      register: backup_status_query
+      changed_when: false
+      retries: "{{ backup_poll_retries | int }}"
+      delay: "{{ backup_poll_delay_seconds | int }}"
+      until: backup_status_query.stdout is search('BACKUP_CREATED') or backup_status_query.stdout is search('BACKUP_FAILED')
+      when: backup_selected_for_execution
+
+    - name: Parse backup status JSON
+      ansible.builtin.set_fact:
+        backup_status_json: "{{ (backup_status_query.stdout_lines | select('match', '^\\{') | list | first | default('{}')) | from_json }}"
+      when: backup_selected_for_execution
+
+    - name: Fail if backup status is failed
+      ansible.builtin.fail:
+        msg: "Backup failed on {{ inventory_hostname }}: {{ backup_status_json.error | default('unknown error') }}"
+      when:
+        - backup_selected_for_execution
+        - backup_status_json.status | default('') != 'BACKUP_CREATED'
+
+    - name: Set config snapshot paths for current host
+      ansible.builtin.set_fact:
+        backup_config_snapshot_rel_dir: >-
+          {{ backup_root_prefix }}/{{ backup_batch_id_effective }}/{{ backup_config_snapshot_subdir }}/{{ inventory_hostname }}_s{{ current_node_shard }}_r{{ current_node_replica }}_i{{ current_node_instance_id }}
+        backup_config_snapshot_rel_archive: >-
+          {{ backup_root_prefix }}/{{ backup_batch_id_effective }}/{{ backup_config_snapshot_subdir }}/{{ inventory_hostname }}_s{{ current_node_shard }}_r{{ current_node_replica }}_i{{ current_node_instance_id }}/config_bundle.tar.gz
+        backup_config_snapshot_abs_dir: >-
+          {{ backup_mount_dir }}/{{ backup_root_prefix }}/{{ backup_batch_id_effective }}/{{ backup_config_snapshot_subdir }}/{{ inventory_hostname }}_s{{ current_node_shard }}_r{{ current_node_replica }}_i{{ current_node_instance_id }}
+        backup_config_snapshot_abs_archive: >-
+          {{ backup_mount_dir }}/{{ backup_root_prefix }}/{{ backup_batch_id_effective }}/{{ backup_config_snapshot_subdir }}/{{ inventory_hostname }}_s{{ current_node_shard }}_r{{ current_node_replica }}_i{{ current_node_instance_id }}/config_bundle.tar.gz
+      when: backup_include_config_files | bool
+
+    - name: Ensure config snapshot directory exists
+      ansible.builtin.file:
+        path: "{{ backup_config_snapshot_abs_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: backup_include_config_files | bool
+
+    - name: Check config snapshot source paths on current host
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ backup_config_source_paths | default([]) }}"
+      loop_control:
+        label: "{{ item }}"
+      register: backup_config_source_path_stats
+      changed_when: false
+      when: backup_include_config_files | bool
+
+    - name: Build config snapshot source path lists
+      ansible.builtin.set_fact:
+        backup_config_snapshot_existing_paths: >-
+          {{ backup_config_source_path_stats.results | selectattr('stat.exists', 'equalto', true) | map(attribute='item') | list }}
+        backup_config_snapshot_missing_paths: >-
+          {{ backup_config_source_path_stats.results | selectattr('stat.exists', 'equalto', false) | map(attribute='item') | list }}
+      when: backup_include_config_files | bool
+
+    - name: Validate at least one config snapshot source path exists
+      ansible.builtin.assert:
+        that:
+          - backup_config_snapshot_existing_paths | length > 0
+        fail_msg: >-
+          backup_include_config_files=true but no snapshot source path exists on {{ inventory_hostname }}.
+          configured={{ backup_config_source_paths | default([]) }}
+      when: backup_include_config_files | bool
+
+    - name: Fail when configured config snapshot paths are missing
+      ansible.builtin.fail:
+        msg: >-
+          Missing config snapshot source paths on {{ inventory_hostname }}:
+          {{ backup_config_snapshot_missing_paths }}.
+          Set backup_config_fail_on_missing_paths=false to ignore missing paths.
+      when:
+        - backup_include_config_files | bool
+        - backup_config_fail_on_missing_paths | bool
+        - backup_config_snapshot_missing_paths | length > 0
+
+    - name: Archive config and access-control snapshot
+      ansible.builtin.shell: |
+        set -euo pipefail
+        paths=(
+        {% for p in backup_config_snapshot_existing_paths %}
+          "{{ p }}"
+        {% endfor %}
+        )
+        tar -czf "{{ backup_config_snapshot_abs_archive }}" "${paths[@]}"
+      args:
+        executable: /bin/bash
+      when: backup_include_config_files | bool
+
+    - name: Set config snapshot archive permission
+      ansible.builtin.file:
+        path: "{{ backup_config_snapshot_abs_archive }}"
+        owner: root
+        group: root
+        mode: "0640"
+      when: backup_include_config_files | bool
+
+    - name: Collect config snapshot archive metadata
+      ansible.builtin.stat:
+        path: "{{ backup_config_snapshot_abs_archive }}"
+        checksum_algorithm: sha256
+      register: backup_config_snapshot_archive_stat
+      changed_when: false
+      when: backup_include_config_files | bool
+
+    - name: Write config snapshot metadata file
+      ansible.builtin.copy:
+        dest: "{{ backup_config_snapshot_abs_dir }}/metadata.json"
+        mode: "0644"
+        content: >-
+          {{
+            {
+              'host': inventory_hostname,
+              'ip': (ansible_host | default(inventory_hostname)),
+              'shard': (current_node_shard | int),
+              'replica': (current_node_replica | int),
+              'instance_id': (current_node_instance_id | int),
+              'archive_rel_path': backup_config_snapshot_rel_archive,
+              'archive_size': (backup_config_snapshot_archive_stat.stat.size | default(0)),
+              'archive_sha256': (backup_config_snapshot_archive_stat.stat.checksum | default('')),
+              'included_paths': (backup_config_snapshot_existing_paths | default([])),
+              'missing_paths': (backup_config_snapshot_missing_paths | default([]))
+            } | to_nice_json
+          }}
+      when: backup_include_config_files | bool
+
+    - name: Build config snapshot manifest record for current host
+      ansible.builtin.set_fact:
+        backup_config_snapshot_record:
+          host: "{{ inventory_hostname }}"
+          ip: "{{ ansible_host | default(inventory_hostname) }}"
+          shard: "{{ current_node_shard | int }}"
+          replica: "{{ current_node_replica | int }}"
+          instance_id: "{{ current_node_instance_id | int }}"
+          archive_rel_path: "{{ backup_config_snapshot_rel_archive }}"
+          archive_size: "{{ backup_config_snapshot_archive_stat.stat.size | default(0) }}"
+          archive_sha256: "{{ backup_config_snapshot_archive_stat.stat.checksum | default('') }}"
+          included_paths: "{{ backup_config_snapshot_existing_paths | default([]) }}"
+          missing_paths: "{{ backup_config_snapshot_missing_paths | default([]) }}"
+      when: backup_include_config_files | bool
+
+    - name: Query safe_ts from checkpoint table (run once)
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "
+            SELECT
+              batch_id,
+              min(marker_ts) AS safe_ts,
+              max(marker_ts) AS latest_marker_ts,
+              countDistinct(shard_num) AS shard_count,
+              count() AS marker_rows
+            FROM clusterAllReplicas(
+              '{{ clickhouse_cluster_name }}',
+              '{{ backup_checkpoint_db }}',
+              '{{ backup_checkpoint_table }}'
+            )
+            WHERE batch_id='{{ backup_batch_id_effective }}'
+            GROUP BY batch_id
+            FORMAT JSONEachRow
+          "
+      register: backup_safe_ts_query
+      changed_when: false
+      when: backup_checkpoint_mode == 'table'
+      run_once: true
+
+    - name: Parse safe_ts result (run once)
+      ansible.builtin.set_fact:
+        backup_safe_ts_json: "{{ (backup_safe_ts_query.stdout_lines | select('match', '^\\{') | list | first | default('{}')) | from_json }}"
+      when: backup_checkpoint_mode == 'table'
+      run_once: true
+
+    - name: Build file-mode checkpoint records (run once)
+      ansible.builtin.set_fact:
+        backup_file_checkpoint_records: >-
+          {%- set out = [] -%}
+          {%- for n in backup_selected_nodes -%}
+          {%- set h = hostvars[n.name] -%}
+          {%- set _ = out.append({
+                'batch_id': backup_batch_id_effective,
+                'shard_num': (n.shard | int),
+                'replica_name': n.replica_name,
+                'marker_ts': (h.backup_runtime_marker_ts | default('')),
+                'host': n.name,
+                'tcp_port': (h.clickhouse_tcp_port | default(0))
+              }) -%}
+          {%- endfor -%}
+          {{ out }}
+      when: backup_checkpoint_mode == 'file'
+      run_once: true
+
+    - name: Validate file-mode checkpoint coverage (run once)
+      ansible.builtin.assert:
+        that:
+          - backup_file_checkpoint_records | length == backup_shards | length
+          - (backup_file_checkpoint_records | map(attribute='shard_num') | list | unique | length) == (backup_shards | length)
+          - (backup_file_checkpoint_records | selectattr('marker_ts', 'equalto', '') | list | length) == 0
+        fail_msg: "Invalid file-mode checkpoint records. Check selected hosts and runtime marker collection."
+      when: backup_checkpoint_mode == 'file'
+      run_once: true
+
+    - name: Build safe_ts from file-mode checkpoint records (run once)
+      ansible.builtin.set_fact:
+        backup_safe_ts_json:
+          safe_ts: "{{ backup_file_marker_ts_sorted | first | default('') }}"
+          latest_marker_ts: "{{ backup_file_marker_ts_sorted | last | default('') }}"
+          shard_count: "{{ backup_file_checkpoint_records | map(attribute='shard_num') | list | unique | length }}"
+          marker_rows: "{{ backup_file_checkpoint_records | length }}"
+      vars:
+        backup_file_marker_ts_sorted: "{{ backup_file_checkpoint_records | map(attribute='marker_ts') | list | sort }}"
+      when: backup_checkpoint_mode == 'file'
+      run_once: true
+
+    - name: Validate safe_ts checkpoint coverage (run once)
+      ansible.builtin.assert:
+        that:
+          - backup_safe_ts_json.safe_ts | default('') | trim | length > 0
+          - backup_safe_ts_json.shard_count | default(0) | int == backup_shards | length
+        fail_msg: >-
+          Invalid checkpoint coverage for batch {{ backup_batch_id_effective }}:
+          safe_ts={{ backup_safe_ts_json.safe_ts | default('') }},
+          shard_count={{ backup_safe_ts_json.shard_count | default('0') }},
+          expected={{ backup_shards | length }}.
+      run_once: true
+
+    - name: Build backup manifest payload (run once)
+      ansible.builtin.set_fact:
+        backup_manifest_payload:
+          manifest_format: "dbbot.clickhouse.backup_manifest"
+          manifest_version: 1
+          generated_at_utc: "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+          batch_id: "{{ backup_batch_id_effective }}"
+          cluster_name: "{{ clickhouse_cluster_name }}"
+          backup_mode: "{{ backup_mode }}"
+          checkpoint_mode: "{{ backup_checkpoint_mode }}"
+          backup_storage_disk: "{{ backup_storage_disk }}"
+          backup_object_clause: "{{ backup_object_clause }}"
+          backup_selected_nodes: "{{ backup_selected_nodes }}"
+          config_snapshots_enabled: "{{ backup_include_config_files | bool }}"
+          config_snapshots: "{{ backup_config_snapshots_list }}"
+          checkpoint_records: "{{ backup_file_checkpoint_records | default([]) }}"
+          safe_ts: "{{ backup_safe_ts_json.safe_ts | default('') }}"
+          latest_marker_ts: "{{ backup_safe_ts_json.latest_marker_ts | default('') }}"
+          shard_count: "{{ backup_safe_ts_json.shard_count | default(0) }}"
+          marker_rows: "{{ backup_safe_ts_json.marker_rows | default(0) }}"
+          results: "{{ backup_results_list }}"
+      vars:
+        backup_config_snapshots_list: >-
+          {%- set out = [] -%}
+          {%- for h in ansible_play_hosts_all -%}
+          {%- set hv = hostvars[h] -%}
+          {%- if hv.backup_config_snapshot_record is defined -%}
+          {%- set _ = out.append(hv.backup_config_snapshot_record) -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+        backup_results_list: >-
+          {%- set out = [] -%}
+          {%- for n in backup_selected_nodes -%}
+          {%- set h = hostvars[n.name] -%}
+          {%- set _ = out.append({
+                'host': n.name,
+                'ip': n.ip,
+                'shard': n.shard,
+                'replica': n.replica,
+                'instance_id': n.instance_id,
+                'task_id': h.backup_task_id | default(''),
+                'target_rel_path': h.backup_target_rel_path | default(''),
+                'status': (h.backup_status_json.status | default('UNKNOWN')),
+                'error': (h.backup_status_json.error | default('')),
+                'num_files': (h.backup_status_json.num_files | default(0)),
+                'compressed_size': (h.backup_status_json.compressed_size | default(0)),
+                'uncompressed_size': (h.backup_status_json.uncompressed_size | default(0)),
+                'start_time': (h.backup_status_json.start_time | default('')),
+                'end_time': (h.backup_status_json.end_time | default(''))
+              }) -%}
+          {%- endfor -%}
+          {{ out }}
+      run_once: true
+
+    - name: Ensure manifest directory exists on NFS (run once)
+      ansible.builtin.file:
+        path: "{{ backup_mount_dir }}/{{ backup_root_prefix }}/{{ backup_batch_id_effective }}/manifest"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: backup_manifest_write_to_nfs | bool
+      run_once: true
+
+    - name: Write manifest to NFS (run once)
+      ansible.builtin.copy:
+        dest: "{{ backup_mount_dir }}/{{ backup_root_prefix }}/{{ backup_batch_id_effective }}/manifest/manifest.json"
+        mode: "0644"
+        content: "{{ backup_manifest_payload | to_nice_json }}"
+      when: backup_manifest_write_to_nfs | bool
+      run_once: true
+
+    - name: Ensure control-host manifest directory exists (run once)
+      ansible.builtin.file:
+        path: "{{ backup_manifest_control_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      when: backup_manifest_write_to_control | bool
+      run_once: true
+
+    - name: Write manifest to control host (run once)
+      ansible.builtin.copy:
+        dest: "{{ backup_manifest_control_dir }}/{{ backup_batch_id_effective }}.json"
+        mode: "0644"
+        content: "{{ backup_manifest_payload | to_nice_json }}"
+      delegate_to: localhost
+      become: false
+      when: backup_manifest_write_to_control | bool
+      run_once: true
+
+    - name: Print backup summary (run once)
+      ansible.builtin.debug:
+        msg:
+          - "backup_batch_id={{ backup_batch_id_effective }}"
+          - "safe_ts={{ backup_safe_ts_json.safe_ts | default('') }}"
+          - "manifest_nfs={{ backup_mount_dir }}/{{ backup_root_prefix }}/{{ backup_batch_id_effective }}/manifest/manifest.json"
+          - "manifest_local={{ backup_manifest_control_dir }}/{{ backup_batch_id_effective }}.json"
+      run_once: true

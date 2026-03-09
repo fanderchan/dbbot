@@ -1,0 +1,112 @@
+- name: Check if MySQL directories exist
+  ansible.builtin.stat:
+    path: "{{ dir }}"
+  register: dir_stats
+  loop:
+    - "{{ mysql_software_dir }}"
+    - "{{ mysql_data_dir_base }}"
+    - "{{ mycnf_dir }}"
+    - "{{ datadir }}"
+    - "{{ tmpdir }}"
+    - "{{ binlog_dir }}"
+    - "{{ relaylog_dir }}"
+    - "{{ redolog_dir }}"
+    - "{{ socket_dir }}"
+    - "{{ mysqlx_socket_dir }}"
+    - "{{ slowlog_dir }}"
+    - "{{ errlog_dir }}"
+    - "{{ generallog_dir }}"
+    - "{{ auditlog_dir }}"
+  loop_control:
+    loop_var: dir
+
+# - name: Output directory status information
+#   debug:
+#     msg:
+#       - "Directory: {{ item.stat.path | default(item.invocation.module_args.path) }}"
+#       - "Exists: {{ item.stat.exists }}"
+#   loop: "{{ dir_stats.results }}"
+#   loop_control:
+#     loop_var: item
+
+- name: Create MySQL directories if they do not exist
+  ansible.builtin.file:
+    path: "{{ item.stat.path | default(item.invocation.module_args.path) }}"
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0755'
+  when: not item.stat.exists
+  loop: "{{ dir_stats.results }}"
+  loop_control:
+    loop_var: item
+
+- name: Config my.cnf for mysql-5.7.x
+  when: mysql_version.startswith('5.7') and db_type == 'mysql'
+  ansible.builtin.template:
+    src: ../templates/5.7/my.cnf.j2
+    dest: "{{ mycnf_dir }}/my.cnf"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
+    backup: true
+
+- name: Config my.cnf for mysql-8.0.x
+  when: mysql_version.startswith('8.0') and db_type == 'mysql'
+  ansible.builtin.template:
+    src: ../templates/8.0/my.cnf.j2
+    dest: "{{ mycnf_dir }}/my.cnf"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
+    backup: true
+
+- name: Config my.cnf for mysql-8.4.x
+  when: mysql_version.startswith('8.4') and db_type == 'mysql'
+  ansible.builtin.template:
+    src: ../templates/8.4/my.cnf.j2
+    dest: "{{ mycnf_dir }}/my.cnf"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
+    backup: true
+
+- name: Config my.cnf for percona-5.7.x
+  when: mysql_version.startswith('5.7') and db_type == 'percona'
+  ansible.builtin.template:
+    src: ../templates/5.7/percona-my.cnf.j2
+    dest: "{{ mycnf_dir }}/my.cnf"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
+    backup: true
+
+- name: Config my.cnf for percona-8.0.x
+  when: mysql_version.startswith('8.0') and db_type == 'percona'
+  ansible.builtin.template:
+    src: ../templates/8.0/percona-my.cnf.j2
+    dest: "{{ mycnf_dir }}/my.cnf"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
+    backup: true
+
+- name: Config my.cnf for greatsql-5.7.x
+  when: mysql_version.startswith('5.7') and db_type == 'greatsql'
+  ansible.builtin.template:
+    src: ../templates/5.7/greatsql-my.cnf.j2
+    dest: "{{ mycnf_dir }}/my.cnf"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
+    backup: true
+
+- name: Config my.cnf for greatsql-8.0.x
+  when: mysql_version.startswith('8.0') and db_type == 'greatsql'
+  ansible.builtin.template:
+    src: ../templates/8.0/greatsql-my.cnf.j2
+    dest: "{{ mycnf_dir }}/my.cnf"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
+    backup: true

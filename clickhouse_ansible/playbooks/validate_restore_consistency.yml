@@ -1,0 +1,237 @@
+---
+- name: Collect restore validation results from source cluster
+  hosts: "{{ validate_source_group }}"
+  become: true
+  any_errors_fatal: true
+  gather_facts: false
+  vars_files:
+    - vars/common_config.yml
+    - vars/validate_restore_config.yml
+
+  pre_tasks:
+    - name: Validate source group exists (run once)
+      ansible.builtin.assert:
+        that:
+          - groups[validate_source_group] is defined
+          - groups[validate_source_group] | length > 0
+        fail_msg: >-
+          Source group {{ validate_source_group }} is empty.
+          Please provide the source inventory, for example:
+          -i ../inventory/hosts.backup.ini
+      run_once: true
+
+    - name: Validate target group exists (run once)
+      ansible.builtin.assert:
+        that:
+          - groups[validate_target_group] is defined
+          - groups[validate_target_group] | length > 0
+        fail_msg: >-
+          Target group {{ validate_target_group }} is empty.
+          Please provide the target inventory, for example:
+          -i ../inventory/hosts.restore.ini
+      run_once: true
+
+    - name: Validate restore validation checks are configured (run once)
+      ansible.builtin.assert:
+        that:
+          - validate_checks | length > 0
+        fail_msg: >-
+          validate_restore_consistency.yml requires validate_checks.
+          Please edit playbooks/vars/validate_restore_config.yml or pass -e.
+      run_once: true
+
+    - name: Set source node derived variables
+      ansible.builtin.set_fact:
+        validate_current_shard: "{{ shard | default(1) | int }}"
+        validate_current_replica: "{{ replica | default(1) | int }}"
+        validate_current_port: "{{ clickhouse_tcp_port | default((clickhouse_tcp_port_base | default(9000) | int) + (instance_id | default(replica | default(1)) | int - 1)) | int }}"
+
+  tasks:
+    - name: Execute validation queries on source node
+      ansible.builtin.command:
+        argv:
+          - clickhouse-client
+          - "--host={{ validate_source_query_host }}"
+          - "--port={{ validate_current_port }}"
+          - "--user={{ validate_clickhouse_user }}"
+          - "--password={{ validate_clickhouse_password }}"
+          - "--query"
+          - "{{ validate_sql_current }}"
+      vars:
+        validate_where_clause: "{{ item.where | default('') | trim }}"
+        validate_sql_current: >-
+          {{
+            item.query
+            if (item.query | default('') | trim | length > 0)
+            else (
+              'SELECT toString(count()) FROM ' ~ item.database ~ '.' ~ item.local_table ~
+              ((' WHERE ' ~ validate_where_clause) if (validate_where_clause | length > 0) else '')
+            )
+          }}
+      loop: "{{ validate_checks }}"
+      loop_control:
+        label: "{{ item.name | default(item.database ~ '.' ~ item.local_table) }}"
+      register: validate_source_query_runs
+      changed_when: false
+
+    - name: Build source validation records
+      ansible.builtin.set_fact:
+        validate_source_records: "{{ (validate_source_records | default([])) + [ {
+          'check': (item.item.name | default(item.item.database ~ '.' ~ item.item.local_table)),
+          'shard': validate_current_shard,
+          'replica': validate_current_replica,
+          'port': validate_current_port,
+          'host': inventory_hostname,
+          'ip': (ansible_host | default(inventory_hostname)),
+          'value': (item.stdout | trim)
+        } ] }}"
+      loop: "{{ validate_source_query_runs.results }}"
+      loop_control:
+        label: "{{ item.item.name | default(item.item.database ~ '.' ~ item.item.local_table) }}"
+
+- name: Collect restore validation results from target cluster
+  hosts: "{{ validate_target_group }}"
+  become: true
+  any_errors_fatal: true
+  gather_facts: false
+  vars_files:
+    - vars/common_config.yml
+    - vars/validate_restore_config.yml
+
+  pre_tasks:
+    - name: Set target node derived variables
+      ansible.builtin.set_fact:
+        validate_current_shard: "{{ shard | default(1) | int }}"
+        validate_current_replica: "{{ replica | default(1) | int }}"
+        validate_current_port: "{{ clickhouse_tcp_port | default((clickhouse_tcp_port_base | default(9000) | int) + (instance_id | default(replica | default(1)) | int - 1)) | int }}"
+
+  tasks:
+    - name: Execute validation queries on target node
+      ansible.builtin.command:
+        argv:
+          - clickhouse-client
+          - "--host={{ validate_target_query_host }}"
+          - "--port={{ validate_current_port }}"
+          - "--user={{ validate_clickhouse_user }}"
+          - "--password={{ validate_clickhouse_password }}"
+          - "--query"
+          - "{{ validate_sql_current }}"
+      vars:
+        validate_where_clause: "{{ item.where | default('') | trim }}"
+        validate_sql_current: >-
+          {{
+            item.query
+            if (item.query | default('') | trim | length > 0)
+            else (
+              'SELECT toString(count()) FROM ' ~ item.database ~ '.' ~ item.local_table ~
+              ((' WHERE ' ~ validate_where_clause) if (validate_where_clause | length > 0) else '')
+            )
+          }}
+      loop: "{{ validate_checks }}"
+      loop_control:
+        label: "{{ item.name | default(item.database ~ '.' ~ item.local_table) }}"
+      register: validate_target_query_runs
+      changed_when: false
+
+    - name: Build target validation records
+      ansible.builtin.set_fact:
+        validate_target_records: "{{ (validate_target_records | default([])) + [ {
+          'check': (item.item.name | default(item.item.database ~ '.' ~ item.item.local_table)),
+          'shard': validate_current_shard,
+          'replica': validate_current_replica,
+          'port': validate_current_port,
+          'host': inventory_hostname,
+          'ip': (ansible_host | default(inventory_hostname)),
+          'value': (item.stdout | trim)
+        } ] }}"
+      loop: "{{ validate_target_query_runs.results }}"
+      loop_control:
+        label: "{{ item.item.name | default(item.item.database ~ '.' ~ item.item.local_table) }}"
+
+- name: Compare source and target validation results
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/validate_restore_config.yml
+
+  tasks:
+    - name: Collect source validation records
+      ansible.builtin.set_fact:
+        validate_source_records_all: "{{ (validate_source_records_all | default([])) + (hostvars[item].validate_source_records | default([])) }}"
+      loop: "{{ groups[validate_source_group] | default([]) }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Collect target validation records
+      ansible.builtin.set_fact:
+        validate_target_records_all: "{{ (validate_target_records_all | default([])) + (hostvars[item].validate_target_records | default([])) }}"
+      loop: "{{ groups[validate_target_group] | default([]) }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Validate collected validation records
+      ansible.builtin.assert:
+        that:
+          - validate_source_records_all | default([]) | length > 0
+          - validate_target_records_all | default([]) | length > 0
+        fail_msg: "No validation records collected from source or target cluster."
+
+    - name: Build source validation map
+      ansible.builtin.set_fact:
+        validate_source_map: "{{ validate_source_map | default({}) | combine({ validate_map_key: item }) }}"
+      vars:
+        validate_map_key: "{{ item.check ~ '|s' ~ (item.shard | string) ~ '|r' ~ (item.replica | string) }}"
+      loop: "{{ validate_source_records_all }}"
+      loop_control:
+        label: "{{ item.check }} s{{ item.shard }}r{{ item.replica }}"
+
+    - name: Build target validation map
+      ansible.builtin.set_fact:
+        validate_target_map: "{{ validate_target_map | default({}) | combine({ validate_map_key: item }) }}"
+      vars:
+        validate_map_key: "{{ item.check ~ '|s' ~ (item.shard | string) ~ '|r' ~ (item.replica | string) }}"
+      loop: "{{ validate_target_records_all }}"
+      loop_control:
+        label: "{{ item.check }} s{{ item.shard }}r{{ item.replica }}"
+
+    - name: Validate source and target key coverage
+      ansible.builtin.assert:
+        that:
+          - not validate_fail_on_missing_pairs | bool or ((validate_source_map.keys() | list | sort) == (validate_target_map.keys() | list | sort))
+        fail_msg: >-
+          Validation key mismatch between source and target.
+          source={{ validate_source_map.keys() | list | sort }}
+          target={{ validate_target_map.keys() | list | sort }}
+
+    - name: Build mismatch list
+      ansible.builtin.set_fact:
+        validate_mismatches: "{{ (validate_mismatches | default([])) + [ {
+          'key': item,
+          'source_value': (validate_source_map[item].value | string),
+          'target_value': (validate_target_map[item].value | string),
+          'source_host': validate_source_map[item].host,
+          'target_host': validate_target_map[item].host
+        } ] }}"
+      loop: "{{ validate_source_map.keys() | list | sort }}"
+      loop_control:
+        label: "{{ item }}"
+      when:
+        - validate_target_map[item] is defined
+        - (validate_source_map[item].value | string) != (validate_target_map[item].value | string)
+
+    - name: Fail when validation result mismatch exists
+      ansible.builtin.fail:
+        msg: >-
+          Restore validation mismatch found:
+          {{ validate_mismatches | to_nice_json }}
+      when: validate_mismatches | default([]) | length > 0
+
+    - name: Print restore validation summary
+      ansible.builtin.debug:
+        msg:
+          - "restore validation passed"
+          - "source_group={{ validate_source_group }}"
+          - "target_group={{ validate_target_group }}"
+          - "checks={{ validate_source_records_all | map(attribute='check') | unique | list }}"
+          - "pairs={{ validate_source_map.keys() | list | sort }}"

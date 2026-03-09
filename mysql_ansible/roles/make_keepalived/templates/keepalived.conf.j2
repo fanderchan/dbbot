@@ -1,0 +1,42 @@
+vrrp_script check_mysql {
+    script "{{ mysql_data_dir_base }}/keepalived/bin/check_mysql.sh"
+    interval 60
+    }
+
+vrrp_instance VI_1 {
+    interface {{ net_work_interface }}			# adjust interface name as needed
+    virtual_router_id 130		# last octet of the VIP
+    state BACKUP
+    nopreempt
+{% if master_ip in ansible_all_ipv4_addresses %}
+    priority 150
+{% else %}
+    priority 100
+{% endif %}
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass 1111
+}
+{% if master_ip in ansible_all_ipv4_addresses %}
+        unicast_src_ip {{ master_ip }}    ## unicast source IP (local)
+        unicast_peer {
+        {{ slave_ip }}     ## unicast peer IP (remote)
+{% else %}
+        unicast_src_ip {{ slave_ip }}     ## unicast source IP (local)
+        unicast_peer {
+        {{ master_ip }}     ## unicast peer IP (remote)
+{% endif %}
+}
+    track_script {
+        check_mysql
+    }
+    virtual_ipaddress {
+        {{ vip }}               ## change to the assigned VIP
+    }
+    notify_fault  "{{ mysql_data_dir_base }}/keepalived/bin/when_check_mysql_failed.sh"
+    notify_master  "{{ mysql_data_dir_base }}/keepalived/bin/when_become_master.sh"
+    notify_backup  "{{ mysql_data_dir_base }}/keepalived/bin/when_become_backup.sh"
+    #notify "{{ mysql_data_dir_base }}/keepalived/bin/when_status_change.sh"  # not use
+    notify_stop "{{ mysql_data_dir_base }}/keepalived/bin/when_keepalived_normal_stop.sh"
+}

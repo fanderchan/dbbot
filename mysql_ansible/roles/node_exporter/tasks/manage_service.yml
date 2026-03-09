@@ -1,0 +1,14 @@
+- name: Create systemd service for node_exporter
+  ansible.builtin.template:
+    src: ../templates/node_exporter.service.j2
+    dest: "{{ node_exporter_service_file }}"
+    mode: '0644'
+  notify:
+    - Reload systemd
+    - Restart node_exporter
+
+- name: Start and enable node_exporter service
+  ansible.builtin.systemd:
+    name: node_exporter
+    enabled: true
+    state: started

@@ -1,0 +1,180 @@
+- name: Set ClickHouse extracted directory patterns
+  ansible.builtin.set_fact:
+    clickhouse_extracted_dir_patterns: >-
+      {{
+        (
+          clickhouse_package_basenames
+          | default([
+              'clickhouse-common-static',
+              'clickhouse-server',
+              'clickhouse-client'
+            ])
+        )
+        | map('regex_replace', '$', '-*')
+        | list
+      }}
+
+- name: Set temporary directory for installation
+  ansible.builtin.set_fact:
+    clickhouse_temp_dir: "{{ clickhouse_data_dir_base }}/tmp"
+
+- name: Create temporary directory for extraction
+  ansible.builtin.file:
+    path: "{{ clickhouse_temp_dir }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+
+- name: Find stale extracted ClickHouse directories in temp path
+  ansible.builtin.find:
+    paths: "{{ clickhouse_temp_dir }}"
+    file_type: directory
+    patterns:
+      - "clickhouse-common-static-*"
+      - "clickhouse-server-*"
+      - "clickhouse-client-*"
+  register: stale_clickhouse_temp_dirs
+
+- name: Remove stale extracted ClickHouse directories before copy
+  ansible.builtin.file:
+    path: "{{ stale_dir.path }}"
+    state: absent
+  loop: "{{ stale_clickhouse_temp_dirs.files }}"
+  loop_control:
+    loop_var: stale_dir
+  when: stale_clickhouse_temp_dirs.files | length > 0
+
+- name: Copy ClickHouse packages to target host
+  ansible.builtin.copy:
+    src: "{{ pkg_file.path }}"
+    dest: "{{ clickhouse_temp_dir }}/{{ pkg_file.path | basename }}"
+    mode: '0644'
+  loop: "{{ clickhouse_packages.files }}"
+  loop_control:
+    loop_var: pkg_file
+  when: clickhouse_packages.files | length > 0
+
+- name: Extract ClickHouse packages
+  ansible.builtin.unarchive:
+    src: "{{ clickhouse_temp_dir }}/{{ pkg_name }}"
+    dest: "{{ clickhouse_temp_dir }}"
+    remote_src: true
+  loop: "{{ clickhouse_packages.files | map(attribute='path') | map('basename') | list }}"
+  loop_control:
+    loop_var: pkg_name
+  when: clickhouse_packages.files | length > 0
+
+- name: Find extracted ClickHouse directories
+  ansible.builtin.find:
+    paths: "{{ clickhouse_temp_dir }}"
+    file_type: directory
+    patterns: "{{ clickhouse_extracted_dir_patterns }}"
+  register: extracted_dirs
+
+- name: Modify doinst.sh to use custom data directory
+  ansible.builtin.replace:
+    path: "{{ dir_item.path }}/install/doinst.sh"
+    regexp: 'CLICKHOUSE_DATADIR=\$\{CLICKHOUSE_DATADIR:=\/var\/lib\/clickhouse\}'
+    replace: "CLICKHOUSE_DATADIR=${CLICKHOUSE_DATADIR:={{ clickhouse_data_dir }}}"
+  loop: "{{ extracted_dirs.files }}"
+  loop_control:
+    loop_var: dir_item
+  when: 
+    - dir_item.path | basename | regex_search('clickhouse-server')
+    - dir_item.isdir | default(false)
+
+- name: Modify doinst.sh to use custom log directory
+  ansible.builtin.replace:
+    path: "{{ dir_item.path }}/install/doinst.sh"
+    regexp: 'CLICKHOUSE_LOGDIR=\$\{CLICKHOUSE_LOGDIR:=\/var\/log\/clickhouse-server\}'
+    replace: "CLICKHOUSE_LOGDIR=${CLICKHOUSE_LOGDIR:={{ clickhouse_log_dir }}}"
+  loop: "{{ extracted_dirs.files }}"
+  loop_control:
+    loop_var: dir_item
+  when: 
+    - dir_item.path | basename | regex_search('clickhouse-server')
+    - dir_item.isdir | default(false)
+
+- name: Install ClickHouse common-static
+  ansible.builtin.shell: |
+    cd {{ dir_item.path }}
+    ./install/doinst.sh
+  loop: "{{ extracted_dirs.files }}"
+  loop_control:
+    loop_var: dir_item
+  when: dir_item.path | basename | regex_search('clickhouse-common-static') and not dir_item.path | basename | regex_search('dbg')
+  args:
+    creates: /usr/bin/clickhouse
+
+- name: Install ClickHouse common-static-dbg
+  ansible.builtin.shell: |
+    cd {{ dir_item.path }}
+    ./install/doinst.sh
+  loop: "{{ extracted_dirs.files }}"
+  loop_control:
+    loop_var: dir_item
+  when: dir_item.path | basename | regex_search('clickhouse-common-static-dbg')
+  args:
+    creates: /usr/lib/debug/usr/bin/clickhouse.debug
+
+- name: Install ClickHouse server (non-interactive, password will be set later)
+  ansible.builtin.shell: |
+    cd {{ dir_item.path }}
+    echo "" | ./install/doinst.sh
+  loop: "{{ extracted_dirs.files }}"
+  loop_control:
+    loop_var: dir_item
+  when: dir_item.path | basename | regex_search('clickhouse-server')
+  args:
+    creates: /etc/clickhouse-server/config.xml
+
+- name: Install ClickHouse client
+  ansible.builtin.shell: |
+    cd {{ dir_item.path }}
+    ./install/doinst.sh
+  loop: "{{ extracted_dirs.files }}"
+  loop_control:
+    loop_var: dir_item
+  when: dir_item.path | basename | regex_search('clickhouse-client')
+  args:
+    creates: /usr/bin/clickhouse-client
+
+- name: Clean up temporary installation files (keep tmp directory)
+  ansible.builtin.find:
+    paths: "{{ clickhouse_temp_dir }}"
+    patterns: >-
+      {{
+        (
+          clickhouse_package_basenames
+          | default([
+              'clickhouse-common-static',
+              'clickhouse-server',
+              'clickhouse-client'
+            ])
+        )
+        | map('regex_replace', '$', '-*')
+        | list
+        +
+        (
+          clickhouse_package_basenames
+          | default([
+              'clickhouse-common-static',
+              'clickhouse-server',
+              'clickhouse-client'
+            ])
+        )
+        | map('regex_replace', '$', '-*.tgz')
+        | list
+      }}
+    file_type: any
+  register: temp_files_to_clean
+
+- name: Remove temporary installation files
+  ansible.builtin.file:
+    path: "{{ cleanup_item.path }}"
+    state: absent
+  loop: "{{ temp_files_to_clean.files }}"
+  loop_control:
+    loop_var: cleanup_item
+  when: temp_files_to_clean.files | length > 0

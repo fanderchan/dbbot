@@ -1,0 +1,19 @@
+- name: Check if mysqld_exporter is already installed on target server
+  ansible.builtin.stat:
+    path: "{{ mysqld_exporter_install_dir }}/mysqld_exporter"
+  register: mysqld_exporter_binary_stat
+
+- name: Check if mysqld_exporter service file exists
+  ansible.builtin.stat:
+    path: "{{ mysqld_exporter_service_file }}"
+  register: mysqld_exporter_service_stat
+
+- name: Set mysqld_exporter installation state
+  ansible.builtin.set_fact:
+    mysqld_exporter_installed: "{{ mysqld_exporter_binary_stat.stat.exists and mysqld_exporter_service_stat.stat.exists }}"
+
+# - name: Fail if mysqld_exporter is already installed
+  # ansible.builtin.fail:
+    # msg: "mysqld_exporter is already installed. Please uninstall it manually if reinstallation is required."
+  # when: mysqld_exporter_stat.exists
+# 

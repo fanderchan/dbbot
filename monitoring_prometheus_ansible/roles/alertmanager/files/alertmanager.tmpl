@@ -1,0 +1,117 @@
+{{ define "email.default.subject" }}[告警] {{ .CommonLabels.alertname }} (Firing: {{ len .Alerts.Firing }}, Resolved: {{ len .Alerts.Resolved }}){{ end }}
+{{ define "email.default.body" }}
+<div style="font-family: Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 14px; color: #111827; line-height: 1.5;">
+  <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600;">
+    {{ .CommonLabels.alertname }}
+  </h2>
+  <p style="margin: 0 0 10px 0;">
+    <span style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: #fee2e2; color: #991b1b; font-size: 12px; margin-right: 6px;">
+      Firing {{ len .Alerts.Firing }}
+    </span>
+    <span style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: #e5e7eb; color: #374151; font-size: 12px;">
+      Resolved {{ len .Alerts.Resolved }}
+    </span>
+  </p>
+
+  <table style="width: 100%; border-collapse: collapse; margin: 0 0 16px 0;">
+    <tr>
+      <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb; width: 140px;">环境</td>
+      <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ with .CommonLabels.environment }}{{ . }}{{ else }}-{{ end }}</td>
+      <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb; width: 140px;">Region</td>
+      <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ with .CommonLabels.region }}{{ . }}{{ else }}-{{ end }}</td>
+    </tr>
+    <tr>
+      <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">Cluster</td>
+      <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ with .CommonLabels.cluster }}{{ . }}{{ else }}-{{ end }}</td>
+      <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">Replication Set</td>
+      <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ with .CommonLabels.replication_set }}{{ . }}{{ else }}-{{ end }}</td>
+    </tr>
+    <tr>
+      <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">Topology</td>
+      <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ with .CommonLabels.topology }}{{ . }}{{ else }}-{{ end }}</td>
+      <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">服务名</td>
+      <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ with .CommonLabels.service_name }}{{ . }}{{ else }}-{{ end }}</td>
+    </tr>
+  </table>
+
+  <h3 style="margin: 12px 0 8px 0; font-size: 16px; font-weight: 600;">告警详情</h3>
+  {{ range .Alerts }}
+  <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; margin: 0 0 12px 0;">
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb; width: 140px;">状态</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">
+          {{ if eq .Status "firing" }}
+            <span style="color: #b91c1c; font-weight: 600;">FIRING</span>
+          {{ else }}
+            <span style="color: #065f46; font-weight: 600;">RESOLVED</span>
+          {{ end }}
+        </td>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb; width: 140px;">严重性</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">
+          {{ if eq .Labels.severity "critical" }}
+            <span style="color: #b91c1c; font-weight: 600;">critical</span>
+          {{ else if eq .Labels.severity "warning" }}
+            <span style="color: #b45309; font-weight: 600;">warning</span>
+          {{ else }}
+            <span style="color: #374151; font-weight: 600;">{{ .Labels.severity }}</span>
+          {{ end }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">主机/实例</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ .Labels.instance }}</td>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">服务</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">{{ .Labels.job }}</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">开始时间 (UTC+8)</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">
+          {{ (.StartsAt.Local).Format "2006-01-02 15:04:05 -0700" }}
+        </td>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">结束时间 (UTC+8)</td>
+        <td style="padding: 6px 8px; border: 1px solid #e5e7eb;">
+          {{ if eq .Status "resolved" }}{{ (.EndsAt.Local).Format "2006-01-02 15:04:05 -0700" }}{{ else }}-{{ end }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">摘要</td>
+        <td colspan="3" style="padding: 6px 8px; border: 1px solid #e5e7eb;">
+          {{ with .Annotations.summary }}{{ . }}{{ else }}-{{ end }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">详细信息</td>
+        <td colspan="3" style="padding: 6px 8px; border: 1px solid #e5e7eb;">
+          {{ with .Annotations.description }}{{ . }}{{ else }}-{{ end }}
+        </td>
+      </tr>
+      {{ if .Annotations.runbook_url }}
+      <tr>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">Runbook</td>
+        <td colspan="3" style="padding: 6px 8px; border: 1px solid #e5e7eb;">
+          <a href="{{ .Annotations.runbook_url }}">{{ .Annotations.runbook_url }}</a>
+        </td>
+      </tr>
+      {{ end }}
+      <tr>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">告警源</td>
+        <td colspan="3" style="padding: 6px 8px; border: 1px solid #e5e7eb;">
+          <a href="{{ .GeneratorURL }}">{{ .GeneratorURL }}</a>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 8px; background: #f9fafb; border: 1px solid #e5e7eb;">标签</td>
+        <td colspan="3" style="padding: 6px 8px; border: 1px solid #e5e7eb; font-family: Consolas, 'Courier New', monospace; font-size: 12px;">
+          {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }}<br/>{{ end }}
+        </td>
+      </tr>
+    </table>
+  </div>
+  {{ end }}
+
+  <p style="margin: 8px 0 0 0;">
+    Alertmanager：<a href="{{ .ExternalURL }}">{{ .ExternalURL }}</a>
+  </p>
+</div>
+{{ end }}

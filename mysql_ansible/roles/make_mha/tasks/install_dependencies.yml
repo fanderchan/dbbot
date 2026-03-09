@@ -1,0 +1,17 @@
+- name: Install required packages (yum)
+  ansible.builtin.yum:
+    name:
+      - perl-DBD-MySQL
+      - perl-Config-Tiny
+    state: present
+
+- name: Transfer dependencies directory to the target server
+  ansible.builtin.copy:
+    src: "../files/dependencies/"
+    dest: "/tmp/dependencies/"
+    mode: '0755'
+
+- name: Install all dependencies RPM packages in /tmp/dependencies/ directory # noqa: command-instead-of-module
+  ansible.builtin.shell:
+    cmd: yum install /tmp/dependencies/*.rpm -y
+  changed_when: true

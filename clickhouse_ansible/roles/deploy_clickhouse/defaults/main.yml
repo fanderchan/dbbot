@@ -1,0 +1,18 @@
+# ClickHouse 部署默认配置
+clickhouse_data_dir: "{{ clickhouse_data_dir_base }}/data"
+clickhouse_log_dir: "{{ clickhouse_log_dir_base }}"
+
+# 端口配置（根据 instance_id 自动计算）
+# 主端口（步长=1）：
+# instance_id=1: tcp=9000, http=8123, interserver=9009
+# instance_id=2: tcp=9001, http=8124, interserver=9010
+# instance_id=3: tcp=9002, http=8125, interserver=9011
+# 协议兼容端口（步长=clickhouse_aux_port_stride，默认 10）：
+# instance_id=1: mysql=9004, postgresql=9005
+# instance_id=2: mysql=9014, postgresql=9015
+# instance_id=3: mysql=9024, postgresql=9025
+
+# 性能参数（会根据服务器规格自动计算）
+max_memory_usage_ratio: 0.7
+max_bytes_before_external_group_by_ratio: 0.5
+background_pool_size_min: 16

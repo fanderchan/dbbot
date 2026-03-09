@@ -1,0 +1,11 @@
+- name: Check if flag exists or not
+  ansible.builtin.find:
+    paths: "/tmp"
+    patterns: 'prometheus_finish.flag'
+  register: prometheus__p
+
+- name: Fail if flag exists
+  ansible.builtin.fail:
+    msg: "Fail because flag exists, please remove the flag manually first!"
+  when: prometheus__p.matched
+

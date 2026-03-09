@@ -1,0 +1,27 @@
+- name: Deploy MySQL backup script and configure scheduled task (with xtrabackup installation)
+  hosts: dbbot_mysql
+  become: true
+  any_errors_fatal: true
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - common_config.yml
+    - advanced_config.yml
+  vars:
+    roles_to_execute:
+      - "../roles/install_xtrabackup"
+      - "../roles/backup_script"
+  pre_tasks:
+    - name: Import tasks to validate setting in common_config.yml
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+    - name: Import confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+  tasks:
+    - name: Include role
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+      loop: "{{ roles_to_execute }}"
+      loop_control:
+        loop_var: role_name

@@ -1,0 +1,5 @@
+- name: Check port not in use —— alertmanager port -> {{ alertmanager_port }}
+  ansible.builtin.shell: set -o pipefail && if [ -z "`/usr/sbin/ss -lntp|grep ":{{ alertmanager_port }}"`" ] ; then echo "True"; else echo "False"; fi;
+  register: alertmanager__check_port_not_in_use
+  failed_when: "'True' not in alertmanager__check_port_not_in_use.stdout"
+  changed_when: false

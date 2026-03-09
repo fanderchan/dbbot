@@ -1,0 +1,4 @@
+- name: Check if /tmp/set_linux_finished exists
+  stat:
+    path: /tmp/set_linux_finished
+  register: set_linux_finished

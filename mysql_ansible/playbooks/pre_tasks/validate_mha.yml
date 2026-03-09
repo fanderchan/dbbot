@@ -1,0 +1,43 @@
+- name: Check if IPs in master_ip, manager_ip, vip are valid
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }}: `{{ item.key }}` is undefined or not valid"
+  loop:
+    - { key: 'master_ip', value: "{{ master_ip | default('') }}" }
+    - { key: 'manager_ip', value: "{{ manager_ip | default('') }}" }
+    - { key: 'vip', value: "{{ vip | default('') }}" }
+  when: not (item.value is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
+
+- name: Check if each ip in slave_ips is valid
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }}: `slave_ips` is undefined or not valid"
+  loop: "{{ slave_ips | default([]) }}"
+  when: not (item is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
+
+- name: Check if manager_ip is valid
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }}: `manager_ip` must be in `slave_ips` and not equal to `master_ip`"
+  when:
+    - manager_ip not in slave_ips
+    - manager_ip == master_ip
+
+- name: Check if vip_netmask is valid
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }}: `vip_netmask` is not valid. It should be between 0 and 32."
+  when: vip_netmask is not defined or vip_netmask | int < 0 or vip_netmask | int > 32
+
+- name: Check if net_work_interface is valid
+  ansible.builtin.fail:
+    msg: "The net_work_interface is not valid or not found in the network interfaces list"
+  when: (net_work_interface | default('')) not in ansible_interfaces
+
+- name: Check if mha.yml 's IP are in inventory/hosts.ini
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }}: mha.yml 's IP `{{ item }}` is not in inventory/hosts.ini"
+  when: item not in ansible_play_hosts
+  loop: "{{ [master_ip] + slave_ips }}"
+
+- name: Check if inventory/hosts.ini 's IP are in mha.yml
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }}: inventory/hosts.ini's IP `{{ item }}` is not in mha.yml"
+  when: item not in  ([master_ip] + slave_ips)
+  loop: "{{ ansible_play_hosts }}"

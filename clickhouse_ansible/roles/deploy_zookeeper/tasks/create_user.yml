@@ -1,0 +1,15 @@
+- name: Ensure group "clickhouse" exists
+  ansible.builtin.group:
+    name: "{{ clickhouse_group }}"
+    gid: "{{ clickhouse_gid }}"
+    state: present
+
+- name: Create clickhouse user
+  ansible.builtin.user:
+    name: "{{ clickhouse_user }}"
+    uid: "{{ clickhouse_uid }}"
+    shell: /bin/bash
+    home: /home/{{ clickhouse_user }}
+    group: "{{ clickhouse_group }}"
+    create_home: yes
+    state: present

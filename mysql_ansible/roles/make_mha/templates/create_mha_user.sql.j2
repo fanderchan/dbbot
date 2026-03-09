@@ -1,0 +1,2 @@
+create user {{mysql_mha_user}}@'{{ sub_nets }}' identified by '{{ mysql_mha_password }}' ;
+grant all privileges on *.* to  {{mysql_mha_user}}@'{{ sub_nets }}' ;

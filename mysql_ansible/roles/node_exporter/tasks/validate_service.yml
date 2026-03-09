@@ -1,0 +1,10 @@
+- name: Check node_exporter service is operational
+  ansible.builtin.uri:
+    url: "http://localhost:{{ node_exporter_port }}/metrics"
+    method: GET
+    return_content: yes
+  register: result
+  until: result.status == 200
+  retries: 5
+  delay: 10
+  when: node_exporter_install

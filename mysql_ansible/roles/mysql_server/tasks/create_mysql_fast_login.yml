@@ -1,0 +1,37 @@
+- name: Ensure expect is installed
+  ansible.builtin.package:
+    name: expect
+    state: present
+
+- name: Transfer expect script to remote host
+  ansible.builtin.template:
+    src: ../templates/mysql_config_editor_script.exp.j2
+    dest: /tmp/mysql_config_editor_script.exp
+    mode: '0755'
+
+- name: Execute expect script to set MySQL login-path
+  ansible.builtin.command:
+    cmd: "./mysql_config_editor_script.exp"
+  args:
+    chdir: /tmp
+  become_user: "{{ mysql_user }}"
+  changed_when: false
+
+- name: Set up alias in .bashrc named —— {{ fcs_create_mysql_fast_login_name }}
+  ansible.builtin.lineinfile:
+    dest: /home/{{ mysql_user }}/.bashrc
+    regexp: '^alias {{ fcs_create_mysql_fast_login_name }}='
+    line: |
+      {% if fcs_mysql_fast_login_have_prompt %}
+      alias {{ fcs_create_mysql_fast_login_name }}="MYSQL_PS1=\"(\$(hostname):{{ mysql_port }})\\u@\\h-\\R:\\m:\\s [\\d]>\" mysql --login-path={{ fcs_create_mysql_fast_login_name }}"
+      {% else %}
+      alias {{ fcs_create_mysql_fast_login_name }}="mysql --login-path={{ fcs_create_mysql_fast_login_name }}"
+      {% endif %}
+    state: present
+  become: true
+  become_user: "{{ mysql_user }}"
+
+- name: Remove expect script from remote host
+  ansible.builtin.file:
+    path: /tmp/mysql_config_editor_script.exp
+    state: absent

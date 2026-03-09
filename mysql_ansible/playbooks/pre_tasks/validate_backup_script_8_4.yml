@@ -1,0 +1,24 @@
+- name: Validate backup_cron format
+  ansible.builtin.assert:
+    that:
+      - backup_cron is match('^([0-9*/,-]+\\s+){4}[0-9*/,-]+$')
+    fail_msg: "backup_cron format invalid, expected 5 fields (minute hour day month weekday)"
+
+- name: Validate backup_topology value
+  ansible.builtin.assert:
+    that:
+      - backup_topology in ['auto', 'ms', 'mgr', 'mic', 'single']
+    fail_msg: "backup_topology must be one of: auto, ms, mgr, mic, single"
+
+- name: Validate backup_scope value
+  ansible.builtin.assert:
+    that:
+      - backup_scope in ['primary_only', 'replica_one', 'replica_all', 'all', 'selected']
+    fail_msg: "backup_scope must be one of: primary_only, replica_one, replica_all, all, selected"
+
+- name: Validate backup_preferred_host for selected scope
+  ansible.builtin.assert:
+    that:
+      - backup_preferred_host | default('') | length > 0
+    fail_msg: "backup_scope=selected requires backup_preferred_host to be set"
+  when: backup_scope == 'selected'

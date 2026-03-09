@@ -1,0 +1,26 @@
+- name: Install 8.0 mysqlshell (Binary)
+  hosts: dbbot_mysql
+  become: true
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_install_mysqlshell.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_install_mysqlshell.yml
+  vars:
+    roles_to_execute:
+      - "../roles/install_mysql_shell"
+  pre_tasks:
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Import confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+  tasks:
+    - name: Include role
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+      loop: "{{ roles_to_execute }}"
+      loop_control:
+        loop_var: role_name

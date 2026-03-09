@@ -1,0 +1,4 @@
+- name: Set variable if set_linux role should be included
+  set_fact:
+    include_set_linux: true
+  when: not (skip_set_linux | default(false)) or not set_linux_finished.stat.exists

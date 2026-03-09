@@ -1,0 +1,16 @@
+---
+# Create MySQL Router required directories
+
+- name: Create router directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ router_user }}"
+    group: "{{ router_group }}"
+    mode: '0755'
+  loop:
+    - "{{ router_base_dir }}"
+    - "{{ router_config_dir }}"
+    - "{{ router_data_dir }}"
+    - "{{ router_log_dir }}"
+    - "{{ router_run_dir }}"

@@ -1,0 +1,35 @@
+#!/bin/bash
+
+mysql_user={{ mysql_user }}
+
+function quit_start
+{
+	ps -ef|grep masterha_manager |grep -v grep >/dev/null 2>&1
+	[[ $? == 0 ]] && echo -e '\n MHA already start!' && exit 2
+}
+
+function ok_or_failed
+{
+	ps -ef|grep masterha_manager |grep -v grep >/dev/null 2>&1
+	[[ $? == 0 ]] && echo -e "\n MHA start OK! Please confirm whether the VIP is attached manually" && exit 0 || 
+        { echo -e "\n MHA start failed! "; exit 2; }
+}
+
+function root_start_mha
+{
+	su ${mysql_user} -c "nohup masterha_manager --conf=/etc/masterha/app.cnf --ignore_last_failover < /dev/null > /var/log/masterha/manager.log 2>&1 &" 
+	sleep 1
+}
+
+
+function mysql_start_mha
+{
+	nohup masterha_manager --conf=/etc/masterha/app.cnf --ignore_last_failover < /dev/null > /var/log/masterha/manager.log 2>&1 & 
+	sleep 1
+}
+
+# MAIN
+quit_start
+[[ "`id -u`" == "`id -u root`" ]] && root_start_mha && ok_or_failed
+[[ "`id -u`" == "`id -u ${mysql_user}`" ]] && mysql_start_mha && ok_or_failed
+[[ "`id -u`" != "`id -u root`" ]] && [[ "`id -u`" != "`id -u ${mysql_user}`" ]] && echo -e "\n Pls use root or ${mysql_user} run user to run this script!" && exit 3

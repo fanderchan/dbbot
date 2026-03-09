@@ -1,0 +1,20 @@
+- name: Gather all hostnames from all groups
+  ansible.builtin.set_fact:
+    all_hostnames_list: "{{ groups['prometheus'] | map('extract', hostvars, 'ansible_hostname') | list + groups['grafana'] | map('extract', hostvars, 'ansible_hostname') | list + groups['alertmanager'] | map('extract', hostvars, 'ansible_hostname') | list }}"
+  delegate_to: 127.0.0.1
+  run_once: true
+
+- name: Ensure all hostnames are unique
+  ansible.builtin.set_fact:
+    unique_hostnames: "{{ all_hostnames_list | unique }}"
+    total_hostnames_count: "{{ all_hostnames_list | length }}"
+    unique_hostnames_count: "{{ all_hostnames_list | unique | length }}"
+  delegate_to: 127.0.0.1
+  run_once: true
+
+- name: Fail if duplicate hostnames are found
+  ansible.builtin.fail:
+    msg: "Duplicate hostnames found: {{ all_hostnames_list | difference(unique_hostnames) }}. Please manually check them."
+  when: total_hostnames_count > unique_hostnames_count
+  delegate_to: 127.0.0.1
+  run_once: true

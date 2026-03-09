@@ -1,0 +1,11 @@
+- name: Check if flag exists or not
+  ansible.builtin.find:
+    paths: "/tmp"
+    patterns: 'grafana_finish.flag'
+  register: grafana__p
+
+- name: Fail if flag exists
+  ansible.builtin.fail:
+    msg: "Fail because flag exists, please remove the flag manually first!"
+  when: grafana__p.matched
+

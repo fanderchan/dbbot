@@ -1,0 +1,23 @@
+- name: Define list of symbolic links
+  set_fact:
+    link_list:
+      - { src: 'libssl.so.10', dest: 'libssl.so' }
+      - { src: 'libcrypto.so.10', dest: 'libcrypto.so' }
+
+- name: Check if libssl.so and libcrypto.so exist
+  ansible.builtin.stat:
+    path: "/usr/local/mysql/lib/private/{{ item.dest }}"
+  loop: "{{ link_list }}"
+  register: check_files
+
+- name: Create symbolic links for libssl.so and libcrypto.so if not already exist
+  ansible.builtin.file:
+    src: "/usr/local/mysql/lib/private/{{ result_item.item.src }}"
+    dest: "/usr/local/mysql/lib/private/{{ result_item.item.dest }}"
+    state: link
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+  when: not result_item.stat.exists
+  loop: "{{ check_files.results }}"
+  loop_control:
+    loop_var: result_item

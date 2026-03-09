@@ -1,0 +1,16 @@
+- name: Copy mysqld_exporter package to target server
+  ansible.builtin.copy:
+    src: "{{ mysql_packages_dir }}/{{ mysqld_exporter_package }}"
+    dest: "/tmp/{{ mysqld_exporter_package }}"
+  when: not (mysqld_exporter_installed | default(false))
+
+- name: Extract mysqld_exporter binary on target server
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ mysqld_exporter_package }}"
+    dest: "{{ mysqld_exporter_install_dir }}"
+    remote_src: true
+    extra_opts: ['--strip-components=1']
+    owner: "{{ mysqld_exporter_run_user }}"
+    group: "{{ mysqld_exporter_run_user_group }}"
+    mode: '0755'
+  when: not (mysqld_exporter_installed | default(false))

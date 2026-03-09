@@ -1,0 +1,11 @@
+- name: Download mysqld_exporter tarball if not found locally and auto download is enabled (dbbot server)
+  ansible.builtin.get_url:
+    url: "{{ mysqld_exporter_url }}"
+    dest: "{{ mysql_packages_dir }}/{{ mysqld_exporter_package }}"
+    mode: '0644'
+    timeout: 60
+    headers:
+      User-Agent: "Wget/1.21.1"
+    validate_certs: no
+  run_once: true
+  delegate_to: 127.0.0.1

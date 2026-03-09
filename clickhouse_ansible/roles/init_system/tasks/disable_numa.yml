@@ -1,0 +1,38 @@
+- name: Set vm.zone_reclaim_mode to 0
+  ansible.builtin.lineinfile:
+    path: /etc/sysctl.d/80-dbbot-clickhouse-numa.conf
+    regexp: '^vm.zone_reclaim_mode'
+    line: 'vm.zone_reclaim_mode = 0'
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Set kernel.numa_balancing to 0
+  ansible.builtin.lineinfile:
+    path: /etc/sysctl.d/80-dbbot-clickhouse-numa.conf
+    regexp: '^kernel.numa_balancing'
+    line: 'kernel.numa_balancing = 0'
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply NUMA sysctl settings
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/80-dbbot-clickhouse-numa.conf
+  changed_when: true
+  failed_when: false
+
+- name: Verify NUMA settings
+  ansible.builtin.shell: |
+    echo "vm.zone_reclaim_mode=$(cat /proc/sys/vm/zone_reclaim_mode 2>/dev/null || echo N/A)"
+    echo "kernel.numa_balancing=$(cat /proc/sys/kernel/numa_balancing 2>/dev/null || echo N/A)"
+  args:
+    executable: /bin/bash
+  register: numa_verify
+  changed_when: false
+  failed_when: false
+
+- name: Display NUMA settings
+  ansible.builtin.debug:
+    var: numa_verify.stdout_lines

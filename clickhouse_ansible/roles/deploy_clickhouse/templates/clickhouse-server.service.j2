@@ -1,0 +1,19 @@
+[Unit]
+Description=ClickHouse Server (analytic DBMS for big data)
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ clickhouse_user }}
+Group={{ clickhouse_group }}
+Restart=always
+RestartSec=30
+RuntimeDirectory={{ clickhouse_service_name }}
+ExecStart=/usr/bin/clickhouse-server --config={{ clickhouse_config_dir }}/config.xml --pid-file={{ clickhouse_pid_file }}
+PIDFile={{ clickhouse_pid_file }}
+LimitCORE=infinity
+LimitNOFILE=500000
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,133 @@
+---
+# Bootstrap MySQL Router to connect to InnoDB Cluster
+# The router account should be created using cluster.setupRouterAccount() first
+# Reference: https://dev.mysql.com/doc/mysql-shell/8.0/en/configuring-router-user.html
+
+- name: Check if router already bootstrapped
+  ansible.builtin.stat:
+    path: "{{ router_data_dir }}/mysqlrouter.conf"
+  register: mysql_router__bootstrapped
+
+- name: Create bootstrap expect script
+  ansible.builtin.template:
+    src: bootstrap_router.exp.j2
+    dest: /tmp/bootstrap_router.exp
+    mode: '0700'
+  when: not mysql_router__bootstrapped.stat.exists
+
+- name: Check if expect is installed
+  ansible.builtin.command: which expect
+  register: mysql_router__expect_check
+  changed_when: false
+  failed_when: false
+  when: not mysql_router__bootstrapped.stat.exists
+
+- name: Install expect if not present
+  ansible.builtin.yum:
+    name: expect
+    state: present
+  when:
+    - not mysql_router__bootstrapped.stat.exists
+    - mysql_router__expect_check.rc != 0
+
+- name: Bootstrap MySQL Router using expect script
+  ansible.builtin.command: /tmp/bootstrap_router.exp
+  when: not mysql_router__bootstrapped.stat.exists
+  no_log: false
+  register: mysql_router__bootstrap_result
+  changed_when: mysql_router__bootstrap_result.rc == 0
+
+- name: Remove bootstrap expect script
+  ansible.builtin.file:
+    path: /tmp/bootstrap_router.exp
+    state: absent
+
+- name: Read router_id from existing config file
+  ansible.builtin.shell: |
+    grep -E '^router_id=' {{ router_data_dir }}/mysqlrouter.conf | cut -d'=' -f2
+  register: router_rest_api__router_id
+  changed_when: false
+  failed_when: false
+
+- name: Read metadata_cluster name from existing config file
+  ansible.builtin.shell: |
+    grep -E '^metadata_cluster=' {{ router_data_dir }}/mysqlrouter.conf | cut -d'=' -f2
+  register: router_rest_api__metadata_cluster
+  changed_when: false
+  failed_when: false
+
+- name: Set router_id variable
+  ansible.builtin.set_fact:
+    router_id: "{{ router_rest_api__router_id.stdout | default('1') }}"
+
+- name: Set metadata_cluster_name variable
+  ansible.builtin.set_fact:
+    metadata_cluster_name: "{{ router_rest_api__metadata_cluster.stdout | default(innodb_cluster_name | default('myCluster' + mysql_port | string)) }}"
+
+- name: Set REST API auth realm based on mode
+  ansible.builtin.set_fact:
+    router_rest_api_auth_realm: "{{ 'file_realm' if router_rest_api_auth_mode == 'file' else 'default_auth_realm' }}"
+
+# ---------------------------
+# FIXED PART: use mysqlrouter_passwd (NOT htpasswd)
+# ---------------------------
+- name: Configure REST API file authentication
+  block:
+    - name: Ensure mysqlrouter_passwd exists
+      ansible.builtin.command: "{{ router_base_dir }}/bin/mysqlrouter_passwd --version"
+      changed_when: false
+
+    - name: Check if REST API passwd file exists
+      ansible.builtin.stat:
+        path: "{{ router_rest_api_realm_file }}"
+      register: router_rest_api__passwd_file
+
+    - name: Verify REST API user password (best-effort)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        PASS="{{ router_rest_api_file_password }}"
+        # mysqlrouter_passwd verify prompts for a password; feed it through stdin
+        printf '%s\n' "$PASS" | {{ router_base_dir }}/bin/mysqlrouter_passwd verify "{{ router_rest_api_realm_file }}" "{{ router_rest_api_file_user }}"
+      register: router_rest_api__verify
+      changed_when: false
+      failed_when: false
+      no_log: true
+      when: router_rest_api__passwd_file.stat.exists
+
+    - name: Create/update REST API passwd file using mysqlrouter_passwd (if missing or verify failed)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        umask 077
+        PASS="{{ router_rest_api_file_password }}"
+        # Some versions prompt once for set; others prompt twice. Send two lines to cover both.
+        printf '%s\n%s\n' "$PASS" "$PASS" | {{ router_base_dir }}/bin/mysqlrouter_passwd \
+          --kdf "{{ router_rest_api_kdf | default('pbkdf2-sha256') }}" \
+          set "{{ router_rest_api_realm_file }}" "{{ router_rest_api_file_user }}"
+      register: router_rest_api__set
+      changed_when: true
+      no_log: true
+      when: (not router_rest_api__passwd_file.stat.exists) or (router_rest_api__verify is defined and router_rest_api__verify.rc != 0)
+
+    - name: Set ownership and permissions for REST API authentication file
+      ansible.builtin.file:
+        path: "{{ router_rest_api_realm_file }}"
+        owner: "{{ router_user }}"
+        group: "{{ router_group }}"
+        mode: '0600'
+  when: router_rest_api_auth_mode == 'file'
+
+- name: Generate router configuration from template
+  ansible.builtin.template:
+    src: mysqlrouter.conf.j2
+    dest: "{{ router_data_dir }}/mysqlrouter.conf"
+    owner: "{{ router_user }}"
+    group: "{{ router_group }}"
+    mode: '0644'
+  notify: Restart mysqlrouter
+
+- name: Set ownership for router data directory
+  ansible.builtin.file:
+    path: "{{ router_data_dir }}"
+    owner: "{{ router_user }}"
+    group: "{{ router_group }}"
+    recurse: true

@@ -1,0 +1,31 @@
+- name: Display the list of target hosts and additional information
+  ansible.builtin.debug:
+    msg: "{{ base_msg + hostnames_msg }}"
+  run_once: true
+  delegate_to: localhost
+  vars:
+    base_msg:
+      - "Hosts to be affected by {{ ansible_play_name }}: {{ play_hosts | join(', ') }}"
+      - "prometheus ip: {{ prometheus_ip }}"
+      - "prometheus port: {{ prometheus_port }}"
+      - "prometheus package: {{ prometheus_package }}"
+      - "grafana ip: {{ grafana_ip }}"
+      - "grafana port: {{ grafana_port }}"
+      - "grafana package: {{ grafana_package }}"
+      - "alertmanager ip: {{ alertmanager_ip }}"
+      - "alertmanager port: {{ alertmanager_port }}"
+      - "alertmanager package: {{ alertmanager_package }}"
+#      - "{% if roles_to_execute is defined %}Roles to be executed: {{ roles_to_execute | join(', ') }}{% else %}Roles to be executed: null{% endif %}"
+    hostnames_msg: "{% if hostnames_list is defined %}[\"Hostnames list: {{ hostnames_list | join(', ') }}\"]{% else %}[]{% endif %}"
+
+- name: Prompt user for confirmation
+  ansible.builtin.pause:
+    prompt: "This will perform {{ ansible_play_name }} on the displayed hosts. Please type 'confirm' to continue or press Ctrl+C to cancel."
+  register: confirmation
+  run_once: true
+  delegate_to: localhost
+
+- name: Check if user confirmed
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }} not confirmed, exiting."
+  when: confirmation.user_input != 'confirm'

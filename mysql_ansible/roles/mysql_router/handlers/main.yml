@@ -1,0 +1,11 @@
+---
+# MySQL Router handlers
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart mysqlrouter
+  ansible.builtin.systemd:
+    name: "{{ router_service_name }}"
+    state: restarted

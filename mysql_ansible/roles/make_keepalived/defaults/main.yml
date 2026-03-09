@@ -1,0 +1,1 @@
+mysql_config_file: "{{ mycnf_dir }}/my.cnf"

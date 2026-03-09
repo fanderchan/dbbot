@@ -1,0 +1,171 @@
+---
+- name: Prepare ClickHouse Backup Disk Config (backup_nfs)
+  hosts: clickhouse_backup:clickhouse_cluster
+  become: true
+  any_errors_fatal: true
+  serial: 1
+  vars_files:
+    - vars/common_config.yml
+    - vars/cluster_config.yml
+    - vars/backup_config.yml
+  vars:
+    backup_prepare_restart: true
+
+  pre_tasks:
+    - name: Validate dedicated backup inventory filename guard (run once)
+      ansible.builtin.assert:
+        that:
+          - not backup_require_inventory_guard | bool or ((inventory_file | default('') | lower) is search(backup_inventory_guard_keyword | lower))
+        fail_msg: >-
+          prepare_backup_disk.yml requires a dedicated backup inventory by default.
+          current_inventory={{ inventory_file | default('unknown') }},
+          expected_keyword={{ backup_inventory_guard_keyword }}.
+          Please use inventory/hosts.backup.ini or set backup_require_inventory_guard=false.
+      run_once: true
+
+    - name: Validate backup inventory purpose guard (run once)
+      ansible.builtin.assert:
+        that:
+          - not backup_require_inventory_purpose_guard | bool or ((dbbot_inventory_purpose | default('') | lower) == (backup_inventory_purpose | lower))
+        fail_msg: >-
+          prepare_backup_disk.yml requires dbbot_inventory_purpose={{ backup_inventory_purpose }}.
+          current_inventory={{ inventory_file | default('unknown') }},
+          dbbot_inventory_purpose={{ dbbot_inventory_purpose | default('unset') }}.
+          Please use inventory/hosts.backup.ini or set backup_require_inventory_purpose_guard=false.
+      run_once: true
+
+    - name: Import tasks to validate common configuration
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    - name: Import tasks to parse topology
+      ansible.builtin.import_tasks: pre_tasks/parse_topology.yml
+
+    - name: Import tasks to check OS and Python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Calculate ClickHouse TCP port based on instance id (when not explicitly set)
+      ansible.builtin.set_fact:
+        clickhouse_tcp_port: "{{ (clickhouse_tcp_port_base | default(9000) | int) + (current_node_instance_id | int - 1) }}"
+      when: clickhouse_tcp_port is not defined
+
+    - name: Derive effective instance id for backup preparation
+      ansible.builtin.set_fact:
+        backup_prepare_instance_id_effective: >-
+          {{
+            backup_prepare_instance_id
+            if (backup_prepare_instance_id is defined and (backup_prepare_instance_id | string | trim | length > 0))
+            else (
+              instance_id
+              if (instance_id is defined and (instance_id | string | trim | length > 0))
+              else (
+                ((clickhouse_tcp_port | int) - (clickhouse_tcp_port_base | default(9000) | int) + 1)
+                if (
+                  clickhouse_tcp_port is defined
+                  and ((clickhouse_tcp_port | int) >= (clickhouse_tcp_port_base | default(9000) | int))
+                )
+                else (current_node_instance_id | int)
+              )
+            )
+          }}
+
+    - name: Validate effective instance id for backup preparation
+      ansible.builtin.assert:
+        that:
+          - backup_prepare_instance_id_effective | int >= 1
+        fail_msg: >-
+          Invalid backup_prepare_instance_id_effective={{ backup_prepare_instance_id_effective }}.
+          Please set instance_id or backup_prepare_instance_id explicitly.
+
+    - name: Build effective config/service target for backup preparation
+      ansible.builtin.set_fact:
+        backup_prepare_instance_suffix_effective: "{{ '' if (backup_prepare_instance_id_effective | int) == 1 else '-' ~ (backup_prepare_instance_id_effective | int) }}"
+        backup_prepare_config_d_dir_effective: >-
+          {{
+            backup_prepare_config_d_dir
+            if (backup_prepare_config_d_dir is defined and (backup_prepare_config_d_dir | string | trim | length > 0))
+            else ('/etc/clickhouse-server' ~ ('' if (backup_prepare_instance_id_effective | int) == 1 else '-' ~ (backup_prepare_instance_id_effective | int)) ~ '/config.d')
+          }}
+        backup_prepare_service_name_effective: >-
+          {{
+            backup_prepare_service_name
+            if (backup_prepare_service_name is defined and (backup_prepare_service_name | string | trim | length > 0))
+            else ('clickhouse-server' ~ ('' if (backup_prepare_instance_id_effective | int) == 1 else '-' ~ (backup_prepare_instance_id_effective | int)))
+          }}
+
+    - name: Validate effective config.d directory exists
+      ansible.builtin.stat:
+        path: "{{ backup_prepare_config_d_dir_effective }}"
+      register: backup_prepare_config_d_dir_stat
+      changed_when: false
+
+    - name: Fail when effective config.d directory is missing
+      ansible.builtin.fail:
+        msg: >-
+          backup prepare target config dir not found: {{ backup_prepare_config_d_dir_effective }}.
+          inventory_host={{ inventory_hostname }},
+          instance_id={{ instance_id | default('unset') }},
+          clickhouse_tcp_port={{ clickhouse_tcp_port | default('unset') }}.
+          You can set backup_prepare_config_d_dir / backup_prepare_service_name explicitly for non-standard layouts.
+      when: not backup_prepare_config_d_dir_stat.stat.exists
+
+    - name: Ensure backup mount directory exists
+      ansible.builtin.file:
+        path: "{{ backup_mount_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+  tasks:
+    - name: Write backup disk configuration
+      ansible.builtin.copy:
+        dest: "{{ backup_prepare_config_d_dir_effective }}/backup_nfs.xml"
+        owner: "{{ clickhouse_user }}"
+        group: "{{ clickhouse_group }}"
+        mode: "0644"
+        content: |
+          <clickhouse>
+            <storage_configuration>
+              <disks>
+                <{{ backup_storage_disk }}>
+                  <type>local</type>
+                  <path>{{ backup_mount_dir }}/</path>
+                </{{ backup_storage_disk }}>
+              </disks>
+            </storage_configuration>
+            <backups>
+              <allowed_disk>{{ backup_storage_disk }}</allowed_disk>
+              <allowed_path>{{ backup_mount_dir }}/</allowed_path>
+            </backups>
+          </clickhouse>
+      register: backup_disk_cfg
+
+    - name: Restart ClickHouse service to apply backup config
+      ansible.builtin.systemd:
+        name: "{{ backup_prepare_service_name_effective }}"
+        state: restarted
+      when:
+        - backup_prepare_restart | bool
+        - backup_disk_cfg is changed
+
+    - name: Wait for ClickHouse TCP port after restart
+      ansible.builtin.wait_for:
+        host: "127.0.0.1"
+        port: "{{ clickhouse_tcp_port | int }}"
+        delay: 2
+        timeout: 120
+      when:
+        - backup_prepare_restart | bool
+        - backup_disk_cfg is changed
+
+    - name: Verify backup disk is visible
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "SELECT name, path FROM system.disks WHERE name='{{ backup_storage_disk }}' FORMAT TSV"
+      register: backup_disk_verify
+      changed_when: false
+      failed_when: backup_disk_verify.rc != 0 or (backup_disk_verify.stdout | trim | length == 0)
+
+    - name: Display backup disk verification
+      ansible.builtin.debug:
+        msg: "{{ backup_disk_verify.stdout_lines }}"

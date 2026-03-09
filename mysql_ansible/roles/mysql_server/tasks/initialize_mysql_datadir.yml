@@ -1,0 +1,10 @@
+- name: Initialize-insecure for mysql-5.7.x
+  ansible.builtin.command: /usr/local/mysql/bin/mysqld --defaults-file={{ mycnf_dir }}/my.cnf --validate-password=off --initialize-insecure
+  when: " '-5.7' in mysql_package "
+  changed_when: true
+
+- name: Initialize-insecure for mysql-8.0.x or mysql-8.4.x
+  ansible.builtin.command: /usr/local/mysql/bin/mysqld --defaults-file={{ mycnf_dir }}/my.cnf  --initialize-insecure
+  when: " '-8.0' in mysql_package or '-8.4' in mysql_package "
+  changed_when: true
+

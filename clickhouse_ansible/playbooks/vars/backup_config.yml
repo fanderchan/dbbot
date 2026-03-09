@@ -1,0 +1,104 @@
+# ClickHouse 企业级备份参数
+
+# 备份执行并发（按 inventory 主机并行）
+backup_serial: "100%"
+
+# 备份对象：
+# 1) backup_databases: ["db1", "db2"]
+# 2) backup_tables: ["db1.tbl1", "db2.tbl2"]
+# 至少配置其中一个
+backup_databases: []
+backup_tables: []
+
+# 备份模式：full 或 incremental
+backup_mode: "full"
+# 增量模式下必须指定基线批次号
+backup_base_batch_id: ""
+
+# 是否额外备份配置与权限相关文件（默认关闭）
+# 说明：开启后会将配置快照写入
+# /backup/<cluster>/<batch_id>/config_snapshots/<host>_s<shard>_r<replica>_i<instance_id>/config_bundle.tar.gz
+backup_include_config_files: false
+# 配置快照路径（可按你们生产环境目录覆盖）
+# 默认覆盖：配置目录 + SQL/RBAC 目录（access_control_path）
+backup_config_source_paths:
+  - "{{ clickhouse_config_dir }}"
+  - "{{ clickhouse_data_dir }}/access"
+# true: 任一配置路径不存在则失败；false: 仅忽略缺失路径，但至少要有一个有效路径
+backup_config_fail_on_missing_paths: false
+# 配置快照子目录名（位于 batch_id 下）
+backup_config_snapshot_subdir: "config_snapshots"
+
+# 备份批次号（为空则自动生成东八区批次号：YYYYmmddTHHMMSS_CST_bk）
+backup_batch_id: ""
+
+# 每分片备份副本选择策略
+# 默认优先 replica=1；如果不存在则选该分片最小 replica
+backup_prefer_replica: 1
+# 手工覆盖（可选），格式示例：
+# backup_shard_host_override:
+#   "1": "ck-131-1"
+#   "2": "ck-132-2"
+#   "3": "ck-133-2"
+backup_shard_host_override: {}
+
+# 备份存储目标（需在 ClickHouse 配置中允许）
+backup_storage_disk: "backup_nfs"
+# NFS 挂载目录（用于写 manifest）
+backup_mount_dir: "/backup"
+
+# 备份在 NFS 目录中的根前缀
+backup_root_prefix: "{{ clickhouse_cluster_name }}"
+
+# 是否异步执行 BACKUP 语句
+backup_async: true
+
+# 轮询配置（用于等待 system.backups 最终状态）
+backup_poll_delay_seconds: 5
+backup_poll_retries: 1440  # 5s * 1440 = 最多约 2 小时
+
+# 备份限速（0 表示不限制）
+backup_max_bandwidth: 0
+backup_max_bandwidth_for_server: 0
+
+# 备份前复制健康检查
+backup_require_replication_healthy: true
+# 允许的最大复制队列长度（0 表示必须为 0）
+backup_max_replication_queue: 0
+# 复制健康检查等待窗口（秒）：在窗口内按轮询间隔持续重试，满足条件即继续
+backup_replication_health_wait_seconds: 60
+# 复制健康检查轮询间隔（秒）
+backup_replication_health_check_interval_seconds: 1
+
+# 备份范围合规检查（仅检查当前 backup_databases / backup_tables 命中的对象）
+# true: 发现非复制本地表（非 Replicated*，且非 Distributed/MV/View/Dictionary）直接阻断备份
+backup_require_replicated_tables: true
+# 失败时打印样本数量
+backup_non_replicated_tables_sample_limit: 20
+
+# 业务一致性检查点（safe_ts）配置
+# file: 不写入 ClickHouse；仅采集运行时 marker，并写入 manifest 文件（默认，推荐生产）
+# table: 将每分片 marker 写入 ClickHouse 运维表（可选，偏审计）
+backup_checkpoint_mode: "file"
+backup_checkpoint_db: "ops"
+backup_checkpoint_table: "backup_checkpoint_local"
+
+# manifest 输出
+backup_manifest_write_to_nfs: true
+backup_manifest_write_to_control: true
+backup_manifest_control_dir: "{{ playbook_dir }}/../artifacts/manifests/backup"
+
+# 是否允许使用 --limit 仅对部分 inventory 执行备份（默认不允许）
+backup_allow_partial_cluster: false
+
+# 备份 inventory 守卫（防止误用 deploy/restore inventory）
+backup_require_inventory_guard: true
+backup_inventory_guard_keyword: "backup"
+backup_require_inventory_purpose_guard: true
+backup_inventory_purpose: "backup"
+
+# 调试输出开关
+# true 时会额外打印分片列表、备份对象、分片到主机映射等内部信息
+backup_debug_internal: false
+# true 时会在执行节点打印最终 BACKUP SQL
+backup_debug_show_sql: false

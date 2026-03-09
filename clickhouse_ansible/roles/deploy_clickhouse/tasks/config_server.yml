@@ -1,0 +1,149 @@
+- name: Generate network.xml configuration
+  ansible.builtin.template:
+    src: network.xml.j2
+    dest: "{{ clickhouse_config_d_dir }}/network.xml"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0644'
+
+- name: Generate ssl.xml configuration when SSL is enabled
+  ansible.builtin.template:
+    src: ssl.xml.j2
+    dest: "{{ clickhouse_config_d_dir }}/ssl.xml"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0644'
+  when: clickhouse_enable_ssl | default(false)
+
+- name: Remove ssl.xml configuration when SSL is disabled
+  ansible.builtin.file:
+    path: "{{ clickhouse_config_d_dir }}/ssl.xml"
+    state: absent
+  when: not (clickhouse_enable_ssl | default(false))
+
+- name: Check if instance config.xml exists
+  ansible.builtin.stat:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+  register: config_xml_stat
+
+- name: Copy base config.xml for additional instances
+  ansible.builtin.copy:
+    src: /etc/clickhouse-server/config.xml
+    dest: "{{ clickhouse_config_dir }}/config.xml"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0644'
+    remote_src: true
+  when:
+    - not config_xml_stat.stat.exists
+    - clickhouse_config_dir != '/etc/clickhouse-server'
+
+- name: Re-check instance config.xml
+  ansible.builtin.stat:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+  register: config_xml_stat_final
+
+- name: Fail if config.xml still does not exist
+  ansible.builtin.fail:
+    msg: "ClickHouse config.xml not found. Please ensure ClickHouse server is installed first."
+  when: not config_xml_stat_final.stat.exists
+
+- name: Remove legacy include_from entry (cluster now loaded from config.d)
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<include_from>.*metrika\.xml</include_from>'
+    state: absent
+  when: config_xml_stat_final.stat.exists
+
+- name: Remove legacy zookeeper include entry (cluster now loaded from config.d)
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<zookeeper incl="zookeeper-servers".*/>'
+    state: absent
+  when: config_xml_stat_final.stat.exists
+
+- name: Update config.xml data path (specific block)
+  ansible.builtin.replace:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '(?s)(<!-- Path to data directory.*?-->\s*<path>)[^<]*(</path>)'
+    replace: '\1{{ clickhouse_data_dir }}/\2'
+  when: config_xml_stat_final.stat.exists
+
+- name: Update distributed_ddl path
+  ansible.builtin.replace:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '(?s)(<distributed_ddl>.*?<path>)[^<]*(</path>)'
+    replace: '\1{{ clickhouse_distributed_ddl_path }}\2'
+  when: config_xml_stat_final.stat.exists
+
+- name: Update config.xml tmp_path
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<tmp_path>.*</tmp_path>'
+    line: '    <tmp_path>{{ clickhouse_data_dir }}/tmp/</tmp_path>'
+  when: config_xml_stat_final.stat.exists
+
+- name: Update config.xml user_files_path
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<user_files_path>.*</user_files_path>'
+    line: '    <user_files_path>{{ clickhouse_data_dir }}/user_files/</user_files_path>'
+  when: config_xml_stat_final.stat.exists
+
+- name: Update config.xml format_schema_path
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<format_schema_path>.*</format_schema_path>'
+    line: '    <format_schema_path>{{ clickhouse_data_dir }}/format_schemas/</format_schema_path>'
+  when: config_xml_stat_final.stat.exists
+
+- name: Remove any existing access_control_path lines
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<access_control_path>.*</access_control_path>'
+    state: absent
+  when: config_xml_stat_final.stat.exists
+
+- name: Ensure access_control_path is set for this instance
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<access_control_path>.*</access_control_path>'
+    line: '    <access_control_path>{{ clickhouse_data_dir }}/access/</access_control_path>'
+    insertafter: '^\s*<path>.*</path>'
+    firstmatch: true
+  when: config_xml_stat_final.stat.exists
+
+- name: Update user_directories local_directory path
+  ansible.builtin.replace:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '(?s)(<local_directory>.*?<path>)[^<]*(</path>)'
+    replace: '\1{{ clickhouse_data_dir }}/access/\2'
+  when: config_xml_stat_final.stat.exists
+
+- name: Update config.xml log path
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<log>.*clickhouse-server\.log</log>'
+    line: '    <log>{{ clickhouse_log_dir }}/clickhouse-server.log</log>'
+  when: config_xml_stat_final.stat.exists
+
+- name: Update config.xml mysql_port
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<mysql_port>.*</mysql_port>'
+    line: '    <mysql_port>{{ clickhouse_mysql_port }}</mysql_port>'
+  when: config_xml_stat_final.stat.exists
+
+- name: Update config.xml postgresql_port
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<postgresql_port>.*</postgresql_port>'
+    line: '    <postgresql_port>{{ clickhouse_postgresql_port }}</postgresql_port>'
+  when: config_xml_stat_final.stat.exists
+
+- name: Update config.xml error log path
+  ansible.builtin.lineinfile:
+    path: "{{ clickhouse_config_dir }}/config.xml"
+    regexp: '^\s*<errorlog>.*clickhouse-server\.err\.log</errorlog>'
+    line: '    <errorlog>{{ clickhouse_log_dir }}/clickhouse-server.err.log</errorlog>'
+  when: config_xml_stat_final.stat.exists

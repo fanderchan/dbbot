@@ -1,0 +1,104 @@
+# MySQL Router Role Default Variables
+
+router_version: "{{ mysql_version }}"
+
+# Router package name pattern
+router_package: "mysql-router-{{ router_version }}-linux-glibc2.17-x86_64.tar.xz"
+
+# Package download directory
+router_packages_dir: "{{ mysql_packages_dir | default('../downloads/') }}"
+
+# Bootstrap connection (use cluster admin credentials)
+router_bootstrap_user: "{{ mysql_cluster_admin_user | default('clusteradmin') }}"
+router_bootstrap_password: "{{ mysql_cluster_admin_password | default('Dbbot_' ~ (mysql_cluster_admin_user | default('clusteradmin')) ~ '@8888') }}"
+
+# Router MySQL user (for reading cluster metadata)
+mysql_router_user: "{{ mysql_router_user | default('mysql_router') }}"
+mysql_router_password: "{{ mysql_router_password | default('Dbbot_' ~ (mysql_router_user | default('mysqlrouter')) ~ '@8888') }}"
+
+# Host group for delegate_to
+router_host_group: "{{ router_host_group | default('dbbot_router') }}"
+
+# Router system user
+router_user: mysqlrouter
+router_group: mysqlrouter
+
+# Router bootstrap name (defaults to hostname)
+router_bootstrap_name: "{{ inventory_hostname }}"
+
+# Directory configuration
+router_base_dir: "/usr/local/mysqlrouter"
+router_config_dir: "/etc/mysqlrouter"
+router_data_dir: "/var/lib/mysqlrouter"
+router_log_dir: "/var/log/mysqlrouter"
+router_run_dir: "/var/run/mysqlrouter"
+
+# Port configuration dictionary
+# Each port entry contains:
+#   - port: port number
+#   - enabled: whether to enable this port in mysqlrouter.conf
+#   - monitor: whether to monitor this port in health check (HA mode)
+#   - socket: socket file path (optional, auto-generated if not specified)
+#   - destinations: routing destinations (optional, auto-generated if not specified)
+#   - routing_strategy: routing strategy (optional, has defaults)
+#   - protocol: protocol type (optional, has defaults)
+#   - Other routing-specific options
+router_ports:
+  rw:
+    port: 6446
+    enabled: true
+    monitor: true
+    socket: "{{ router_data_dir }}/mysql.sock"
+    destinations: "metadata-cache://{{ metadata_cluster_name }}/?role=PRIMARY"
+    routing_strategy: "first-available"
+    protocol: "classic"
+  ro:
+    port: 6447
+    enabled: false
+    monitor: false
+    socket: "{{ router_data_dir }}/mysqlro.sock"
+    destinations: "metadata-cache://{{ metadata_cluster_name }}/?role=SECONDARY"
+    routing_strategy: "round-robin-with-fallback"
+    protocol: "classic"
+  rw_x:
+    port: 6448
+    enabled: false
+    monitor: false
+    socket: "{{ router_data_dir }}/mysqlx.sock"
+    destinations: "metadata-cache://{{ metadata_cluster_name }}/?role=PRIMARY"
+    routing_strategy: "first-available"
+    protocol: "x"
+    router_require_enforce: 0
+  ro_x:
+    port: 6449
+    enabled: false
+    monitor: false
+    socket: "{{ router_data_dir }}/mysqlxro.sock"
+    destinations: "metadata-cache://{{ metadata_cluster_name }}/?role=SECONDARY"
+    routing_strategy: "round-robin-with-fallback"
+    protocol: "x"
+    router_require_enforce: 0
+  rw_split:
+    port: 6450
+    enabled: false
+    monitor: false
+    socket: "{{ router_data_dir }}/mysqlsplit.sock"
+    destinations: "metadata-cache://{{ metadata_cluster_name }}/?role=PRIMARY_AND_SECONDARY"
+    routing_strategy: "round-robin"
+    protocol: "classic"
+    connection_sharing: 1
+    access_mode: "auto"
+  http:
+    port: 8443
+    enabled: true
+    monitor: false
+
+# Service configuration
+router_service_name: "mysqlrouter"
+
+# REST API configuration
+router_rest_api_bind_address: "{{ router_rest_api_bind_address | default('127.0.0.1') }}"
+router_rest_api_auth_mode: "{{ router_rest_api_auth_mode | default('file') }}"
+router_rest_api_file_user: "{{ router_rest_api_file_user | default('router_api_user') }}"
+router_rest_api_file_password: "{{ router_rest_api_file_password | default('Dbbot_' ~ (router_rest_api_file_user | default('router_api_user')) ~ '@8888') }}"
+router_rest_api_realm_file: "{{ router_data_dir }}/rest_api_users"

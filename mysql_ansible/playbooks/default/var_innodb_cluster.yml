@@ -1,0 +1,20 @@
+# vars loading order: common_config -> this file
+# ============================================================
+# Common settings (usually only need to modify these)
+# ============================================================
+innodb_cluster_name: "myCluster{{ mysql_port }}"
+innodb_cluster_primary: 192.0.2.131
+innodb_cluster_members:
+  - '192.0.2.131'
+  - '192.0.2.132'
+  - '192.0.2.133'
+
+# ============================================================
+# Advanced settings (usually no need to modify)
+# ============================================================
+mysql_mgr_port: "{{ (mysql_port | int) * 10 + 1 }}"
+mysql_mgr_hosts: "{{ innodb_cluster_members }}"
+
+# Cluster admin user (for MySQL Shell management)
+mysql_cluster_admin_user: clusteradmin
+mysql_cluster_admin_password: "Dbbot_{{ mysql_cluster_admin_user }}@8888"

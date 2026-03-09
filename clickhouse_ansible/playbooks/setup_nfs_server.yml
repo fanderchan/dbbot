@@ -1,0 +1,114 @@
+---
+- name: Setup NFS Server For ClickHouse Backups
+  hosts: clickhouse_nfs_server
+  become: true
+  gather_facts: true
+  vars:
+    nfs_export_dir: "/srv/nfs/clickhouse_backup"
+    nfs_export_mode: "0777"
+    # 文档默认值使用 RFC 5737 示例网段，生产前请改为真实客户端网段。
+    nfs_export_cidr: "192.0.2.0/24"
+    nfs_export_opts: "rw,sync,no_subtree_check,no_root_squash"
+    nfs_exports_file: "/etc/exports.d/clickhouse_backup.exports"
+    nfs_server_require_inventory_guard: true
+    nfs_server_inventory_guard_keyword: "nfs_server"
+    nfs_server_require_inventory_purpose_guard: true
+    nfs_server_inventory_purpose: "nfs_server"
+
+  pre_tasks:
+    - name: Validate dedicated NFS server inventory filename guard
+      ansible.builtin.assert:
+        that:
+          - not nfs_server_require_inventory_guard | bool or ((inventory_file | default('') | lower) is search(nfs_server_inventory_guard_keyword | lower))
+        fail_msg: >-
+          setup_nfs_server.yml requires a dedicated NFS server inventory by default.
+          current_inventory={{ inventory_file | default('unknown') }},
+          expected_keyword={{ nfs_server_inventory_guard_keyword }}.
+          Please use inventory/hosts.nfs_server.ini or set nfs_server_require_inventory_guard=false.
+      run_once: true
+
+    - name: Validate NFS server inventory purpose guard
+      ansible.builtin.assert:
+        that:
+          - not nfs_server_require_inventory_purpose_guard | bool or ((dbbot_inventory_purpose | default('') | lower) == (nfs_server_inventory_purpose | lower))
+        fail_msg: >-
+          setup_nfs_server.yml requires dbbot_inventory_purpose={{ nfs_server_inventory_purpose }}.
+          current_inventory={{ inventory_file | default('unknown') }},
+          dbbot_inventory_purpose={{ dbbot_inventory_purpose | default('unset') }}.
+          Please use inventory/hosts.nfs_server.ini or set nfs_server_require_inventory_purpose_guard=false.
+      run_once: true
+
+  tasks:
+    - name: Install nfs-utils
+      ansible.builtin.package:
+        name: nfs-utils
+        state: present
+
+    - name: Create NFS export directory
+      ansible.builtin.file:
+        path: "{{ nfs_export_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ nfs_export_mode }}"
+
+    - name: Check SELinux mode
+      ansible.builtin.command: getenforce
+      register: nfs_selinux_mode
+      changed_when: false
+      failed_when: false
+
+    - name: Enable SELinux bool for NFS RW export
+      ansible.builtin.command: setsebool -P nfs_export_all_rw 1
+      when: nfs_selinux_mode.stdout == "Enforcing"
+
+    - name: Write NFS exports file
+      ansible.builtin.copy:
+        dest: "{{ nfs_exports_file }}"
+        mode: "0644"
+        content: |
+          {{ nfs_export_dir }} {{ nfs_export_cidr }}({{ nfs_export_opts }})
+      notify: Reload NFS exports
+
+    - name: Ensure rpcbind service is enabled and running
+      ansible.builtin.service:
+        name: rpcbind
+        enabled: true
+        state: started
+
+    - name: Ensure nfs-server service is enabled and running
+      ansible.builtin.service:
+        name: nfs-server
+        enabled: true
+        state: started
+
+    - name: Check firewalld status
+      ansible.builtin.command: systemctl is-active firewalld
+      register: nfs_firewalld_status
+      changed_when: false
+      failed_when: false
+
+    - name: Open NFS-related services in firewalld
+      ansible.posix.firewalld:
+        service: "{{ item }}"
+        state: enabled
+        immediate: true
+        permanent: true
+      loop:
+        - nfs
+        - mountd
+        - rpc-bind
+      when: nfs_firewalld_status.stdout == "active"
+
+    - name: Show exported NFS paths
+      ansible.builtin.command: exportfs -v
+      register: nfs_exportfs_out
+      changed_when: false
+
+    - name: Display NFS export summary
+      ansible.builtin.debug:
+        msg: "{{ nfs_exportfs_out.stdout_lines }}"
+
+  handlers:
+    - name: Reload NFS exports
+      ansible.builtin.command: exportfs -rav

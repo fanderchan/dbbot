@@ -1,0 +1,278 @@
+---
+- name: Uninstall ClickHouse Cluster Instances
+  hosts: clickhouse_deploy:clickhouse_cluster
+  become: true
+  any_errors_fatal: true
+  vars_files:
+    - vars/common_config.yml
+    - vars/cluster_config.yml
+    - vars/uninstall_config.yml
+
+  pre_tasks:
+    - name: Validate uninstall inventory purpose guard (run once)
+      ansible.builtin.assert:
+        that:
+          - not uninstall_require_inventory_guard | bool or ((dbbot_inventory_purpose | default('') | lower) == (uninstall_inventory_purpose | lower))
+        fail_msg: >-
+          uninstall_cluster.yml requires dbbot_inventory_purpose={{ uninstall_inventory_purpose }}.
+          current_inventory={{ inventory_file | default('unknown') }},
+          dbbot_inventory_purpose={{ dbbot_inventory_purpose | default('unset') }}.
+          Please use inventory/hosts.deploy.ini or inventory/hosts.dr_deploy.ini.
+      run_once: true
+
+    - name: Set effective uninstall confirmation phrase (run once)
+      ansible.builtin.set_fact:
+        uninstall_confirm_phrase_effective: >-
+          {{
+            uninstall_confirm_phrase
+            if (uninstall_confirm_phrase | default('') | trim | length > 0)
+            else ('UNINSTALL ' ~ clickhouse_cluster_name)
+          }}
+      run_once: true
+
+    - name: Manual confirmation before uninstall (run once)
+      ansible.builtin.pause:
+        prompt: |-
+          [MANUAL CONFIRM REQUIRED]
+          playbook=uninstall_cluster.yml
+          inventory={{ inventory_file | default('unknown') }}
+          target_group=clickhouse_deploy|clickhouse_cluster,zookeeper_deploy|zookeeper_cluster
+          Type exactly "{{ uninstall_confirm_phrase_effective }}" to continue:
+      register: uninstall_manual_confirm_input
+      delegate_to: localhost
+      become: false
+      when: uninstall_require_manual_confirm | bool
+      run_once: true
+
+    - name: Validate uninstall confirmation phrase (run once)
+      ansible.builtin.assert:
+        that:
+          - (uninstall_manual_confirm_input.user_input | default('') | trim) == (uninstall_confirm_phrase_effective | trim)
+        fail_msg: >-
+          Manual confirmation failed.
+          Expected: {{ uninstall_confirm_phrase_effective }}
+      when: uninstall_require_manual_confirm | bool
+      run_once: true
+
+    - name: Mark uninstall confirmation as completed (run once)
+      ansible.builtin.set_fact:
+        uninstall_manual_confirm_ok: true
+      delegate_to: localhost
+      delegate_facts: true
+      when: uninstall_require_manual_confirm | bool
+      run_once: true
+
+    - name: Import tasks to parse topology
+      ansible.builtin.import_tasks: pre_tasks/parse_topology.yml
+
+    - name: Import tasks to check OS and Python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+  tasks:
+    - name: Stop and disable ClickHouse service
+      ansible.builtin.systemd:
+        name: "{{ clickhouse_service_name }}"
+        state: stopped
+        enabled: false
+      failed_when: false
+      when: uninstall_disable_services | bool
+
+    - name: Remove ClickHouse systemd service file
+      ansible.builtin.file:
+        path: "/etc/systemd/system/{{ clickhouse_service_name }}.service"
+        state: absent
+
+    - name: Remove ClickHouse configuration directory
+      ansible.builtin.file:
+        path: "{{ clickhouse_config_dir }}"
+        state: absent
+      when: uninstall_purge_clickhouse_config | bool
+
+    - name: Remove ClickHouse data directory
+      ansible.builtin.file:
+        path: "{{ clickhouse_data_dir }}"
+        state: absent
+      when: uninstall_purge_clickhouse_data | bool
+
+    - name: Remove ClickHouse log directory
+      ansible.builtin.file:
+        path: "{{ clickhouse_log_dir }}"
+        state: absent
+      when: uninstall_purge_clickhouse_logs | bool
+
+    - name: Remove clickhouse fast-login client config
+      ansible.builtin.file:
+        path: "/home/{{ clickhouse_user }}/.clickhouse-client"
+        state: absent
+      when:
+        - uninstall_remove_clickhouse_fast_login | bool
+        - ck_run_host_tasks | default(true) | bool
+
+    - name: Remove clickhouse fast-login aliases from bashrc
+      ansible.builtin.lineinfile:
+        path: "/home/{{ clickhouse_user }}/.bashrc"
+        regexp: '^alias {{ fcs_create_clickhouse_fast_login_name_prefix | default("dblocal") }}[0-9]+='
+        state: absent
+      when:
+        - uninstall_remove_clickhouse_fast_login | bool
+        - ck_run_host_tasks | default(true) | bool
+      failed_when: false
+
+    - name: Remove ClickHouse Keeper configuration
+      ansible.builtin.file:
+        path: "{{ clickhouse_config_d_dir }}/keeper-server.xml"
+        state: absent
+      when: ck_run_host_tasks | default(true) | bool
+
+    - name: Remove ClickHouse Keeper directories
+      ansible.builtin.file:
+        path: "{{ keeper_cleanup_item }}"
+        state: absent
+      loop:
+        - "/opt/clickhouse/coordination/log"
+        - "/opt/clickhouse/coordination/snapshots"
+      loop_control:
+        loop_var: keeper_cleanup_item
+      when:
+        - use_clickhouse_keeper | default(false) | bool
+        - ck_run_host_tasks | default(true) | bool
+
+    - name: Remove ClickHouse binaries
+      ansible.builtin.file:
+        path: "{{ clickhouse_binary_item }}"
+        state: absent
+      loop:
+        - /usr/bin/clickhouse
+        - /usr/bin/clickhouse-client
+        - /usr/bin/clickhouse-compressor
+        - /usr/bin/clickhouse-extract-from-config
+        - /usr/bin/clickhouse-format
+        - /usr/bin/clickhouse-local
+        - /usr/bin/clickhouse-obfuscator
+      loop_control:
+        loop_var: clickhouse_binary_item
+      when:
+        - uninstall_remove_clickhouse_binaries | bool
+        - ck_run_host_tasks | default(true) | bool
+
+    - name: Remove backup mount rc.local entry
+      ansible.builtin.lineinfile:
+        path: /etc/rc.d/rc.local
+        regexp: '^/usr/local/sbin/mount_clickhouse_backup_nfs\.sh\b'
+        state: absent
+      when:
+        - uninstall_remove_backup_mount | bool
+        - ck_run_host_tasks | default(true) | bool
+      failed_when: false
+
+    - name: Unmount backup NFS mount
+      ansible.builtin.command: "umount -lf {{ uninstall_backup_mount_point }}"
+      when:
+        - uninstall_remove_backup_mount | bool
+        - ck_run_host_tasks | default(true) | bool
+      changed_when: false
+      failed_when: false
+
+    - name: Remove backup mount script and log
+      ansible.builtin.file:
+        path: "{{ backup_mount_cleanup_item }}"
+        state: absent
+      loop:
+        - "{{ uninstall_backup_mount_script }}"
+        - "{{ uninstall_backup_mount_log }}"
+      loop_control:
+        loop_var: backup_mount_cleanup_item
+      when:
+        - uninstall_remove_backup_mount | bool
+        - ck_run_host_tasks | default(true) | bool
+
+    - name: Reload systemd after ClickHouse cleanup
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: ck_run_host_tasks | default(true) | bool
+
+    - name: Remove clickhouse user
+      ansible.builtin.user:
+        name: "{{ clickhouse_user }}"
+        state: absent
+        remove: false
+      when:
+        - uninstall_remove_clickhouse_user | bool
+        - ck_run_host_tasks | default(true) | bool
+
+- name: Uninstall Standalone Zookeeper
+  hosts: zookeeper_deploy:zookeeper_cluster
+  become: true
+  any_errors_fatal: true
+  vars_files:
+    - vars/common_config.yml
+    - vars/uninstall_config.yml
+    - ../roles/deploy_zookeeper/defaults/main.yml
+
+  pre_tasks:
+    - name: Validate uninstall inventory purpose guard for zookeeper play (run once)
+      ansible.builtin.assert:
+        that:
+          - not uninstall_require_inventory_guard | bool or ((dbbot_inventory_purpose | default('') | lower) == (uninstall_inventory_purpose | lower))
+        fail_msg: >-
+          uninstall_cluster.yml requires dbbot_inventory_purpose={{ uninstall_inventory_purpose }}.
+          current_inventory={{ inventory_file | default('unknown') }},
+          dbbot_inventory_purpose={{ dbbot_inventory_purpose | default('unset') }}.
+      run_once: true
+
+    - name: Assert uninstall confirmation completed (run once)
+      ansible.builtin.assert:
+        that:
+          - not uninstall_require_manual_confirm | bool or (hostvars['localhost'].uninstall_manual_confirm_ok | default(false) | bool)
+        fail_msg: "Manual confirmation was not completed."
+      run_once: true
+
+  tasks:
+    - name: Stop and disable Zookeeper service
+      ansible.builtin.systemd:
+        name: zookeeper
+        state: stopped
+        enabled: false
+      failed_when: false
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: Remove Zookeeper systemd service file
+      ansible.builtin.file:
+        path: /etc/systemd/system/zookeeper.service
+        state: absent
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: Remove Zookeeper installation directories
+      ansible.builtin.file:
+        path: "{{ zookeeper_cleanup_item }}"
+        state: absent
+      loop:
+        - "{{ zookeeper_install_base }}"
+        - "{{ zookeeper_data_dir }}"
+        - "{{ zookeeper_log_dir }}"
+      loop_control:
+        loop_var: zookeeper_cleanup_item
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: Reload systemd after Zookeeper cleanup
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: Remove zookeeper user
+      ansible.builtin.user:
+        name: "{{ zookeeper_user }}"
+        state: absent
+        remove: false
+      when:
+        - uninstall_remove_zookeeper_user | bool
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool

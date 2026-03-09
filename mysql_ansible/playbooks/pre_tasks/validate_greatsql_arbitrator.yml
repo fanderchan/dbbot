@@ -1,0 +1,7 @@
+- name: Check if greatsql_group_replication_arbitrator_hosts is a strict subset of mysql_mgr_hosts
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }}: `greatsql_group_replication_arbitrator_hosts` must be a strict subset of `mysql_mgr_hosts`"
+  when: >
+    (greatsql_group_replication_arbitrator_hosts | length >= mysql_mgr_hosts | length) or
+    (greatsql_group_replication_arbitrator_hosts | difference(mysql_mgr_hosts) | length > 0) or
+    (greatsql_group_replication_arbitrator_hosts | length == mysql_mgr_hosts | length)

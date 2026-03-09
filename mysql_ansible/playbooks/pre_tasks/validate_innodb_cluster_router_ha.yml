@@ -1,0 +1,92 @@
+---
+# InnoDB Cluster Router HA Configuration Validation
+
+# Import basic Router validation first
+- name: Import basic router validation
+  ansible.builtin.import_tasks: validate_innodb_cluster_router.yml
+
+# ============================================================
+# HA Specific Validation
+# ============================================================
+
+- name: Validate monitored ports are enabled
+  ansible.builtin.fail:
+    msg: >-
+      router_ports with monitor=true must also have enabled=true.
+      Invalid ports: {{ invalid_monitored_ports | join(', ') }}
+  vars:
+    invalid_monitored_ports: >-
+      {{
+        (router_ports | default({}) | dict2items
+        | selectattr('value.monitor', 'defined')
+        | selectattr('value.monitor')
+        | rejectattr('value.enabled', 'equalto', true)
+        | map(attribute='key')
+        | list)
+      }}
+  when: invalid_monitored_ports | length > 0
+
+- name: Validate router_vip is defined
+  ansible.builtin.fail:
+    msg: "router_vip is not defined. Please configure VIP address"
+  when: router_vip is not defined or router_vip == ""
+
+- name: Validate router_ha_nodes is defined and has 2 nodes
+  ansible.builtin.fail:
+    msg: |
+      router_ha_nodes must be defined and contain exactly 2 nodes.
+      Current configuration: {{ router_ha_nodes | default([]) | length }} nodes
+  when: router_ha_nodes is not defined or router_ha_nodes | length != 2
+
+- name: Validate HA nodes have required fields
+  ansible.builtin.fail:
+    msg: "Each node in router_ha_nodes must contain ip, role, and priority fields"
+  when: >
+    router_ha_nodes | selectattr('ip', 'undefined') | list | length > 0 or
+    router_ha_nodes | selectattr('role', 'undefined') | list | length > 0 or
+    router_ha_nodes | selectattr('priority', 'undefined') | list | length > 0
+
+- name: Validate HA nodes have one MASTER and one BACKUP
+  ansible.builtin.fail:
+    msg: "router_ha_nodes must have exactly one MASTER and one BACKUP"
+  when: >
+    (router_ha_nodes | selectattr('role', 'equalto', 'MASTER') | list | length != 1) or
+    (router_ha_nodes | selectattr('role', 'equalto', 'BACKUP') | list | length != 1)
+
+- name: Validate keepalived check interval exceeds health timeout
+  ansible.builtin.assert:
+    that:
+      - router_keepalived_check_interval > router_health_tcp_timeout
+    fail_msg: |
+      router_keepalived_check_interval ({{ router_keepalived_check_interval }}) must be greater than router_health_tcp_timeout ({{ router_health_tcp_timeout }}) to avoid overlapping executions.
+
+- name: Validate current host is in HA nodes
+  ansible.builtin.fail:
+    msg: |
+      Current host {{ ansible_default_ipv4.address }} is not in router_ha_nodes list.
+      Configured HA nodes: {{ router_ha_nodes | map(attribute='ip') | list | join(', ') }}
+  when: ansible_default_ipv4.address not in (router_ha_nodes | map(attribute='ip') | list)
+
+- name: Set current node HA role
+  ansible.builtin.set_fact:
+    router_current_node_role: "{{ (router_ha_nodes | selectattr('ip', 'equalto', ansible_default_ipv4.address) | first).role }}"
+    router_current_node_priority: "{{ (router_ha_nodes | selectattr('ip', 'equalto', ansible_default_ipv4.address) | first).priority }}"
+    router_ha_master_node: "{{ router_ha_nodes | selectattr('role', 'equalto', 'MASTER') | first }}"
+    router_ha_backup_node: "{{ router_ha_nodes | selectattr('role', 'equalto', 'BACKUP') | first }}"
+
+- name: Display Router HA configuration summary
+  ansible.builtin.debug:
+    msg:
+      - "======================================================"
+      - "MySQL Router HA Configuration Summary"
+      - "======================================================"
+      - "VIP Address:        {{ router_vip }}/{{ router_vip_netmask }}"
+      - "Network Interface:  {{ router_net_work_interface }}"
+      - "Current Node:       {{ ansible_default_ipv4.address }}"
+      - "Current Role:       {{ router_current_node_role }}"
+      - "Current Priority:   {{ router_current_node_priority }}"
+      - ""
+      - "HA Nodes:"
+      - "  - {{ router_ha_master_node.ip }} ({{ router_ha_master_node.role }}, priority: {{ router_ha_master_node.priority }})"
+      - "  - {{ router_ha_backup_node.ip }} ({{ router_ha_backup_node.role }}, priority: {{ router_ha_backup_node.priority }})"
+      - "======================================================"

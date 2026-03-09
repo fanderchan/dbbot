@@ -1,0 +1,21 @@
+---
+# Start MySQL Router service
+
+- name: Enable and start MySQL Router service
+  ansible.builtin.systemd:
+    name: "{{ router_service_name }}"
+    state: started
+    enabled: true
+
+- name: Wait for router to be ready
+  ansible.builtin.wait_for:
+    port: "{{ router_ports.rw.port | int }}"
+    host: "{{ ansible_default_ipv4.address }}"
+    delay: 3
+    timeout: 60
+
+- name: Verify router is running
+  ansible.builtin.command: pgrep -f mysqlrouter
+  register: mysql_router__pgrep
+  changed_when: false
+  failed_when: mysql_router__pgrep.rc != 0

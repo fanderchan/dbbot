@@ -1,0 +1,155 @@
+---
+# Ensure packages required by selected roles are ready on the control host
+
+- name: Ensure downloads directory exists when packages are needed (local)
+  ansible.builtin.file:
+    path: "{{ mysql_packages_dir }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+  when: >
+    '../roles/mysql_server' in roles_to_execute
+    or '../roles/setup_mysqlshell' in roles_to_execute
+    or '../roles/mysql_router' in roles_to_execute
+
+- name: Prepare MySQL Server package on control host
+  when: "'../roles/mysql_server' in roles_to_execute"
+  delegate_to: localhost
+  run_once: true
+  block:
+    - name: Check MySQL Server package availability (local)
+      ansible.builtin.stat:
+        path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
+      register: prepare_mysql_package_stat
+
+    - name: Fail if MySQL package missing and auto download is disabled (local)
+      ansible.builtin.fail:
+        msg: "MySQL package {{ mysql_package }} not found under {{ mysql_packages_dir }} and auto download is disabled"
+      when:
+        - not prepare_mysql_package_stat.stat.exists
+        - not fcs_auto_download_packages | bool
+
+    - name: Fail if auto download is enabled for unsupported db_type (local)
+      ansible.builtin.fail:
+        msg: "Auto download only supports db_type=mysql or greatsql. Please place {{ mysql_package }} in {{ mysql_packages_dir }}."
+      when:
+        - not prepare_mysql_package_stat.stat.exists
+        - fcs_auto_download_packages | bool
+        - db_type not in ['mysql', 'greatsql']
+
+    - name: Download MySQL binary tarball when missing (local)
+      ansible.builtin.get_url:
+        url: "https://dev.mysql.com/get/Downloads/MySQL-{{ mysql_version[0:3] }}/{{ mysql_package }}"
+        dest: "{{ mysql_packages_dir }}/{{ mysql_package }}"
+        mode: '0644'
+        timeout: 30
+        headers:
+          User-Agent: "Wget/1.21.1"
+      when:
+        - not prepare_mysql_package_stat.stat.exists
+        - fcs_auto_download_packages | bool
+        - db_type == 'mysql'
+
+    - name: Download GreatSQL binary tarball when missing (local)
+      ansible.builtin.get_url:
+        url: "https://product.greatdb.com/{{ 'GreatSQL-' + mysql_version + ('-Rapid' if mysql_version == '8.0.32-25' else '') }}/{{ mysql_package }}"
+        dest: "{{ mysql_packages_dir }}/{{ mysql_package }}"
+        mode: '0644'
+        timeout: 30
+        headers:
+          User-Agent: "Wget/1.21.1"
+      when:
+        - not prepare_mysql_package_stat.stat.exists
+        - fcs_auto_download_packages | bool
+        - db_type == 'greatsql'
+
+    - name: Verify MySQL package is present after preparation (local)
+      ansible.builtin.stat:
+        path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
+      register: prepare_mysql_package_verify
+      failed_when: not prepare_mysql_package_verify.stat.exists
+
+- name: Prepare MySQL Shell package on control host
+  when: "'../roles/setup_mysqlshell' in roles_to_execute"
+  delegate_to: localhost
+  run_once: true
+  vars:
+    prepare_mysqlshell_package: "{{ mysqlshell_package | default('mysql-shell-' + (mysqlshell_version | default(mysql_version)) + '-linux-glibc2.17-x86-64bit.tar.gz') }}"
+    prepare_mysqlshell_dir: "{{ mysqlshell_packages_dir | default(mysql_packages_dir) }}"
+  block:
+    - name: Ensure MySQL Shell download directory exists (local)
+      ansible.builtin.file:
+        path: "{{ prepare_mysqlshell_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Check MySQL Shell package availability (local)
+      ansible.builtin.stat:
+        path: "{{ prepare_mysqlshell_dir }}/{{ prepare_mysqlshell_package }}"
+      register: prepare_mysqlshell_package_stat
+
+    - name: Fail if MySQL Shell package missing and auto download is disabled (local)
+      ansible.builtin.fail:
+        msg: "MySQL Shell package {{ prepare_mysqlshell_package }} not found under {{ prepare_mysqlshell_dir }} and auto download is disabled"
+      when:
+        - not prepare_mysqlshell_package_stat.stat.exists
+        - not fcs_auto_download_packages | bool
+
+    - name: Download MySQL Shell package when missing (local)
+      ansible.builtin.get_url:
+        url: "https://cdn.mysql.com/Downloads/MySQL-Shell/{{ prepare_mysqlshell_package }}"
+        dest: "{{ prepare_mysqlshell_dir }}/{{ prepare_mysqlshell_package }}"
+        mode: '0644'
+        timeout: 300
+      when:
+        - not prepare_mysqlshell_package_stat.stat.exists
+        - fcs_auto_download_packages | bool
+
+    - name: Verify MySQL Shell package is present after preparation (local)
+      ansible.builtin.stat:
+        path: "{{ prepare_mysqlshell_dir }}/{{ prepare_mysqlshell_package }}"
+      register: prepare_mysqlshell_package_verify
+      failed_when: not prepare_mysqlshell_package_verify.stat.exists
+
+- name: Prepare MySQL Router package on control host
+  when: "'../roles/mysql_router' in roles_to_execute"
+  delegate_to: localhost
+  run_once: true
+  vars:
+    prepare_router_package: "{{ router_package | default('mysql-router-' + (router_version | default(mysql_version)) + '-linux-glibc2.17-x86_64.tar.xz') }}"
+    prepare_router_dir: "{{ router_packages_dir | default(mysql_packages_dir) }}"
+  block:
+    - name: Ensure MySQL Router download directory exists (local)
+      ansible.builtin.file:
+        path: "{{ prepare_router_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Check MySQL Router package availability (local)
+      ansible.builtin.stat:
+        path: "{{ prepare_router_dir }}/{{ prepare_router_package }}"
+      register: prepare_router_package_stat
+
+    - name: Fail if MySQL Router package missing and auto download is disabled (local)
+      ansible.builtin.fail:
+        msg: "MySQL Router package {{ prepare_router_package }} not found under {{ prepare_router_dir }} and auto download is disabled"
+      when:
+        - not prepare_router_package_stat.stat.exists
+        - not fcs_auto_download_packages | bool
+
+    - name: Download MySQL Router package when missing (local)
+      ansible.builtin.get_url:
+        url: "https://cdn.mysql.com/Downloads/MySQL-Router/{{ prepare_router_package }}"
+        dest: "{{ prepare_router_dir }}/{{ prepare_router_package }}"
+        mode: '0644'
+        timeout: 300
+      when:
+        - not prepare_router_package_stat.stat.exists
+        - fcs_auto_download_packages | bool
+
+    - name: Verify MySQL Router package is present after preparation (local)
+      ansible.builtin.stat:
+        path: "{{ prepare_router_dir }}/{{ prepare_router_package }}"
+      register: prepare_router_package_verify
+      failed_when: not prepare_router_package_verify.stat.exists

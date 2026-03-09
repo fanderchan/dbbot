@@ -1,0 +1,16 @@
+- name: Generate cluster.xml configuration (config.d)
+  ansible.builtin.template:
+    src: cluster.xml.j2
+    dest: "{{ clickhouse_config_d_dir }}/cluster.xml"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0644'
+
+- name: Generate users.xml with performance parameters
+  ansible.builtin.template:
+    src: users.xml.j2
+    dest: "{{ clickhouse_config_dir }}/users.xml"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0600'
+    backup: true

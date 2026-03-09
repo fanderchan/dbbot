@@ -1,0 +1,113 @@
+---
+# InnoDB Cluster Configuration Validation
+# Includes MySQL 8.4 version enforcement
+
+# ============================================================
+# MySQL Version Validation - Only 8.4.x Supported
+# ============================================================
+
+- name: Validate MySQL version is 8.4.x for InnoDB Cluster
+  ansible.builtin.fail:
+    msg: |
+      =====================================================
+      ERROR: InnoDB Cluster only supports MySQL 8.4.x!
+      =====================================================
+      Current configured version: {{ mysql_version }}
+      Supported version range: 8.4.0 - 8.4.x
+      
+      Please update mysql_version in common_config.yml to 8.4.x
+      Example: mysql_version: "8.4.6"
+      =====================================================
+  when: not mysql_version.startswith('8.4')
+
+- name: Validate db_type is mysql for InnoDB Cluster
+  ansible.builtin.fail:
+    msg: |
+      =====================================================
+      ERROR: InnoDB Cluster only supports db_type: mysql
+      =====================================================
+      Current configuration: db_type: {{ db_type }}
+      
+      InnoDB Cluster is MySQL's official high availability solution,
+      it does not support Percona or GreatSQL.
+      
+      Please update db_type in common_config.yml to mysql
+      =====================================================
+  when: db_type != 'mysql'
+
+# ============================================================
+# InnoDB Cluster Configuration Validation
+# ============================================================
+
+- name: Validate innodb_cluster_primary is defined
+  ansible.builtin.fail:
+    msg: "innodb_cluster_primary is not defined. Please configure primary node IP in vars/var_innodb_cluster.yml"
+  when: innodb_cluster_primary is not defined or innodb_cluster_primary == ""
+
+- name: Validate innodb_cluster_members is defined and not empty
+  ansible.builtin.fail:
+    msg: "innodb_cluster_members is not defined or empty. Please configure cluster member list"
+  when: innodb_cluster_members is not defined or innodb_cluster_members | length == 0
+
+- name: Validate cluster has at least 3 members
+  ansible.builtin.fail:
+    msg: |
+      =====================================================
+      WARNING: InnoDB Cluster requires at least 3 nodes
+      =====================================================
+      Current configured nodes: {{ innodb_cluster_members | length }}
+      
+      For high availability and automatic failover,
+      InnoDB Cluster needs at least 3 nodes (odd number recommended)
+      =====================================================
+  when: innodb_cluster_members | length < 3
+
+- name: Validate innodb_cluster_primary is in members list
+  ansible.builtin.fail:
+    msg: |
+      innodb_cluster_primary ({{ innodb_cluster_primary }}) 
+      must be included in innodb_cluster_members list
+  when: innodb_cluster_primary not in innodb_cluster_members
+
+- name: Validate cluster admin password complexity
+  ansible.builtin.assert:
+    that:
+      - mysql_cluster_admin_password | length >= 8
+      - mysql_cluster_admin_password | regex_search('[a-z]') is not none
+      - mysql_cluster_admin_password | regex_search('[A-Z]') is not none
+      - mysql_cluster_admin_password | regex_search('[0-9]') is not none
+      - mysql_cluster_admin_password | regex_search('[!@#$%^&*()]') is not none
+    fail_msg: |
+      mysql_cluster_admin_password does not meet complexity requirements:
+      - At least 8 characters
+      - Contains lowercase letter
+      - Contains uppercase letter
+      - Contains digit
+      - Contains special character (!@#$%^&*())
+  no_log: true
+
+# ============================================================
+# Inventory Validation
+# ============================================================
+
+- name: Validate current host is in cluster members
+  ansible.builtin.fail:
+    msg: |
+      Current host {{ ansible_default_ipv4.address }} is not in innodb_cluster_members list.
+      Please ensure inventory hosts match innodb_cluster_members configuration.
+  when: ansible_default_ipv4.address not in innodb_cluster_members
+
+- name: Display InnoDB Cluster configuration summary
+  ansible.builtin.debug:
+    msg: |
+      =====================================================
+      InnoDB Cluster Configuration Summary
+      =====================================================
+      MySQL Version: {{ mysql_version }}
+      Cluster Name: {{ innodb_cluster_name }}
+      Primary Node: {{ innodb_cluster_primary }}
+      Member Nodes: {{ innodb_cluster_members | join(', ') }}
+      MGR Port: {{ mysql_mgr_port }}
+      Cluster Admin User: {{ mysql_cluster_admin_user }}
+      =====================================================
+  run_once: true

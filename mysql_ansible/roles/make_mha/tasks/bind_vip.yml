@@ -1,0 +1,9 @@
+- name: Copy bind_vip.sh to /tmp/
+  ansible.builtin.template:
+    src: ../templates/bind_vip.sh.j2
+    dest: /tmp/bind_vip.sh
+    mode: '0755'
+
+- name: Bind vip
+  ansible.builtin.command: bash /tmp/bind_vip.sh
+  changed_when: true

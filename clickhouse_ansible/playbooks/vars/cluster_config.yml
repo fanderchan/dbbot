@@ -1,0 +1,49 @@
+# ClickHouse 集群配置
+# 拓扑信息从 inventory 自动解析，这里定义集群级别的配置
+
+# 集群名称（会覆盖 common_config.yml 中的设置）
+clickhouse_cluster_name: "example_3shards_2replicas"
+
+# 分片数量（从 inventory 自动计算，这里可以手动指定）
+# clickhouse_shard_count: 3
+
+# 副本数量（从 inventory 自动计算，这里可以手动指定）
+# clickhouse_replica_count: 2
+
+# 性能参数（会根据服务器规格自动计算，也可以手动指定）
+# max_memory_usage 计算方式：total_memory * 0.7 / replica_count
+# background_pool_size 计算方式：max(total_threads, 16)
+
+# 网络配置（基准端口）
+# 说明：
+# 1) 这里所有端口都按 instance_id 计算，不按 replica 计算。
+# 2) current_node_instance_id 默认取 instance_id；若未定义则回退 replica；再回退 1。
+# 3) 计算发生在 roles/deploy_clickhouse/tasks/calculate_params.yml。
+clickhouse_tcp_port_base: 9000
+clickhouse_http_port_base: 8123
+clickhouse_interserver_http_port_base: 9009
+clickhouse_mysql_port_base: 9004
+clickhouse_postgresql_port_base: 9005
+
+# 端口偏移规则（自动计算）
+# A) 主端口（步长=1）：
+#    tcp         = clickhouse_tcp_port_base + (instance_id - 1)
+#    http        = clickhouse_http_port_base + (instance_id - 1)
+#    interserver = clickhouse_interserver_http_port_base + (instance_id - 1)
+#    示例：
+#    instance_id=1: tcp=9000, http=8123, interserver=9009
+#    instance_id=2: tcp=9001, http=8124, interserver=9010
+#    instance_id=3: tcp=9002, http=8125, interserver=9011
+# B) 协议兼容端口（步长=clickhouse_aux_port_stride，默认 10）：
+#    mysql       = clickhouse_mysql_port_base + (instance_id - 1) * clickhouse_aux_port_stride
+#    postgresql  = clickhouse_postgresql_port_base + (instance_id - 1) * clickhouse_aux_port_stride
+#
+# 当 clickhouse_aux_port_stride=10 时示例：
+# instance_id=1: mysql=9004, postgresql=9005
+# instance_id=2: mysql=9014, postgresql=9015
+# instance_id=3: mysql=9024, postgresql=9025
+#
+# 兼容理解（仅当 inventory 里 instance_id 与 replica 一一对应时）：
+# replica 1: tcp=9000, http=8123, interserver=9009
+# replica 2: tcp=9001, http=8124, interserver=9010
+# replica 3: tcp=9002, http=8125, interserver=9011

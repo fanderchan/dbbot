@@ -1,0 +1,9 @@
+- name: Change some setting in my.cnf
+  ansible.builtin.import_tasks: change_setting_in_mycnf.yml
+
+- name: Create Keepalived HA user in mysql(master node)
+  ansible.builtin.import_tasks: create_kha_user.yml
+  when: master_ip in ansible_all_ipv4_addresses
+
+- name: Install keepalived
+  ansible.builtin.import_tasks: install_keepalived.yml

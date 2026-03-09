@@ -1,0 +1,12 @@
+This directory contains a portable Ansible runtime redistribution and should
+be treated as mixed third-party content.
+
+Primary upstream:
+- Ansible: https://github.com/ansible/ansible
+- Upstream license: GPL-3.0-or-later
+
+Additional notes:
+- Bundled collections and Python dependencies may carry their own licenses.
+- Preserve bundled COPYING / LICENSE files inside this directory tree.
+- This directory is excluded from the repository-wide Apache-2.0 default
+  unless a specific file states otherwise.

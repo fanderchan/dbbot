@@ -1,0 +1,40 @@
+- name: Deploy and configure node_exporter and mysqld_exporter
+  hosts: dbbot_mysql
+  become: true
+  any_errors_fatal: true
+  max_fail_percentage: 1
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_exporter_install.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_exporter_install.yml
+  vars:
+    roles_to_execute:
+      - { name: "../roles/node_exporter", condition: "{{ node_exporter_install }}" }
+      - { name: "../roles/mysqld_exporter", condition: "{{ mysqld_exporter_install }}" }
+  pre_tasks:
+    - name: Import tasks to validate setting in common_config.yml
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Import tasks to check exporter ports
+      ansible.builtin.import_tasks: pre_tasks/check_exporter_ports.yml
+
+    - name: Import tasks to check if packages exist
+      ansible.builtin.import_tasks: pre_tasks/check_if_exporter_packages_exist.yml
+
+    - name: Import tasks to confirm deployment
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+
+  tasks:
+    - name: Include roles for exporter installation
+      ansible.builtin.include_role:
+        name: "{{ exporter_role.name }}"
+      loop: "{{ roles_to_execute }}"
+      loop_control:
+        loop_var: exporter_role
+      when: exporter_role.condition

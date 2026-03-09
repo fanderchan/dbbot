@@ -1,0 +1,26 @@
+---
+# Setup MySQL Router account using cluster.setupRouterAccount()
+# Reference: https://dev.mysql.com/doc/mysql-shell/8.0/en/configuring-router-user.html
+
+- name: Create setup router account script
+  ansible.builtin.template:
+    src: setup_router_account.js.j2
+    dest: /tmp/setup_router_account.js
+    mode: '0600'
+
+- name: Run setup router account script
+  ansible.builtin.command: >
+    {{ mysqlsh_path }} --no-wizard --js -f /tmp/setup_router_account.js
+  register: make_innodb_cluster__setup_router_result
+  changed_when: "'has been configured successfully' in make_innodb_cluster__setup_router_result.stdout"
+
+- name: Display setup router account result
+  ansible.builtin.debug:
+    var: make_innodb_cluster__setup_router_result.stdout_lines
+  when: make_innodb_cluster__setup_router_result.stdout_lines | length > 0
+
+- name: Remove setup router account script
+  ansible.builtin.file:
+    path: /tmp/setup_router_account.js
+    state: absent
+

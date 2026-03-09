@@ -1,0 +1,12 @@
+- name: Ensure group -> {{ prometheus_run_user_group }} exists
+  ansible.builtin.group:
+    name: "{{ prometheus_run_user_group }}"
+    state: present
+
+- name: Create Prometheus user -> {{ prometheus_run_user }} with no login
+  ansible.builtin.user:
+    name: "{{ prometheus_run_user }}"
+    shell: /sbin/nologin
+    home: /home/{{ prometheus_run_user }}
+    group: "{{ prometheus_run_user_group }}"
+    state: present

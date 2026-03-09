@@ -1,0 +1,16 @@
+PORT={{ mysql_port }}
+CNF_FILE={{ mysql_config_file | default(mycnf_dir ~ '/my.cnf') }}
+SOCKET={{ socket }}
+MYSQL_BIN={{ mysql_software_dir }}/bin/mysql
+MYSQLBINLOG_BIN={{ mysql_software_dir }}/bin/mysqlbinlog
+BACKUP_DIR_BASE={{ backup_base_dir }}
+BACKUP_USER='{{ mysql_backup_user | replace("'", "'\"'\"'") }}'
+BACKUP_PASS='{{ mysql_backup_password | replace("'", "'\"'\"'") }}'
+BACKUP_TOPOLOGY={{ backup_topology }}
+BACKUP_SCOPE={{ backup_scope }}
+BACKUP_PREFERRED_HOST='{{ backup_preferred_host | default("") }}'
+KEEP_FULL_BACKUP_LAST_COPYS={{ backup_keep_full }}
+EXPIRE_BINLOG_DAYS={{ backup_keep_binlog_days }}
+INVENTORY_HOST='{{ inventory_hostname }}'
+BACKUP_CLONE_SCRIPT='{{ backup_script_path }}'
+BACKUP_PURGE_SCRIPT='{{ backup_purge_script_path }}'

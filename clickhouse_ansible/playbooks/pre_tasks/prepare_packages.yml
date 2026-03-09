@@ -1,0 +1,248 @@
+---
+# Ensure ClickHouse packages directory exists and packages are ready on the control host
+
+- name: Mark whether ClickHouse version needs build-number resolution
+  ansible.builtin.set_fact:
+    clickhouse_version_input: "{{ clickhouse_version | string }}"
+    clickhouse_version_needs_resolution: "{{ (clickhouse_version | string) is match('^[0-9]+\\.[0-9]+\\.[0-9]+$') }}"
+  run_once: true
+  when: "'../roles/deploy_clickhouse' in roles_to_execute"
+
+- name: Set required ClickHouse package basenames
+  ansible.builtin.set_fact:
+    clickhouse_package_basenames: >-
+      {{
+        [
+          'clickhouse-common-static',
+          'clickhouse-server',
+          'clickhouse-client'
+        ]
+        + (
+          ['clickhouse-common-static-dbg']
+          if (clickhouse_install_debug_package | default(false) | bool)
+          else []
+        )
+      }}
+  run_once: true
+  when: "'../roles/deploy_clickhouse' in roles_to_execute"
+
+- name: Resolve ClickHouse version from local packages when 3-part version is provided
+  ansible.builtin.shell: |
+    set -euo pipefail
+    base="{{ clickhouse_version }}"
+    for f in "{{ clickhouse_packages_dir }}"/clickhouse-common-static-"${base}".*-amd64.tgz; do
+      [ -e "$f" ] || continue
+      bn="$(basename "$f")"
+      echo "${bn#clickhouse-common-static-}" | sed -E 's/-amd64\.tgz$//'
+    done | sort -V | tail -n 1
+  args:
+    executable: /bin/bash
+  register: clickhouse_local_resolved_version
+  changed_when: false
+  failed_when: false
+  delegate_to: localhost
+  run_once: true
+  when:
+    - "'../roles/deploy_clickhouse' in roles_to_execute"
+    - clickhouse_version_needs_resolution | default(false)
+
+- name: Resolve ClickHouse version from upstream repository when local packages are absent
+  ansible.builtin.shell: |
+    set -euo pipefail
+    base="{{ clickhouse_version }}"
+    index="$(curl -fsSL --connect-timeout 5 --max-time 40 https://packages.clickhouse.com/tgz/stable/ || true)"
+    mapfile -t candidates < <(
+      printf '%s\n' "${index}" \
+        | grep -oE "clickhouse-client-${base//./\\.}\\.[0-9]+-amd64\\.tgz" \
+        | sed -E 's/^clickhouse-client-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)-amd64\.tgz$/\1/' \
+        | sort -V -u -r
+    )
+
+    if [ -z "${candidates[*]:-}" ]; then
+      bregex="${base//./\\.}"
+      mapfile -t candidates < <(
+        curl -fsSL --connect-timeout 5 --max-time 40 https://packages.clickhouse.com/deb/dists/stable/main/binary-amd64/Packages.gz \
+          | gzip -dc \
+          | awk '$1=="Package:" {pkg=$2} $1=="Version:" && pkg=="clickhouse-common-static" {print $2}' \
+          | grep -E "^${bregex}\\.[0-9]+$" \
+          | sort -V -u -r
+      )
+    fi
+
+    for ver in "${candidates[@]:-}"; do
+      ok=true
+      for pkg in {% for pkg in clickhouse_package_basenames | default(['clickhouse-common-static', 'clickhouse-server', 'clickhouse-client']) %}{{ pkg }} {% endfor %}; do
+        url="https://packages.clickhouse.com/tgz/stable/${pkg}-${ver}-amd64.tgz"
+        code="$(curl -m 10 -s -o /dev/null -w '%{http_code}' "${url}" || true)"
+        if [ "${code}" != "200" ]; then
+          ok=false
+          break
+        fi
+      done
+      if [ "${ok}" = true ]; then
+        echo "${ver}"
+        exit 0
+      fi
+    done
+  args:
+    executable: /bin/bash
+  register: clickhouse_remote_resolved_version
+  changed_when: false
+  failed_when: false
+  delegate_to: localhost
+  run_once: true
+  when:
+    - "'../roles/deploy_clickhouse' in roles_to_execute"
+    - clickhouse_version_needs_resolution | default(false)
+    - (clickhouse_local_resolved_version.stdout | default('') | trim) == ''
+
+- name: Set effective ClickHouse version
+  ansible.builtin.set_fact:
+    clickhouse_resolved_version: >-
+      {{
+        (
+          clickhouse_local_resolved_version.stdout
+          if (clickhouse_local_resolved_version.stdout | default('') | trim) != ''
+          else clickhouse_remote_resolved_version.stdout | default('')
+        ) | trim
+        if (clickhouse_version_needs_resolution | default(false))
+        else (clickhouse_version | string)
+      }}
+  run_once: true
+  when: "'../roles/deploy_clickhouse' in roles_to_execute"
+
+- name: Fail when 3-part ClickHouse version cannot be resolved
+  ansible.builtin.fail:
+    msg: |
+      Unable to resolve a 4-part ClickHouse version from "{{ clickhouse_version }}".
+      Expected examples: 22.11.2.30, 23.6.1.1524
+      Suggestions:
+      1) Ensure control host can access https://packages.clickhouse.com
+      2) Or pre-download packages into {{ clickhouse_packages_dir }} using full 4-part version names
+      3) Or set clickhouse_version to an explicit 4-part version
+  run_once: true
+  when:
+    - "'../roles/deploy_clickhouse' in roles_to_execute"
+    - clickhouse_version_needs_resolution | default(false)
+    - (clickhouse_resolved_version | default('') | trim) == ''
+
+- name: Apply effective ClickHouse version to all hosts
+  ansible.builtin.set_fact:
+    clickhouse_effective_version: "{{ hostvars[ansible_play_hosts_all[0]].clickhouse_resolved_version }}"
+  when:
+    - "'../roles/deploy_clickhouse' in roles_to_execute"
+    - hostvars[ansible_play_hosts_all[0]].clickhouse_resolved_version is defined
+    - (hostvars[ansible_play_hosts_all[0]].clickhouse_resolved_version | trim) != ''
+
+- name: Display effective ClickHouse version
+  ansible.builtin.debug:
+    msg: >-
+      ClickHouse version input={{ hostvars[ansible_play_hosts_all[0]].clickhouse_version_input | default(clickhouse_version) }}
+      effective={{ hostvars[ansible_play_hosts_all[0]].clickhouse_effective_version | default(hostvars[ansible_play_hosts_all[0]].clickhouse_resolved_version | default(clickhouse_version)) }}
+  run_once: true
+  when: "'../roles/deploy_clickhouse' in roles_to_execute"
+
+- name: Ensure downloads directory exists when packages are needed (local)
+  ansible.builtin.file:
+    path: "{{ clickhouse_packages_dir }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+  when: "'../roles/deploy_clickhouse' in roles_to_execute"
+
+- name: Prepare ClickHouse packages on control host
+  when: "'../roles/deploy_clickhouse' in roles_to_execute"
+  delegate_to: localhost
+  run_once: true
+  block:
+    - name: Set required packages list
+      ansible.builtin.set_fact:
+        required_packages: >-
+          {{
+            [
+              {
+                'name': 'clickhouse-common-static-' ~ (clickhouse_effective_version | default(clickhouse_version)) ~ '-amd64.tgz',
+                'url': 'https://packages.clickhouse.com/tgz/stable/clickhouse-common-static-' ~ (clickhouse_effective_version | default(clickhouse_version)) ~ '-amd64.tgz'
+              },
+              {
+                'name': 'clickhouse-server-' ~ (clickhouse_effective_version | default(clickhouse_version)) ~ '-amd64.tgz',
+                'url': 'https://packages.clickhouse.com/tgz/stable/clickhouse-server-' ~ (clickhouse_effective_version | default(clickhouse_version)) ~ '-amd64.tgz'
+              },
+              {
+                'name': 'clickhouse-client-' ~ (clickhouse_effective_version | default(clickhouse_version)) ~ '-amd64.tgz',
+                'url': 'https://packages.clickhouse.com/tgz/stable/clickhouse-client-' ~ (clickhouse_effective_version | default(clickhouse_version)) ~ '-amd64.tgz'
+              }
+            ]
+            + (
+              [
+                {
+                  'name': 'clickhouse-common-static-dbg-' ~ (clickhouse_effective_version | default(clickhouse_version)) ~ '-amd64.tgz',
+                  'url': 'https://packages.clickhouse.com/tgz/stable/clickhouse-common-static-dbg-' ~ (clickhouse_effective_version | default(clickhouse_version)) ~ '-amd64.tgz'
+                }
+              ]
+              if (clickhouse_install_debug_package | default(false) | bool)
+              else []
+            )
+          }}
+    - name: Set required package names
+      ansible.builtin.set_fact:
+        required_package_names: "{{ required_packages | map(attribute='name') | list }}"
+
+    - name: Check each required package exists (local)
+      ansible.builtin.stat:
+        path: "{{ clickhouse_packages_dir }}/{{ pkg.name }}"
+      register: package_check_results
+      loop: "{{ required_packages }}"
+      loop_control:
+        loop_var: pkg
+      delegate_to: localhost
+      run_once: true
+
+    - name: Fail if packages missing and auto download is disabled (local)
+      ansible.builtin.fail:
+        msg: |
+          ClickHouse packages not found under {{ clickhouse_packages_dir }} and auto download is disabled.
+          Required packages:
+          {%- for pkg_name in required_package_names %}
+          - {{ pkg_name }}
+          {%- endfor %}
+          
+          Please download them manually or set fcs_auto_download_packages=true
+      when:
+        - package_check_results.results | selectattr('stat.exists') | list | length < (required_packages | length)
+        - not (fcs_auto_download_packages | default(false) | bool)
+      delegate_to: localhost
+      run_once: true
+
+    - name: Download ClickHouse packages when missing (local)
+      ansible.builtin.get_url:
+        url: "{{ pkg.url }}"
+        dest: "{{ clickhouse_packages_dir }}/{{ pkg.name }}"
+        mode: '0644'
+        timeout: 300
+      loop: "{{ required_packages }}"
+      loop_control:
+        loop_var: pkg
+        index_var: pkg_index
+      when:
+        - fcs_auto_download_packages | default(false) | bool
+        - package_check_results.results[pkg_index].stat.exists | default(false) == false
+      delegate_to: localhost
+      run_once: true
+
+    - name: Verify all ClickHouse packages are present after preparation (local)
+      ansible.builtin.find:
+        paths: "{{ clickhouse_packages_dir }}"
+        patterns: "{{ required_package_names }}"
+        recurse: false
+      register: prepare_ck_packages_verify
+      failed_when: prepare_ck_packages_verify.files | length < (required_packages | length)
+      delegate_to: localhost
+      run_once: true
+
+    - name: Display prepared packages
+      ansible.builtin.debug:
+        msg: "ClickHouse packages ready: {{ prepare_ck_packages_verify.files | map(attribute='path') | map('basename') | list }}"
+      delegate_to: localhost
+      run_once: true

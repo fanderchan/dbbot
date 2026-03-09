@@ -1,0 +1,3 @@
+grep  $'#add by dbbot MHA install playbook\n{{ mysql_user }}   ALL=(ALL)       NOPASSWD: /usr/sbin/ip,/sbin/arping,/usr/bin/scp' /etc/sudoers ||
+{ echo -e '#add by dbbot MHA install playbook\n{{ mysql_user }}   ALL=(ALL)       NOPASSWD: /usr/sbin/ip,/sbin/arping,/usr/bin/scp' | sudo EDITOR='tee -a' visudo; }
+

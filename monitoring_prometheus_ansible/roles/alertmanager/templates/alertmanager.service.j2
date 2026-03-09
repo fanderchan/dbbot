@@ -1,0 +1,18 @@
+[Unit]
+Description=Alertmanager Service
+After=network.target
+
+[Service]
+Type=simple
+User={{ alertmanager_run_user }}
+Group={{ alertmanager_run_user_group }}
+Environment=TZ=Asia/Shanghai
+ExecStart=/usr/local/alertmanager/alertmanager \
+  --config.file=/usr/local/alertmanager/alertmanager.yml \
+  --storage.path=/usr/local/alertmanager/data \
+  --web.listen-address=:{{ alertmanager_port }}
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

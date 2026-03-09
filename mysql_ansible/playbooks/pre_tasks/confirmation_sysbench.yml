@@ -1,0 +1,19 @@
+- name: Display sysbench install variables
+  ansible.builtin.debug:
+    msg:
+      - "Hosts to be affected by {{ ansible_play_name }}: {{ play_hosts | join(', ') }}"
+      - "sysbench_install_path: {{ sysbench_install_path }}"
+  run_once: true
+  delegate_to: localhost
+
+- name: Prompt user for confirmation
+  ansible.builtin.pause:
+    prompt: "This will perform {{ ansible_play_name }} on the displayed hosts. Please type 'confirm' to continue or press Ctrl+C to cancel."
+  register: confirmation
+  run_once: true
+  delegate_to: localhost
+
+- name: Check if user confirmed
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }} not confirmed, exiting."
+  when: confirmation.user_input != 'confirm'

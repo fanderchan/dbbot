@@ -1,0 +1,2 @@
+create user {{mysql_kha_user}}@'{{ sub_nets }}' identified by '{{ mysql_kha_password }}' ;
+grant all privileges on *.* to  {{mysql_kha_user}}@'{{ sub_nets }}' ;

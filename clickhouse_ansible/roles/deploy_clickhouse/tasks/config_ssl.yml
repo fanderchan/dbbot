@@ -1,0 +1,30 @@
+- name: Generate SSL server key and certificate
+  ansible.builtin.shell: |
+    openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 \
+      -keyout /etc/clickhouse-server/server.key \
+      -out /etc/clickhouse-server/server.crt
+  args:
+    creates: /etc/clickhouse-server/server.crt
+
+- name: Set ownership for SSL key and certificate
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0600'
+  loop:
+    - /etc/clickhouse-server/server.key
+    - /etc/clickhouse-server/server.crt
+
+- name: Generate Diffie-Hellman parameters
+  ansible.builtin.shell: |
+    openssl dhparam -out /etc/clickhouse-server/dhparam.pem {{ clickhouse_dhparam_bits | default(2048) }}
+  args:
+    creates: /etc/clickhouse-server/dhparam.pem
+
+- name: Set ownership for dhparam.pem
+  ansible.builtin.file:
+    path: /etc/clickhouse-server/dhparam.pem
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0600'

@@ -1,0 +1,16 @@
+## sample ##
+#- targets:
+#  - 192.0.2.131:9104
+#  labels:
+#    instance: 192.0.2.132:3306
+#    environment: production
+#    region: cn-sz-1
+#    cluster: mysql3306
+
+#- targets:
+#  - 192.0.2.132:9104
+#  labels:
+#    instance: 192.0.2.131:3306
+#    environment: production
+#    region: cn-sz-1
+#    cluster: mysql3306

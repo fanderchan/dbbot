@@ -1,0 +1,50 @@
+- name: Check if user confirmed
+  ansible.builtin.fail:
+    msg: "Unsafe uninstall not confirmed, exiting."
+  when: confirmation.user_input != 'confirm'
+
+- name: Ensure that directories to be deleted are safe
+  ansible.builtin.assert:
+    that:
+      - item not in ['/', '/boot', '/dev', '/etc', '/lib', '/proc', '/root', '/sys', '/usr', '/var', '/home', '/home/{{ mysql_user }}', '/tmp', '/proc', '/sys']
+      - item != ''
+    fail_msg: "Unsafe directory detected: {{ item }}. Aborting."
+    success_msg: "Directory {{ item }} is safe to delete."
+  loop:
+    - "{{ datadir | realpath }}"
+    - "{{ tmpdir | realpath }}"
+    - "{{ binlog_dir | realpath }}"
+    - "{{ relaylog_dir | realpath }}"
+    - "{{ redolog_dir | realpath }}"
+  loop_control:
+    loop_var: item
+
+- name: Stop mysql-service
+  ansible.builtin.systemd:
+    name: "{{ mysql_service_name }}"
+    state: stopped
+
+- name: Delete MySQL startup script
+  ansible.builtin.file:
+    path: "/usr/lib/systemd/system/{{ mysql_service_name }}.service"
+    state: absent
+
+- name: Reload systemd configuration
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Remove MySQL directories and files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  become_user: "{{ mysql_user }}"
+  when: item is not none
+  loop:
+    - "{{ datadir }}"
+    - "{{ tmpdir }}"
+    - "{{ binlog_dir }}"
+    - "{{ relaylog_dir }}"
+    - "{{ redolog_dir }}"
+  loop_control:
+    loop_var: item

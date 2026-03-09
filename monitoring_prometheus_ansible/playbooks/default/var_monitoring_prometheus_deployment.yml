@@ -1,0 +1,3 @@
+prometheus_url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_package | regex_replace('prometheus-(.*)\\.linux-amd64\\.tar\\.gz', '\\1') }}/{{ prometheus_package }}"
+grafana_url: "https://dl.grafana.com/enterprise/release/{{ grafana_package }}"
+alertmanager_url: "https://github.com/prometheus/alertmanager/releases/download/v{{ alertmanager_package | regex_replace('alertmanager-(.*)\\.linux-amd64\\.tar\\.gz', '\\1') }}/{{ alertmanager_package }}"

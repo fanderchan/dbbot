@@ -1,0 +1,44 @@
+- name: Set timezone to Asia/Shanghai using timedatectl (systemd systems)
+  ansible.builtin.command: timedatectl set-timezone "{{ timezone | default('Asia/Shanghai') }}"
+  register: timedatectl_result
+  changed_when: timedatectl_result.rc == 0
+  failed_when: false
+  when: ansible_service_mgr == "systemd"
+
+- name: Set timezone to Asia/Shanghai by copying timezone file (fallback method)
+  ansible.builtin.copy:
+    src: "/usr/share/zoneinfo/{{ timezone | default('Asia/Shanghai') }}"
+    dest: /etc/localtime
+    owner: root
+    group: root
+    mode: '0644'
+    remote_src: yes
+  when: ansible_service_mgr != "systemd" or timedatectl_result.rc != 0
+
+- name: Verify timezone setting
+  ansible.builtin.command: timedatectl
+  register: timezone_result
+  changed_when: false
+  failed_when: false
+  when: ansible_service_mgr == "systemd"
+
+- name: Verify timezone setting (alternative method)
+  ansible.builtin.command: date +%Z
+  register: timezone_result_alt
+  changed_when: false
+  failed_when: false
+  when: ansible_service_mgr != "systemd"
+
+- name: Display timezone information (systemd)
+  ansible.builtin.debug:
+    msg: "Timezone set to: {{ timezone_result.stdout }}"
+  when: 
+    - ansible_service_mgr == "systemd"
+    - timezone_result is defined
+
+- name: Display timezone information (non-systemd)
+  ansible.builtin.debug:
+    msg: "Timezone set to: {{ timezone_result_alt.stdout | default('Asia/Shanghai') }}"
+  when: 
+    - ansible_service_mgr != "systemd"
+    - timezone_result_alt is defined

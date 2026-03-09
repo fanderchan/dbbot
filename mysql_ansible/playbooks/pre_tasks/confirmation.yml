@@ -1,0 +1,92 @@
+- name: Set server_specs_processor_count and server_specs_memtotal_gb based on server_specs
+  set_fact:
+    server_specs_processor_count: "{{ server_specs.split('c')[0] | int }}"
+    server_specs_memtotal_gb: "{{ (server_specs.split('c')[1]).rstrip('g') | int }}"
+  when: server_specs != "auto"
+
+- name: Gen random MySQL server_id
+  set_fact:
+    mysql_server_id: "{{ 4294967295 |random(1) }}"
+
+- name: Collect mysql_server_id to a list on localhost
+  set_fact:
+    all_mysql_server_ids: >-
+      {{ groups['dbbot_mysql']
+         | map('extract', hostvars, 'mysql_server_id')
+         | select('defined')
+         | list }}
+  delegate_to: localhost
+  run_once: true
+
+- name: Check for duplicate mysql_server_id
+  assert:
+    that: "{{ all_mysql_server_ids | unique | length == all_mysql_server_ids | length }}"
+    msg: "Duplicate mysql_server_id detected!"
+  run_once: true
+  delegate_to: localhost
+
+- name: Generate random UUID if mgr_use_random_uuid is set to 1
+  command: uuidgen
+  register: random_uuid_result
+  when: mgr_use_random_uuid == 1
+  run_once: true
+  delegate_to: localhost
+
+- set_fact:
+    mysql_group_replication_group_name: "{{ random_uuid_result.stdout }}"
+  when: mgr_use_random_uuid == 1
+
+- name: Display the list of target hosts and additional information
+  ansible.builtin.debug:
+    msg: "{{ base_msg
+            + master_ip_msg + slave_ips_msg + vip_msg + manager_ip_msg
+            + mysqld_exporter_port_msg + mysqld_exporter_install_type_msg + mysqld_exporter_package_msg + mysqld_exporter_install_dir_msg
+            + node_exporter_port_msg + node_exporter_install_type_msg + node_exporter_package_msg + node_exporter_install_dir_msg
+            + mycnf_dir_msg + datadir_msg + tmpdir_msg + binlog_dir_msg + relaylog_dir_msg + redolog_dir_msg + socket_dir_msg + mysqlx_socket_dir_msg }}"
+  run_once: true
+  delegate_to: localhost
+  vars:
+    base_msg:
+      - "Hosts to be affected by {{ ansible_play_name }}: {{ play_hosts | join(', ') }}"
+      - "DB type: {{ db_type }}"
+      - "MySQL port: {{ mysql_port }}"
+      - "MySQL service name: {{ mysql_service_name }}"
+      - "MySQL version: {{ mysql_version }}"
+      - "Server specs: {{ server_specs }}"
+      - "Roles to be executed: {{ roles_to_execute | join(', ') }}"   
+    # master, slave, VIP, manager info
+    master_ip_msg: "{% if master_ip is defined %}[\"Master IP: {{ master_ip }}\"]{% else %}[]{% endif %}"
+    slave_ips_msg: "{% if slave_ips is defined %}[\"Slave IPs: {{ slave_ips | join(', ') }}\"]{% else %}[]{% endif %}"
+    vip_msg: "{% if vip is defined %}[\"VIP: {{ vip }}\"]{% else %}[]{% endif %}"
+    manager_ip_msg: "{% if manager_ip is defined %}[\"Manager IP: {{ manager_ip }}\"]{% else %}[]{% endif %}"   
+    # mysqld_exporter messages
+    mysqld_exporter_port_msg: "{% if mysqld_exporter_port is defined %}[\"mysqld_exporter port: {{ mysqld_exporter_port_resolved | int }}{% if (mysqld_exporter_port | string) == 'auto' %} (auto){% endif %}\"]{% else %}[]{% endif %}"
+    mysqld_exporter_install_type_msg: "{% if mysqld_exporter_install_type is defined %}[\"mysqld_exporter install type: {{ mysqld_exporter_install_type }}\"]{% else %}[]{% endif %}"
+    mysqld_exporter_package_msg: "{% if (mysqld_exporter_install_type | default('dbbot')) == 'package' and (mysqld_exporter_package is defined) %}[\"mysqld_exporter package: {{ mysqld_exporter_package }}\"]{% else %}[]{% endif %}"
+    mysqld_exporter_install_dir_msg: "{% if mysqld_exporter_install_dir is defined %}[\"mysqld_exporter install dir: {{ mysqld_exporter_install_dir }}\"]{% else %}[]{% endif %}"   
+    # node_exporter messages
+    node_exporter_port_msg: "{% if node_exporter_port is defined %}[\"node_exporter port: {{ node_exporter_port }}\"]{% else %}[]{% endif %}"
+    node_exporter_install_type_msg: "{% if node_exporter_install_type is defined %}[\"node_exporter install type: {{ node_exporter_install_type }}\"]{% else %}[]{% endif %}"
+    node_exporter_package_msg: "{% if (node_exporter_install_type | default('dbbot')) == 'package' and node_exporter_package is defined %}[\"node_exporter package: {{ node_exporter_package }}\"]{% else %}[]{% endif %}"
+    node_exporter_install_dir_msg: "{% if node_exporter_install_dir is defined %}[\"node_exporter install dir: {{ node_exporter_install_dir }}\"]{% else %}[]{% endif %}"
+    # Additional MySQL directory messages
+    mycnf_dir_msg: "{% if mycnf_dir is defined %}[\"mycnf_dir: {{ mycnf_dir }}\"]{% else %}[]{% endif %}"
+    datadir_msg: "{% if datadir is defined %}[\"datadir: {{ datadir }}\"]{% else %}[]{% endif %}"
+    tmpdir_msg: "{% if tmpdir is defined %}[\"tmpdir: {{ tmpdir }}\"]{% else %}[]{% endif %}"
+    binlog_dir_msg: "{% if binlog_dir is defined %}[\"binlog_dir: {{ binlog_dir }}\"]{% else %}[]{% endif %}"
+    relaylog_dir_msg: "{% if relaylog_dir is defined %}[\"relaylog_dir: {{ relaylog_dir }}\"]{% else %}[]{% endif %}"
+    redolog_dir_msg: "{% if redolog_dir is defined %}[\"redolog_dir: {{ redolog_dir }}\"]{% else %}[]{% endif %}"
+    socket_dir_msg: "{% if socket_dir is defined %}[\"socket_dir: {{ socket_dir }}\"]{% else %}[]{% endif %}"
+    mysqlx_socket_dir_msg: "{% if mysqlx_socket_dir is defined %}[\"mysqlx_socket_dir: {{ mysqlx_socket_dir }}\"]{% else %}[]{% endif %}"
+
+- name: Prompt user for confirmation
+  ansible.builtin.pause:
+    prompt: "This will perform {{ ansible_play_name }} on the displayed hosts. Please type 'confirm' to continue or press Ctrl+C to cancel."
+  register: confirmation
+  run_once: true
+  delegate_to: localhost
+
+- name: Check if user confirmed
+  ansible.builtin.fail:
+    msg: "{{ ansible_play_name }} not confirmed, exiting."
+  when: confirmation.user_input != 'confirm'

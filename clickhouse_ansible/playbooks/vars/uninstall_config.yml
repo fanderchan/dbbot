@@ -1,0 +1,26 @@
+# ClickHouse / ZooKeeper 卸载参数
+
+# 卸载执行保护
+uninstall_require_manual_confirm: true
+uninstall_confirm_phrase: ""
+uninstall_require_inventory_guard: true
+uninstall_inventory_purpose: "deploy"
+
+# ClickHouse 清理范围
+uninstall_disable_services: true
+uninstall_purge_clickhouse_config: true
+uninstall_purge_clickhouse_data: true
+uninstall_purge_clickhouse_logs: true
+uninstall_remove_clickhouse_binaries: true
+uninstall_remove_clickhouse_fast_login: true
+
+# 是否清理 NFS 客户端挂载痕迹
+uninstall_remove_backup_mount: false
+uninstall_backup_mount_point: "/backup"
+uninstall_backup_mount_script: "/usr/local/sbin/mount_clickhouse_backup_nfs.sh"
+uninstall_backup_mount_log: "/var/log/mount_clickhouse_backup_nfs.log"
+
+# ZooKeeper 清理范围（Keeper 模式不会触发 zookeeper.service 清理）
+uninstall_purge_zookeeper: true
+uninstall_remove_zookeeper_user: false
+uninstall_remove_clickhouse_user: false

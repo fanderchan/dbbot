@@ -1,0 +1,208 @@
+#!/bin/bash
+
+
+# This script includes backup, upload, and cleanup logic. Upload requires SSH keyless access to the management host; the upload step is part of backupops centralized management and is commented out here.
+# Only back up single-node or replica servers. For an MHA topology (one master, two replicas), create a nobackup file under the other replicas' $DATA_DIR/nobackup if you only want the manager node to back up.
+# Keep the latest two local backups; retain binlogs for 8 days (configurable).
+# Before running, BACKUP_DIR_BASE should be mounted separately (e.g., distributed storage) to avoid losing backups if the host fails.
+
+## local backup vars
+#DATA_DIR={{ mysql_data_dir_base }}/data/{{mysql_port}}
+PORT={{mysql_port}}
+CNF_FILE={{ mycnf_dir }}/my.cnf
+BACKUP_DIR_BASE={{ mysql_data_dir_base }}/backup
+BACKUP_USER={{ mysql_backup_user }}
+BACKUP_PASS={{ mysql_backup_password }}
+START_TIME=$(date +%Y%m%d_%H%M%S)
+EXPIRE_BINLOG_DAYS=8
+KEEP_FULL_BACKUP_LAST_COPYS=2
+
+## backupops vars
+MANAGE_IP=192.0.2.175
+ALLBACKUP_DIR=/mysqlbackup
+
+log(){
+	DATELOG=$(date +"%Y/%m/%d %H:%M:%S")
+	echo "$DATELOG $*" | tee -a $BACKUP_DIR_BASE/backup${PORT}.log
+}
+
+prepare(){
+	[ ! -d $BACKUP_DIR_BASE ] && mkdir -p $BACKUP_DIR_BASE
+	log "--------------- backup start ---------------"
+	BACKUP_DIR=$BACKUP_DIR_BASE/$PORT
+	log "############### mysql_$PORT ###############"
+	[ -f $CNF_FILE ] && DEFAULTS_FILE=$CNF_FILE || { log "could not find my.cnf" ; exit 2 ; }
+	CONNECT="--defaults-file=$DEFAULTS_FILE --user=$BACKUP_USER --password=$BACKUP_PASS --host=127.0.0.1 --port=$PORT"
+}
+
+check_need_backup() {
+	# Check if the database connection is successful, get the datadir, and check if the backup user has the correct permissions. If failed, exit the script.
+	if [ -n "$(mysql $CONNECT -e "select 1;" 2>/dev/null)" ]; then
+		DATA_DIR=$(mysql $CONNECT -NBe "select @@datadir" 2>/dev/null)
+		my_grants=$(mysql $CONNECT -NBe "show grants" 2>/dev/null)
+		log "mysql_$PORT login successful"
+		if (echo "$my_grants" | grep -i "ALL PRIVILEGES ON \*" >/dev/null) || (echo "$my_grants" | grep -i "PROCESS" | grep -i "LOCK TABLES" | grep -i "REPLICATION CLIENT" >/dev/null); then
+			log "mysql_$PORT BACKUP_USER has the correct grants"
+		else
+			log "mysql_$PORT BACKUP_USER is missing required permissions"
+			exit 2
+		fi
+	else
+		log "mysql_$PORT login failed"
+		echo "0 $(hostname -I | awk '{print $1}'):$PORT" >>/tmp/instance.txt
+		exit 2
+	fi
+	# Check for the nobackup file, and if it exists, skip the backup.
+	if [ -f $DATA_DIR/nobackup ]; then
+		log "mysql_$PORT is set to nobackup"
+		echo 2 >> /tmp/instance.txt
+		exit 2
+	fi
+	# Check if it's a slave server, and if so, perform the backup.
+	if [ -n "$(mysql $CONNECT -e "show slave status;" 2>/dev/null)" ]; then
+		return
+	# If it's not a slave server and there are no Dump processes, it's a standalone master server that still needs to be backup.
+	elif [ -z "$(mysql $CONNECT -e "show processlist;" 2>/dev/null | grep Dump | grep -v canal)" ]; then
+		return
+	else
+		# The master server does not need to be backup.
+		log "mysql_$PORT is a master server, no need to backup"
+		echo 2 >> /tmp/instance.txt
+		exit 2
+	fi
+}
+
+backup_data(){
+	[ ! -d $BACKUP_DIR ] && mkdir -p $BACKUP_DIR
+	#sh /tmp/kill.sh $BACKUP_USER $BACKUP_PASS $PORT &
+	log "mysql_$PORT data backup start"
+	DATA_START=$(date +%s)
+	xtrabackup $CONNECT --backup --target-dir=$BACKUP_DIR --compress --stream=xbstream --parallel=4 --compress-threads=2 \
+	--ftwrl-wait-timeout=120 --ftwrl-wait-threshold=120 --ftwrl-wait-query-type=all > $BACKUP_DIR/$START_TIME.xbstream 2> $BACKUP_DIR/detail.log
+	DATA_MARK=$?
+	DATA_END=$(date +%s)
+	DATA_TIME=$((DATA_END-DATA_START))
+	if [ $DATA_MARK -eq 0 ]
+	then
+		log "mysql_$PORT data backup success,named $START_TIME.xbstream,took $DATA_TIME seconds,size $(du -sh $BACKUP_DIR/$START_TIME.xbstream | awk '{print $1}')"
+	else
+		log "mysql_$PORT data backup fail"
+		rm -f $BACKUP_DIR/$START_TIME.xbstream
+	fi
+}
+
+backup_binlog(){
+	[ ! -d $BACKUP_DIR/binlog ] && mkdir -p $BACKUP_DIR/binlog
+	[ ! -d $BACKUP_DIR/tmp ] && mkdir -p $BACKUP_DIR/tmp
+	BINLOG_INDEX="$(mysql $CONNECT -Ne "show variables like 'log_bin_index';" 2>/dev/null | awk '{print $2}')"
+	BINLOG_DIR="$(mysql $CONNECT -Ne "show variables like 'log_bin_basename';" 2>/dev/null | awk '{print $2}' | xargs dirname)/"
+	mysql $CONNECT -e "flush binary logs;" 2>/dev/null
+	ls $BACKUP_DIR/binlog > $BACKUP_DIR/tmp/a.txt
+	sed '$d' $BINLOG_INDEX | sed 's#.*/##g' > $BACKUP_DIR/tmp/b.txt
+	grep -F -v -f $BACKUP_DIR/tmp/a.txt $BACKUP_DIR/tmp/b.txt > $BACKUP_DIR/tmp/c.txt
+	sed -i "s#^#$BINLOG_DIR#g" $BACKUP_DIR/tmp/c.txt
+	log "mysql_$PORT binlog backup start"
+	BINLOG_START=$(date +%s)
+	cat $BACKUP_DIR/tmp/c.txt | xargs -I {} cp {} $BACKUP_DIR/binlog 2>> $BACKUP_DIR/detail.log
+	BINLOG_MARK=$?
+	BINLOG_END=$(date +%s)
+	BINLOG_TIME=$((BINLOG_END-BINLOG_START))
+	if [ $BINLOG_MARK -eq 0 ]
+	then
+		log "mysql_$PORT binlog backup success,from $(sed -n '1p' $BACKUP_DIR/tmp/c.txt | xargs basename) to $(sed -n '$p' $BACKUP_DIR/tmp/c.txt | xargs basename),took $BINLOG_TIME seconds,size $(cat $BACKUP_DIR/tmp/c.txt | xargs du -csh | sed -n '$p' | awk '{print $1}')"
+	else
+		log "mysql_$PORT binlog backup fail"
+	fi
+}
+
+backup_cnf(){
+	log "mysql_$PORT my.cnf backup start"
+	cp $DEFAULTS_FILE $BACKUP_DIR/$START_TIME.cnf 2>> $BACKUP_DIR/detail.log
+	CNF_MARK=$?
+	[ $CNF_MARK -eq 0 ] && log "mysql_$PORT my.cnf backup success,named $START_TIME.cnf" || log "mysql_$PORT my.cnf backup fail"
+}
+
+DATA_UPLOAD_MARK=0
+BINLOG_UPLOAD_MARK=0
+CNF_UPLOAD_MARK=0
+upload(){
+	IP_HOST="$(hostname -I | awk '{print $1}')_$(hostname)"
+	ssh -o passwordauthentication=no -o stricthostkeychecking=no $MANAGE_IP "[ ! -d $ALLBACKUP_DIR/$IP_HOST/$PORT/binlog ] && mkdir -p $ALLBACKUP_DIR/$IP_HOST/$PORT/binlog"
+	if [ $DATA_MARK -eq 0 ]
+	then
+		log "mysql_$PORT data upload start"
+		DATA_UPLOAD_START=$(date +%s)
+		scp -o passwordauthentication=no -o stricthostkeychecking=no $BACKUP_DIR/$START_TIME.xbstream $MANAGE_IP:$ALLBACKUP_DIR/$IP_HOST/$PORT 2>> $BACKUP_DIR/detail.log
+		DATA_UPLOAD_MARK=$?
+		DATA_UPLOAD_END=$(date +%s)
+		DATA_UPLOAD_TIME=$((DATA_UPLOAD_END-DATA_UPLOAD_START))
+		if [ $DATA_UPLOAD_MARK -eq 0 ]
+		then
+			log "mysql_$PORT data upload success,took $DATA_UPLOAD_TIME seconds"
+		else
+			log "mysql_$PORT data upload fail"
+			ssh $MANAGE_IP "rm -f $ALLBACKUP_DIR/$IP_HOST/$PORT/$START_TIME.xbstream"
+		fi
+	fi
+	if [ $BINLOG_MARK -eq 0 ]
+	then
+		log "mysql_$PORT binlog upload start"
+		BINLOG_UPLOAD_START=$(date +%s)
+		cat $BACKUP_DIR/tmp/c.txt | xargs -I {} scp -o passwordauthentication=no -o stricthostkeychecking=no {} $MANAGE_IP:$ALLBACKUP_DIR/$IP_HOST/$PORT/binlog 2>> $BACKUP_DIR/detail.log
+		BINLOG_UPLOAD_MARK=$?
+		BINLOG_UPLOAD_END=$(date +%s)
+		BINLOG_UPLOAD_TIME=$((BINLOG_UPLOAD_END-BINLOG_UPLOAD_START))
+		if [ $BINLOG_UPLOAD_MARK -eq 0 ]
+		then
+			log "mysql_$PORT binlog upload success,took $BINLOG_UPLOAD_TIME seconds"
+		else
+			log "mysql_$PORT binlog upload fail"
+		fi
+	fi
+	if [ $CNF_MARK -eq 0 ]
+	then
+		log "mysql_$PORT my.cnf upload start"
+		scp -o passwordauthentication=no -o stricthostkeychecking=no $BACKUP_DIR/$START_TIME.cnf $MANAGE_IP:$ALLBACKUP_DIR/$IP_HOST/$PORT 2>> $BACKUP_DIR/detail.log
+		CNF_UPLOAD_MARK=$?
+		[ $CNF_UPLOAD_MARK -eq 0 ] && log "mysql_$PORT my.cnf upload success" || log "mysql_$PORT my.cnf upload fail"
+	fi
+}
+
+purge(){
+	cd ~
+	if [ "`ls $BACKUP_DIR | grep xbstream | wc -l`" -gt ${KEEP_FULL_BACKUP_LAST_COPYS} ]
+	then
+		PURGE_DATA_NAME=`ls -rt $BACKUP_DIR | grep xbstream | head -1`
+		echo "$PURGE_DATA_NAME" | xargs -I {} rm -f $BACKUP_DIR/{}
+		log "mysql_$PORT purge backup_data `echo $PURGE_DATA_NAME`"
+	fi
+	find $BACKUP_DIR/binlog -type f -mtime +${EXPIRE_BINLOG_DAYS} | sort > $BACKUP_DIR/tmp/d.txt
+	if [ -s $BACKUP_DIR/tmp/d.txt ]
+	then
+		cat $BACKUP_DIR/tmp/d.txt | xargs rm -f
+		log "mysql_$PORT purge backup_binlog from `sed -n '1p' $BACKUP_DIR/tmp/d.txt | xargs basename` to `sed -n '$p' $BACKUP_DIR/tmp/d.txt | xargs basename`"
+	fi
+	if [ "`ls $BACKUP_DIR | grep cnf | wc -l`" -gt ${KEEP_FULL_BACKUP_LAST_COPYS} ]
+	then
+		PURGE_CNF_NAME=`ls -rt $BACKUP_DIR | grep cnf | head -1`
+		echo "$PURGE_CNF_NAME" | xargs -I {} rm -f $BACKUP_DIR/{}
+		log "mysql_$PORT purge backup_cnf `echo $PURGE_CNF_NAME`"
+	fi
+}
+
+	prepare
+	check_need_backup
+	backup_data
+	backup_binlog
+	backup_cnf
+	#upload
+	purge
+	purge  #This code is needed, and repetition is not a problem
+	# if [ $DATA_MARK -eq 0 -a $BINLOG_MARK -eq 0 -a $CNF_MARK -eq 0 -a $DATA_UPLOAD_MARK -eq 0 -a $BINLOG_UPLOAD_MARK -eq 0 -a $CNF_UPLOAD_MARK -eq 0 ]
+	# then
+		# echo "1 $ALLBACKUP_DIR/$IP_HOST/$PORT/$START_TIME.xbstream" >> /tmp/instance.txt
+	# else
+		# echo "0 $(hostname -I | awk '{print $1}'):$PORT" >> /tmp/instance.txt
+	# fi
+log "--------------- backup end   ---------------"
+

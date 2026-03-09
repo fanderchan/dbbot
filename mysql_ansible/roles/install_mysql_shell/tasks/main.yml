@@ -1,0 +1,99 @@
+- name: Ensure group "mysql" exists
+  ansible.builtin.group:
+    name: "{{ mysql_group }}"
+    state: present
+
+- name: Create mysql user
+  ansible.builtin.user:
+    name: "{{ mysql_user }}"
+    shell: /bin/bash
+    home: /home/{{ mysql_user }}
+    group: "{{ mysql_group }}"
+    password: "{{ mysql_user_password | password_hash('sha512') }}"
+    state: present
+
+- name: Create MySQL Shell directory
+  ansible.builtin.file:
+    path: "/database/mysqlshell/{{ mysqlshell_version }}"
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0755'
+
+- name: Check if MySQL Shell package exists locally(local)
+  ansible.builtin.stat:
+    path: "{{ mysql_shell_package_path }}"
+  register: install_mysql_shell__package_file
+  delegate_to: 127.0.0.1
+
+- name: Test MySQL Shell package
+  ansible.builtin.shell:
+    cmd: tar tf "{{ mysql_shell_package_path }}" 1>/dev/null 2>&1
+    warn: false
+  register: install_mysql_shell__tar_test
+  failed_when: false
+  changed_when: false
+  delegate_to: 127.0.0.1
+  tags: [skip_ansible_lint]
+
+- name: Fail if MySQL Shell package not found, not fully downloaded or auto download is disabled(local)
+  ansible.builtin.fail:
+    msg: "MySQL Shell package not found, invalid, or auto download is disabled"
+  when:
+    - not fcs_auto_download_packages | bool
+    - not install_mysql_shell__package_file.stat.exists or install_mysql_shell__tar_test.rc != 0
+  delegate_to: 127.0.0.1
+
+- name: (local) Download MySQL Shell {{ mysqlshell_version }}
+  ansible.builtin.import_tasks: download_mysqlshell.yml
+  when:
+    - fcs_auto_download_packages | bool
+    - not install_mysql_shell__package_file.stat.exists or install_mysql_shell__tar_test.rc != 0
+  delegate_to: 127.0.0.1
+
+- name: Transfer mysqlshell install package to remote host
+  ansible.builtin.copy:
+    src: "{{ mysql_packages_dir }}/{{ mysql_shell_package_name }}"
+    dest: /tmp
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
+
+- name: Unarchive mysqlshell install package to {{ mysqlshell_base_dir }}
+  ansible.builtin.unarchive:
+    creates: "{{ mysqlshell_base_dir }}/bin/mysqlsh"
+    copy: false
+    src: "/tmp/{{ mysql_shell_package_name }}"
+    dest: "{{ mysqlshell_base_dir }}"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    extra_opts:
+      - --strip-components=1
+
+- name: Change owner to mysql user
+  ansible.builtin.file:
+    path: "{{ mysqlshell_base_dir }}"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    recurse: true
+  when: mysql_shell_package_name.find('tar.gz') != -1 or mysql_shell_package_name.find('tar.xz') != -1
+
+- name: Make link /database/mysql/mysql-xx.yy.gz to /usr/local/mysql
+  ansible.builtin.file:
+    src: "{{ mysqlshell_base_dir }}"
+    dest: /usr/local/mysqlshell
+    state: link
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+  when: mysql_shell_package_name.find('tar.gz') != -1 or mysql_shell_package_name.find('tar.xz') != -1
+
+- name: Ensure mysqlsh is executable
+  ansible.builtin.file:
+    path: "{{ mysqlshell_base_dir }}/bin/mysqlsh"
+    mode: '0755'
+
+- name: Export path env variable
+  ansible.builtin.lineinfile:
+    path: /etc/profile
+    line: export PATH=/usr/local/mysqlshell/bin/:$PATH
+    insertafter: EOF

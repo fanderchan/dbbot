@@ -1,0 +1,99 @@
+- name: Check if MySQL package exists locally(local)
+  ansible.builtin.stat:
+    path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
+  register: mysql_server__package_file
+  delegate_to: 127.0.0.1
+
+- name: Fail if MySQL package not found (local)
+  ansible.builtin.fail:
+    msg: "MySQL package not found at {{ mysql_packages_dir }}/{{ mysql_package }}. Please place it before running."
+  when: 
+    - not mysql_server__package_file.stat.exists
+  delegate_to: 127.0.0.1
+
+# - name: Download MySQL binary tarball with wget if not found locally and auto download is enabled(local)
+#  ansible.builtin.shell:
+#    cmd: wget -O {{ mysql_packages_dir }}/{{ mysql_package }} https://dev.mysql.com/get/Downloads/MySQL-{{ mysql_version[0:3] }}/{{ mysql_package }}
+#  when: not mysql_server__package_file.stat.exists and fcs_auto_download_packages | bool
+#  delegate_to: 127.0.0.1
+
+- name: Transfer MySQL install package to remote host
+  ansible.builtin.copy:
+    src: "{{ mysql_packages_dir }}/{{ mysql_package }}"
+    dest: /tmp
+    mode: '0755'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Unarchive MySQL install package to {{ mysql_software_dir }}
+  ansible.builtin.unarchive:
+    creates: "{{ mysql_software_dir }}/bin/unarchive_mysql_package_finished"
+    copy: false
+    src: "/tmp/{{ mysql_package }}"
+    dest: "{{ mysql_software_dir }}"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    extra_opts:
+      - --strip-components=1
+
+- name: Touch unarchive_mysql_package_finished file
+  ansible.builtin.file:
+    path: "{{ mysql_software_dir }}/bin/unarchive_mysql_package_finished"
+    mode: '0755'
+    state: touch
+
+- name: Change owner to mysql user
+  when: mysql_package.find('tar.gz') != -1 or mysql_package.find('tar.xz') != -1
+  ansible.builtin.file:
+    path: "{{ mysql_software_dir }}"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    recurse: true
+
+- name: Make link /database/mysql/mysql-xx.yy.gz to /usr/local/mysql
+  when: mysql_package.find('tar.gz') != -1 or mysql_package.find('tar.xz') != -1
+  ansible.builtin.file:
+    src: "{{ mysql_software_dir }}"
+    dest: /usr/local/mysql
+    state: link
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Export mysql share object (*.os)
+  ansible.builtin.template:
+    src: ../templates/mysql.conf.j2
+    dest: /etc/ld.so.conf.d/mysql.conf
+    mode: '0644'
+
+- name: Load share object
+  ansible.builtin.command: /usr/sbin/ldconfig
+  changed_when: false
+
+- name: Export path env variable
+  ansible.builtin.lineinfile:
+    path: /etc/profile
+    line: export PATH=/usr/local/mysql/bin/:$PATH
+    insertafter: EOF
+
+- name: Export path env to /root/.bashrc
+  ansible.builtin.lineinfile:
+    path: /root/.bashrc
+    line: export PATH=/usr/local/mysql/bin/:$PATH
+    insertafter: EOF
+
+- name: Export path env to /home/mysql/.bashrc
+  ansible.builtin.lineinfile:
+    path: /home/mysql/.bashrc
+    line: export PATH=/usr/local/mysql/bin/:$PATH
+    insertafter: EOF
+
+- name: Remove /usr/include/mysql
+  ansible.builtin.file:
+    dest: /usr/include/mysql
+    state: absent
+
+- name: Export include file to /usr/include/mysql
+  ansible.builtin.file:
+    src: /usr/local/mysql/include
+    dest: /usr/include/mysql
+    state: link

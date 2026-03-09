@@ -1,0 +1,19 @@
+set sql_log_bin=0;
+        update mysql.user set user='{{ mysql_admin_user }}' where user='root' and host='localhost';
+        flush privileges;
+        alter user {{ mysql_admin_user }}@'localhost' identified by '{{ mysql_admin_password }}' ;
+        create user {{ mysql_admin_user }}@'127.0.0.1' identified by '{{ mysql_admin_127_password }}' ;
+        {% if mysql_version.startswith('8.4') and db_type == 'mysql' %}
+        grant all on *.* to {{ mysql_admin_user }}@'127.0.0.1' with grant option;
+        grant all on *.* to {{ mysql_admin_user }}@'localhost' with grant option;
+        grant SYSTEM_USER on *.* to {{ mysql_admin_user }}@'127.0.0.1';
+        grant SYSTEM_USER on *.* to {{ mysql_admin_user }}@'localhost';
+        {% else %}
+        grant all on *.* to {{ mysql_admin_user }}@'127.0.0.1' with grant option;
+        grant all on *.* to {{ mysql_admin_user }}@'localhost' with grant option;
+        {% endif %}
+        {% if mysql_version.startswith('8.4') %}
+        INSTALL COMPONENT 'file://component_validate_password';
+        {% endif %}
+set sql_log_bin=1;
+

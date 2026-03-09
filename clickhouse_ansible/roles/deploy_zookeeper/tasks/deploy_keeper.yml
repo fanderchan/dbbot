@@ -1,0 +1,43 @@
+# ClickHouse Keeper 部署任务
+# Keeper 会随 ClickHouse 一起安装，这里只需要配置
+
+- name: Import tasks to create clickhouse user
+  ansible.builtin.import_tasks: create_user.yml
+  when: inventory_hostname in groups['zookeeper_cluster'] | default([])
+
+- name: Create Keeper coordination directories
+  ansible.builtin.file:
+    path: "{{ keeper_dir_item }}"
+    state: directory
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0755'
+  loop:
+    - "{{ keeper_log_storage_path }}"
+    - "{{ keeper_snapshot_storage_path }}"
+  loop_control:
+    loop_var: keeper_dir_item
+  when: inventory_hostname in groups['zookeeper_cluster'] | default([])
+
+- name: Create ClickHouse config.d directory
+  ansible.builtin.file:
+    path: "{{ clickhouse_config_d_dir }}"
+    state: directory
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0755'
+  when: inventory_hostname in groups['zookeeper_cluster'] | default([])
+
+- name: Get Keeper server ID
+  ansible.builtin.set_fact:
+    keeper_server_id: "{{ zk_id | default((groups['zookeeper_cluster'] | default([])).index(inventory_hostname) + 1) | int }}"
+  when: inventory_hostname in groups['zookeeper_cluster'] | default([])
+
+- name: Generate Keeper server configuration
+  ansible.builtin.template:
+    src: keeper-server.xml.j2
+    dest: "{{ clickhouse_config_d_dir }}/keeper-server.xml"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0644'
+  when: inventory_hostname in groups['zookeeper_cluster'] | default([])

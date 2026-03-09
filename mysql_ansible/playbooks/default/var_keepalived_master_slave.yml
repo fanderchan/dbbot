@@ -1,0 +1,6 @@
+# vars loading order: common_config -> this file
+master_ip: 192.0.2.131
+slave_ip: 192.0.2.132
+sub_nets: 1%
+net_work_interface: "ens33"
+vip: 192.0.2.130

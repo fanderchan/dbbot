@@ -1,0 +1,41 @@
+- name: Install dependencies for sysbench
+  ansible.builtin.yum:
+    name:
+      - make
+      - automake
+      - libtool
+      - pkgconfig
+      - unzip
+      - libaio-devel
+      - mariadb-devel
+    state: present
+
+- name: Ensure sysbench install path exists
+  ansible.builtin.file:
+    path: "{{ sysbench_install_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Unarchive sysbench-master.zip to /tmp
+  ansible.builtin.unarchive:
+    src: sysbench-master.zip
+    dest: /tmp/
+    remote_src: no
+
+- name: Compile and install sysbench
+  ansible.builtin.shell: |
+    cd /tmp/sysbench-master
+    ./autogen.sh
+    ./configure --prefix={{ sysbench_install_path }}
+    make -j
+    make install
+  args:
+    creates: "{{ sysbench_install_path }}/bin/sysbench"
+
+- name: Add sysbench to PATH (system-wide)
+  ansible.builtin.lineinfile:
+    path: /etc/profile.d/sysbench.sh
+    line: 'export PATH={{ sysbench_install_path }}/bin:$PATH'
+    create: yes
+    state: present
+    mode: '0755'

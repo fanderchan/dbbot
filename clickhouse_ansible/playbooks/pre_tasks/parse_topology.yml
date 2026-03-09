@@ -1,0 +1,96 @@
+# 解析 inventory 中的拓扑信息
+# 支持同一物理主机多实例：通过 ansible_host + instance_id 区分
+
+- name: Set current node info
+  ansible.builtin.set_fact:
+    current_node_shard: "{{ shard | default(1) | int }}"
+    current_node_replica: "{{ replica | default(1) | int }}"
+    current_node_instance_id: "{{ instance_id | default(replica | default(1)) | int }}"
+    current_node_replica_name: "{{ replica_name | default('ck-s' ~ (shard | default(1) | int) ~ '-r' ~ (replica | default(1) | int)) }}"
+    current_node_hostname: "{{ system_hostname | default(node_hostname | default(ansible_hostname | default(ansible_fqdn | default(inventory_hostname)))) }}"
+    ck_physical_host: "{{ ansible_host | default(inventory_hostname) }}"
+    ck_instance_suffix: "{{ '' if (instance_id | default(replica | default(1)) | int) == 1 else '-' ~ (instance_id | default(replica | default(1)) | int) }}"
+
+- name: Build ClickHouse topology facts (run once)
+  ansible.builtin.set_fact:
+    clickhouse_all_nodes: "{{ clickhouse_all_nodes | default([]) + [ {
+      'name': item,
+      'ip': node_ip,
+      'shard': node_shard,
+      'replica': node_replica,
+      'instance_id': node_instance_id,
+      'replica_name': node_replica_name,
+      'system_hostname': node_system_hostname
+    } ] }}"
+    ck_host_primary: "{{ ck_host_primary | default({}) | combine({ node_ip: ((ck_host_primary | default({}))[node_ip] | default(item)) }) }}"
+    ck_host_system_hostname: "{{ ck_host_system_hostname | default({}) | combine({ node_ip: ((ck_host_system_hostname | default({}))[node_ip] | default(node_system_hostname)) }) }}"
+  loop: "{{ groups['clickhouse_cluster'] | default([]) }}"
+  vars:
+    node_ip: "{{ hostvars[item].ansible_host | default(item) }}"
+    node_shard: "{{ hostvars[item].shard | default(1) | int }}"
+    node_replica: "{{ hostvars[item].replica | default(1) | int }}"
+    node_instance_id: "{{ hostvars[item].instance_id | default(hostvars[item].replica | default(1)) | int }}"
+    node_replica_name: "{{ hostvars[item].replica_name | default('ck-s' ~ (hostvars[item].shard | default(1) | int) ~ '-r' ~ (hostvars[item].replica | default(1) | int)) }}"
+    node_system_hostname: "{{ hostvars[item].system_hostname | default(hostvars[item].node_hostname | default(hostvars[item].ansible_hostname | default(hostvars[item].ansible_fqdn | default(item)))) }}"
+  run_once: true
+
+- name: Calculate shard and replica counts (run once)
+  ansible.builtin.set_fact:
+    clickhouse_shard_count: "{{ clickhouse_all_nodes | map(attribute='shard') | unique | list | length }}"
+    clickhouse_replica_count: "{{ clickhouse_all_nodes | map(attribute='replica') | unique | list | length }}"
+    clickhouse_instance_ids: "{{ clickhouse_all_nodes | map(attribute='instance_id') | unique | sort | list }}"
+  run_once: true
+
+- name: Determine primary instance per physical host (lowest instance_id)
+  ansible.builtin.set_fact:
+    ck_host_primary: >-
+      {%- set result = {} -%}
+      {%- for n in (clickhouse_all_nodes | sort(attribute='instance_id')) -%}
+      {%- if n.ip not in result -%}
+      {%- set _ = result.update({ n.ip: n.name }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ result }}
+    ck_host_system_hostname: >-
+      {%- set result = {} -%}
+      {%- for n in (clickhouse_all_nodes | sort(attribute='instance_id')) -%}
+      {%- if n.ip not in result -%}
+      {%- set _ = result.update({ n.ip: n.system_hostname }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ result }}
+  run_once: true
+
+- name: Build zookeeper node list (run once)
+  ansible.builtin.set_fact:
+    zookeeper_nodes: >-
+      {%- set nodes = [] -%}
+      {%- for n in groups['zookeeper_cluster'] | default([]) -%}
+      {%- set _ = nodes.append(hostvars[n].ansible_host | default(n)) -%}
+      {%- endfor -%}
+      {{ nodes }}
+  run_once: true
+
+- name: Distribute topology facts to all hosts
+  ansible.builtin.set_fact:
+    clickhouse_all_nodes: "{{ hostvars[ansible_play_hosts_all[0]].clickhouse_all_nodes | default([]) }}"
+    clickhouse_shard_count: "{{ hostvars[ansible_play_hosts_all[0]].clickhouse_shard_count | default(0) }}"
+    clickhouse_replica_count: "{{ hostvars[ansible_play_hosts_all[0]].clickhouse_replica_count | default(0) }}"
+    clickhouse_instance_ids: "{{ hostvars[ansible_play_hosts_all[0]].clickhouse_instance_ids | default([]) }}"
+    ck_host_primary: "{{ hostvars[ansible_play_hosts_all[0]].ck_host_primary | default({}) }}"
+    ck_host_system_hostname: "{{ hostvars[ansible_play_hosts_all[0]].ck_host_system_hostname | default({}) }}"
+    zookeeper_nodes: "{{ hostvars[ansible_play_hosts_all[0]].zookeeper_nodes | default([]) }}"
+
+- name: Set instance and host derived variables
+  ansible.builtin.set_fact:
+    ck_run_host_tasks: "{{ inventory_hostname == (ck_host_primary[ck_physical_host] | default(inventory_hostname)) }}"
+    ck_system_hostname: "{{ ck_host_system_hostname[ck_physical_host] | default(system_hostname | default(ansible_hostname | default(ansible_fqdn | default(inventory_hostname)))) }}"
+    clickhouse_config_dir: "/etc/clickhouse-server{{ ck_instance_suffix }}"
+    clickhouse_config_d_dir: "/etc/clickhouse-server{{ ck_instance_suffix }}/config.d"
+    clickhouse_data_dir: "{{ clickhouse_data_dir_base }}/data{{ ck_instance_suffix }}"
+    clickhouse_log_dir: "{{ clickhouse_log_dir_base }}{{ ck_instance_suffix }}"
+    clickhouse_service_name: "clickhouse-server{{ ck_instance_suffix }}"
+
+- name: Set instance PID file path
+  ansible.builtin.set_fact:
+    clickhouse_pid_file: "{{ clickhouse_data_dir }}/clickhouse-server{{ ck_instance_suffix }}.pid"

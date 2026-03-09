@@ -1,0 +1,10 @@
+dbbot
+Copyright (c) 2024-2026 dbbot contributors
+
+Except where otherwise noted, the original work in this repository is
+licensed under the Apache License, Version 2.0.
+
+This repository also redistributes or references third-party components
+that keep their own licenses. Those exceptions are documented in
+THIRD_PARTY_LICENSES.txt and in local NOTICE / LICENSE files under the
+relevant subdirectories.

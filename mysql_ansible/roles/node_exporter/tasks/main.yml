@@ -1,0 +1,32 @@
+- name: Check if node_exporter is installed
+  ansible.builtin.import_tasks: check_if_node_exporter_installed.yml
+
+- name: Setup and configure node_exporter if not installed
+  block:
+    - name: Check if node_exporter package availability(delegate_to dbbot server)
+      ansible.builtin.import_tasks: check_if_node_exporter_package_availability.yml
+
+    - name: Download node_exporter package if necessary(delegate_to dbbot server)
+      ansible.builtin.import_tasks: download_package.yml
+      when:
+        - node_exporter_install_type == 'package'
+        - fcs_auto_download_packages | bool
+        - not node_exporter_package_stat.stat.exists | default(true)
+
+    - name: Create user and make dir
+      ansible.builtin.import_tasks: create_user_and_dir.yml
+
+    - name: Setup node_exporter
+      ansible.builtin.import_tasks: setup_node_exporter.yml
+      when: node_exporter_install_type == 'package'
+    
+    - name: Setup pmm node_exporter
+      ansible.builtin.import_tasks: setup_node_exporter_not_package.yml
+      when: node_exporter_install_type != 'package'
+
+    - name: Manage node_exporter service (create systemd service, enable and start)
+      ansible.builtin.import_tasks: manage_service.yml
+  when: not node_exporter_stat.stat.exists
+
+- name: Validate node_exporter service is operational
+  ansible.builtin.import_tasks: validate_service.yml

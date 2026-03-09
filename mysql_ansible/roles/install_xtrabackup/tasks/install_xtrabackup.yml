@@ -1,0 +1,42 @@
+- name: Fail if mysql version is not 5.7
+  ansible.builtin.fail:
+    msg: "backup script is only support MySQL 5.7 !"
+  when: not (mysql_version.startswith('5.7'))
+
+- name: Install xtrabackup dependents
+  ansible.builtin.yum:
+    name: "{{ item.name }}"
+    state: present
+  with_items:
+    - { name: 'libev' }
+    - { name: 'perl-DBD-MySQL' }
+    - { name: 'perl-Digest-MD5' }
+    - { name: 'rsync' }
+  tags:
+    - dependents
+
+- name: Debug os_type
+  ansible.builtin.debug:
+    var: os_type
+
+- name: Transfer xtrabackup
+  ansible.builtin.copy:
+    src: "../files/{{ (os_type in ['Rocky9', 'BigCloud21', 'openEuler24', 'openEuler22', 'openEuler20', 'CentOS8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10']) | ternary('percona-xtrabackup-24-2.4.28-1.el8.x86_64.rpm', 'percona-xtrabackup-24-2.4.26-1.el7.x86_64.rpm') }}"
+    dest: "/tmp/{{ (os_type in ['Rocky9', 'BigCloud21', 'openEuler24', 'openEuler22', 'openEuler20', 'CentOS8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10']) | ternary('percona-xtrabackup-24-2.4.28-1.el8.x86_64.rpm', 'percona-xtrabackup-24-2.4.26-1.el7.x86_64.rpm') }}"
+    mode: '0755'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+
+- name: Install xtrabackup
+  ansible.builtin.yum:
+    name: "/tmp/{{ (os_type in ['Rocky9', 'BigCloud21', 'openEuler24', 'openEuler22', 'openEuler20', 'CentOS8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10']) | ternary('percona-xtrabackup-24-2.4.28-1.el8.x86_64.rpm', 'percona-xtrabackup-24-2.4.26-1.el7.x86_64.rpm') }}"
+    state: present
+    disable_gpg_check: true
+
+- name: Install qpress
+  ansible.builtin.copy:
+    src: "../files/qpress"
+    dest: /usr/bin
+    mode: '0755'
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"

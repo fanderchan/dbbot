@@ -1,0 +1,14 @@
+- name: Transfer create_kha_user.sql to master
+  ansible.builtin.template:
+    src: ../templates/create_kha_user.sql.j2
+    dest: /tmp/create_kha_user.sql
+    mode: '0600'
+
+- name: Create Keepalived HA user in mysql(master)
+  ansible.builtin.shell: "{{ mysql_software_dir }}/bin/mysql -h127.0.0.1 -P{{ mysql_port }} -u{{ mysql_admin_user }} -p{{ mysql_admin_127_password }} < /tmp/create_kha_user.sql"
+  changed_when: true
+
+- name: Clean up temporary SQL file
+  ansible.builtin.file:
+    path: /tmp/create_kha_user.sql
+    state: absent

@@ -1,0 +1,11 @@
+groups:
+- name: 内存报警规则
+  rules:
+  - alert: 内存使用率告警
+    expr: (1 - (node_memory_MemAvailable_bytes / (node_memory_MemTotal_bytes))) * 100 > 80
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "服务器可用内存不足。"
+      description: "内存使用率已超过80%（持续5分钟，当前值：{{ $value }}%）"

@@ -1,0 +1,12 @@
+- name: Copy node_exporter binary to target server (for pmm or dbbot)
+  ansible.builtin.copy:
+    src: "{% if node_exporter_install_type == 'pmm' %}../files/pmm/node_exporter{% elif node_exporter_install_type == 'dbbot' %}../files/dbbot/node_exporter{% endif %}"
+    dest: "{{ node_exporter_install_dir }}/node_exporter"
+    owner: "{{ node_exporter_owner | default('root') }}"
+    group: "{{ node_exporter_group | default('root') }}"
+    mode: '0755'
+  when:
+    - not node_exporter_stat.stat.exists
+    - node_exporter_install_type in ['pmm', 'dbbot']
+  notify:
+    - Restart node_exporter

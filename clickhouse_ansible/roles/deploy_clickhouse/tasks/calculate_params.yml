@@ -1,0 +1,58 @@
+- name: Calculate total memory in bytes
+  ansible.builtin.set_fact:
+    total_memory_bytes: "{{ ansible_memtotal_mb | int * 1024 * 1024 }}"
+
+- name: Calculate total threads
+  ansible.builtin.set_fact:
+    total_threads: "{{ ansible_processor_cores | default(ansible_processor_count) | int }}"
+
+- name: Calculate max_memory_usage per replica
+  ansible.builtin.set_fact:
+    max_memory_usage: "{{ ((total_memory_bytes | int * max_memory_usage_ratio | float) / clickhouse_replica_count | int) | int }}"
+
+- name: Calculate max_bytes_before_external_group_by
+  ansible.builtin.set_fact:
+    max_bytes_before_external_group_by: "{{ ((max_memory_usage | int * max_bytes_before_external_group_by_ratio | float)) | int }}"
+
+- name: Calculate background pool size
+  ansible.builtin.set_fact:
+    background_pool_size: "{{ [total_threads | int, background_pool_size_min | int] | max }}"
+
+- name: Calculate ClickHouse TCP port based on instance id (when not explicitly set)
+  ansible.builtin.set_fact:
+    clickhouse_tcp_port: "{{ (clickhouse_tcp_port_base | default(9000) | int) + (current_node_instance_id | int - 1) }}"
+  when: clickhouse_tcp_port is not defined
+
+- name: Calculate ClickHouse HTTP port based on instance id (when not explicitly set)
+  ansible.builtin.set_fact:
+    clickhouse_http_port: "{{ (clickhouse_http_port_base | default(8123) | int) + (current_node_instance_id | int - 1) }}"
+  when: clickhouse_http_port is not defined
+
+- name: Calculate ClickHouse interserver HTTP port based on instance id (when not explicitly set)
+  ansible.builtin.set_fact:
+    clickhouse_interserver_http_port: "{{ (clickhouse_interserver_http_port_base | default(9009) | int) + (current_node_instance_id | int - 1) }}"
+  when: clickhouse_interserver_http_port is not defined
+
+- name: Calculate ClickHouse HTTPS port based on instance id (when SSL enabled and not explicitly set)
+  ansible.builtin.set_fact:
+    clickhouse_https_port: "{{ (clickhouse_https_port_base | default(8443) | int) + (current_node_instance_id | int - 1) }}"
+  when:
+    - clickhouse_enable_ssl | default(false)
+    - clickhouse_https_port is not defined
+
+- name: Calculate ClickHouse secure TCP port based on instance id (when SSL enabled and not explicitly set)
+  ansible.builtin.set_fact:
+    clickhouse_tcp_port_secure: "{{ (clickhouse_tcp_port_secure_base | default(9440) | int) + (current_node_instance_id | int - 1) }}"
+  when:
+    - clickhouse_enable_ssl | default(false)
+    - clickhouse_tcp_port_secure is not defined
+
+- name: Calculate ClickHouse MySQL port based on instance id (when not explicitly set)
+  ansible.builtin.set_fact:
+    clickhouse_mysql_port: "{{ (clickhouse_mysql_port_base | default(9004) | int) + ((current_node_instance_id | int - 1) * (clickhouse_aux_port_stride | default(10) | int)) }}"
+  when: clickhouse_mysql_port is not defined
+
+- name: Calculate ClickHouse PostgreSQL port based on instance id (when not explicitly set)
+  ansible.builtin.set_fact:
+    clickhouse_postgresql_port: "{{ (clickhouse_postgresql_port_base | default(9005) | int) + ((current_node_instance_id | int - 1) * (clickhouse_aux_port_stride | default(10) | int)) }}"
+  when: clickhouse_postgresql_port is not defined

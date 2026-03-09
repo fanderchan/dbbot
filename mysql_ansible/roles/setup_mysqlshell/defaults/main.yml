@@ -1,0 +1,11 @@
+# MySQL Shell Role Default Variables
+
+# MySQL Shell version (defaults to mysql_version)
+mysqlshell_version: "{{ mysql_version }}"
+
+# Package name pattern
+mysqlshell_package: "mysql-shell-{{ mysqlshell_version }}-linux-glibc2.17-x86-64bit.tar.gz"
+
+# Installation directories
+mysqlshell_base_dir: "/usr/local/mysqlshell"
+mysqlshell_packages_dir: "{{ mysql_packages_dir | default('../downloads/') }}"

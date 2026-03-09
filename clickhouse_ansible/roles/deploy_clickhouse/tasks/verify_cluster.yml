@@ -1,0 +1,61 @@
+- name: Verify cluster metadata is visible
+  ansible.builtin.shell: |
+    clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+      -q "SELECT count() FROM system.clusters WHERE cluster = '{{ clickhouse_cluster_name }}'"
+  register: cluster_info
+  changed_when: false
+  retries: 10
+  delay: 3
+  until:
+    - cluster_info.rc == 0
+    - (cluster_info.stdout | trim | int) > 0
+
+- name: Verify Zookeeper/Keeper connection
+  ansible.builtin.shell: |
+    clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+      -q "SELECT count() FROM system.zookeeper WHERE path IN ('/', '/clickhouse') LIMIT 1"
+  register: zk_info
+  changed_when: false
+  retries: 10
+  delay: 3
+  until: zk_info.rc == 0
+  when:
+    - zookeeper_nodes | default([]) | length > 0
+    - clickhouse_topology_mode | default('cluster') != 'standalone'
+
+- name: Distributed DDL smoke test (create/drop database on cluster)
+  run_once: true
+  when:
+    - clickhouse_topology_mode | default('cluster') != 'standalone'
+    - (clickhouse_all_nodes | default([]) | length) > 1
+    - (ck_instance_id | default(current_node_instance_id) | int) == ((clickhouse_instance_ids | default([current_node_instance_id]) | map('int') | list | max) | int)
+  block:
+    - name: Set DDL smoke database name
+      ansible.builtin.set_fact:
+        ck_ddl_smoke_db: "ck_ddl_smoke_{{ ansible_date_time.epoch }}"
+
+    - name: Create DDL smoke database
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          --distributed_ddl_task_timeout={{ clickhouse_ddl_smoke_timeout | default(120) | int }} \
+          -q "CREATE DATABASE IF NOT EXISTS {{ ck_ddl_smoke_db }} ON CLUSTER {{ clickhouse_cluster_name }}"
+      register: ddl_create
+      changed_when: false
+      failed_when: ddl_create.rc != 0
+
+    - name: Verify DDL result on all cluster nodes
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          -q "SELECT count() FROM clusterAllReplicas('{{ clickhouse_cluster_name }}', system.databases) WHERE name = '{{ ck_ddl_smoke_db }}'"
+      register: ddl_verify_count
+      changed_when: false
+      failed_when: ddl_verify_count.rc != 0 or ((ddl_verify_count.stdout | trim | int) != (clickhouse_all_nodes | default([]) | length | int))
+  always:
+    - name: Drop DDL smoke database
+      ansible.builtin.shell: |
+        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+          --distributed_ddl_task_timeout={{ clickhouse_ddl_smoke_timeout | default(120) | int }} \
+          -q "DROP DATABASE IF EXISTS {{ ck_ddl_smoke_db | default('ck_ddl_smoke_cleanup') }} ON CLUSTER {{ clickhouse_cluster_name }}"
+      register: ddl_drop
+      changed_when: false
+      failed_when: false

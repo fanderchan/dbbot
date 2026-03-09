@@ -1,0 +1,10 @@
+- name: Check if flag exists or not
+  ansible.builtin.find:
+    paths: "{{ datadir }}/"
+    patterns: '*_finish.flag'
+  register: mysql_server__p
+
+- name: Fail if flag exists
+  ansible.builtin.fail:
+    msg: "Fail because flag exists, please remove the flag manually first!"
+  when: mysql_server__p.matched

@@ -1,0 +1,332 @@
+# 独立 Zookeeper 部署任务
+
+- name: Check if Java is installed
+  ansible.builtin.command: java -version
+  register: java_check
+  changed_when: false
+  failed_when: false
+
+- name: Try install OpenJDK 11 (best-effort)
+  ansible.builtin.package:
+    name:
+      - java-11-openjdk
+      - java-11-openjdk-devel
+    state: present
+  register: java_pkg11
+  ignore_errors: true
+  when:
+    - java_check.rc != 0
+    - zookeeper_java_mode | default('auto') in ['auto', 'package']
+
+- name: Try install OpenJDK 8 (fallback, best-effort)
+  ansible.builtin.package:
+    name:
+      - java-1.8.0-openjdk
+      - java-1.8.0-openjdk-devel
+    state: present
+  register: java_pkg8
+  ignore_errors: true
+  when:
+    - java_check.rc != 0
+    - zookeeper_java_mode | default('auto') in ['auto', 'package']
+    - java_pkg11 is defined
+    - java_pkg11 is failed or (java_pkg11.failed | default(false))
+
+- name: Re-check Java installation (after package attempt)
+  ansible.builtin.command: java -version
+  register: java_check_after_pkg
+  changed_when: false
+  failed_when: false
+  when:
+    - java_check.rc != 0
+    - zookeeper_java_mode | default('auto') in ['auto', 'package']
+
+- name: Install Java via tarball (auto download)
+  when:
+    - java_check.rc != 0
+    - (java_check_after_pkg.rc | default(1)) != 0
+    - zookeeper_java_mode | default('auto') in ['auto', 'tarball']
+  block:
+    - name: Ensure Java install base exists
+      ansible.builtin.file:
+        path: "{{ zookeeper_java_install_base }}"
+        state: directory
+        mode: '0755'
+
+    - name: Set Java home for tarball install
+      ansible.builtin.set_fact:
+        zookeeper_java_home: "{{ zookeeper_java_install_base }}/current"
+
+    - name: Ensure Java packages directory exists on control host
+      ansible.builtin.file:
+        path: "{{ zookeeper_java_packages_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Resolve Java tarball from GitHub API (auto)
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/adoptium/temurin11-binaries/releases/latest"
+        return_content: true
+      register: java_release
+      failed_when: false
+      delegate_to: localhost
+      run_once: true
+      when:
+        - zookeeper_java_download_url | default('auto') == 'auto'
+
+    - name: Select Java tarball asset (auto)
+      ansible.builtin.set_fact:
+        zookeeper_java_tarball_name: "{{ (java_release.json.assets | selectattr('name','match', '^' ~ zookeeper_java_asset_prefix) | selectattr('name','search','\\.tar\\.gz$') | list | first).name | default('') }}"
+        zookeeper_java_download_url: "{{ (java_release.json.assets | selectattr('name','match', '^' ~ zookeeper_java_asset_prefix) | selectattr('name','search','\\.tar\\.gz$') | list | first).browser_download_url | default('') }}"
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true
+      when:
+        - zookeeper_java_download_url | default('auto') == 'auto'
+        - java_release is defined
+        - java_release.status | default(0) == 200
+        - java_release.json is defined
+
+    - name: Distribute resolved Java tarball info to all hosts
+      ansible.builtin.set_fact:
+        zookeeper_java_tarball_name: "{{ hostvars['localhost'].zookeeper_java_tarball_name | default(zookeeper_java_tarball_name) }}"
+        zookeeper_java_download_url: "{{ hostvars['localhost'].zookeeper_java_download_url | default(zookeeper_java_download_url) }}"
+      when:
+        - zookeeper_java_download_url | default('auto') == 'auto'
+
+    - name: Check Java tarball exists on control host
+      ansible.builtin.stat:
+        path: "{{ zookeeper_java_packages_dir }}/{{ zookeeper_java_tarball_name }}"
+      register: java_pkg_stat
+      delegate_to: localhost
+      run_once: true
+
+    - name: Download Java tarball if missing (local)
+      ansible.builtin.get_url:
+        url: "{{ zookeeper_java_download_url }}"
+        dest: "{{ zookeeper_java_packages_dir }}/{{ zookeeper_java_tarball_name }}"
+        mode: '0644'
+      when:
+        - not java_pkg_stat.stat.exists
+        - fcs_auto_download_java | default(false)
+        - zookeeper_java_download_url | default('') not in ['', 'auto']
+      delegate_to: localhost
+      run_once: true
+
+    - name: Re-check Java tarball exists on control host
+      ansible.builtin.stat:
+        path: "{{ zookeeper_java_packages_dir }}/{{ zookeeper_java_tarball_name }}"
+      register: java_pkg_stat_after
+      delegate_to: localhost
+      run_once: true
+
+    - name: Fail if Java tarball is missing
+      ansible.builtin.fail:
+        msg: "Java tarball not found under {{ zookeeper_java_packages_dir }}. Please download it or set zookeeper_java_download_url to a valid URL."
+      when:
+        - not java_pkg_stat_after.stat.exists
+        - (not fcs_auto_download_java | default(false)) or (zookeeper_java_download_url | default('') in ['', 'auto'])
+      delegate_to: localhost
+      run_once: true
+
+    - name: Copy Java tarball to target host
+      ansible.builtin.copy:
+        src: "{{ zookeeper_java_packages_dir }}/{{ zookeeper_java_tarball_name }}"
+        dest: "/tmp/{{ zookeeper_java_tarball_name }}"
+        mode: '0644'
+
+    - name: Check if Java already installed via tarball
+      ansible.builtin.stat:
+        path: "{{ zookeeper_java_home }}/bin/java"
+      register: java_home_stat
+
+    - name: Extract Java tarball
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ zookeeper_java_tarball_name }}"
+        dest: "{{ zookeeper_java_install_base }}"
+        remote_src: true
+      when: not java_home_stat.stat.exists
+
+    - name: Find extracted Java directories
+      ansible.builtin.find:
+        paths: "{{ zookeeper_java_install_base }}"
+        file_type: directory
+        patterns:
+          - "jdk-*"
+          - "jre-*"
+      register: java_dirs
+
+    - name: Fail if no Java directory found after extraction
+      ansible.builtin.fail:
+        msg: "Java extraction failed: no jdk-*/jre-* directory found under {{ zookeeper_java_install_base }}"
+      when: java_dirs.files | length == 0
+
+    - name: Select latest Java directory
+      ansible.builtin.set_fact:
+        zookeeper_java_version_dir: "{{ (java_dirs.files | sort(attribute='mtime')) | last }}"
+
+    - name: Create Java current symlink
+      ansible.builtin.file:
+        src: "{{ zookeeper_java_version_dir.path }}"
+        dest: "{{ zookeeper_java_home }}"
+        state: link
+
+- name: Final Java check (PATH or tarball)
+  ansible.builtin.shell: |
+    if command -v java >/dev/null 2>&1; then
+      java -version
+    elif [ -n "{{ zookeeper_java_home | default('') }}" ] && [ -x "{{ zookeeper_java_home }}/bin/java" ]; then
+      "{{ zookeeper_java_home }}/bin/java" -version
+    else
+      exit 1
+    fi
+  register: java_check_final
+  changed_when: false
+  failed_when: false
+
+- name: Fail if Java is still missing
+  ansible.builtin.fail:
+    msg: "Java is required for Zookeeper. Install via package manager or provide tarball (see zookeeper_java_* vars)."
+  when: java_check_final.rc != 0
+
+- name: Ensure zookeeper group exists
+  ansible.builtin.group:
+    name: "{{ zookeeper_group }}"
+    state: present
+
+- name: Ensure zookeeper user exists
+  ansible.builtin.user:
+    name: "{{ zookeeper_user }}"
+    shell: /bin/bash
+    home: /home/{{ zookeeper_user }}
+    group: "{{ zookeeper_group }}"
+    create_home: yes
+    state: present
+
+- name: Create Zookeeper directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+    mode: '0755'
+  loop:
+    - "{{ zookeeper_install_base }}"
+    - "{{ zookeeper_data_dir }}"
+    - "{{ zookeeper_log_dir }}"
+
+- name: Ensure Zookeeper packages directory exists on control host
+  ansible.builtin.file:
+    path: "{{ zookeeper_packages_dir }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Ensure Zookeeper package exists on control host
+  ansible.builtin.stat:
+    path: "{{ zookeeper_packages_dir }}/{{ zookeeper_package_name }}"
+  register: zk_pkg_stat
+  delegate_to: localhost
+  run_once: true
+
+- name: Download Zookeeper package if missing (local)
+  ansible.builtin.get_url:
+    url: "{{ zookeeper_download_url }}"
+    dest: "{{ zookeeper_packages_dir }}/{{ zookeeper_package_name }}"
+    mode: '0644'
+  when:
+    - not zk_pkg_stat.stat.exists
+    - fcs_auto_download_zookeeper | default(false)
+  delegate_to: localhost
+  run_once: true
+
+- name: Fail if Zookeeper package is missing
+  ansible.builtin.fail:
+    msg: "Zookeeper package not found under {{ zookeeper_packages_dir }}. Please download it or set fcs_auto_download_zookeeper=true"
+  when:
+    - not zk_pkg_stat.stat.exists
+    - not fcs_auto_download_zookeeper | default(false)
+  delegate_to: localhost
+  run_once: true
+
+- name: Copy Zookeeper package to target host
+  ansible.builtin.copy:
+    src: "{{ zookeeper_packages_dir }}/{{ zookeeper_package_name }}"
+    dest: "/tmp/{{ zookeeper_package_name }}"
+    mode: '0644'
+
+- name: Extract Zookeeper package
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ zookeeper_package_name }}"
+    dest: "{{ zookeeper_install_base }}"
+    remote_src: true
+  args:
+    creates: "{{ zookeeper_version_dir }}"
+
+- name: Set Zookeeper installation ownership
+  ansible.builtin.file:
+    path: "{{ zookeeper_version_dir }}"
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+    recurse: true
+
+- name: Create Zookeeper current symlink
+  ansible.builtin.file:
+    src: "{{ zookeeper_version_dir }}"
+    dest: "{{ zookeeper_home }}"
+    state: link
+
+- name: Ensure Zookeeper config directory exists
+  ansible.builtin.file:
+    path: "{{ zookeeper_home }}/conf"
+    state: directory
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+    mode: '0755'
+
+- name: Generate zoo.cfg
+  ansible.builtin.template:
+    src: zoo.cfg.j2
+    dest: "{{ zookeeper_home }}/conf/zoo.cfg"
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+    mode: '0644'
+
+- name: Set myid for this Zookeeper node
+  ansible.builtin.copy:
+    content: "{{ zk_id | default((groups['zookeeper_cluster'] | default([])).index(inventory_hostname) + 1) | int }}"
+    dest: "{{ zookeeper_data_dir }}/myid"
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+    mode: '0644'
+
+- name: Generate systemd service file
+  ansible.builtin.template:
+    src: zookeeper.service.j2
+    dest: /etc/systemd/system/zookeeper.service
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Start Zookeeper service
+  ansible.builtin.systemd:
+    name: zookeeper
+    state: started
+    enabled: true
+
+- name: Check Zookeeper port is listening
+  ansible.builtin.shell: netstat -tlnp 2>/dev/null | grep ":{{ zookeeper_client_port }} " || ss -tlnp 2>/dev/null | grep ":{{ zookeeper_client_port }} " || echo "Port not listening"
+  register: zk_port_check
+  changed_when: false
+  failed_when: false
+
+- name: Display Zookeeper port status
+  ansible.builtin.debug:
+    msg: "Zookeeper port {{ zookeeper_client_port }} status: {{ zk_port_check.stdout }}"

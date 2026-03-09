@@ -1,0 +1,15 @@
+[Unit]
+Description=MySQL Router Exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ mysqlrouter_exporter_run_user }}
+Group={{ mysqlrouter_exporter_run_group }}
+Type=simple
+ExecStart={{ mysqlrouter_exporter_install_dir }}/mysqlrouter_exporter --config {{ mysqlrouter_exporter_config_file }}
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

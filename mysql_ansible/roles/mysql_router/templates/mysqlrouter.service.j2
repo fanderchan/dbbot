@@ -1,0 +1,22 @@
+[Unit]
+Description=MySQL Router
+After=network.target
+
+[Service]
+Type=simple
+User={{ router_user }}
+Group={{ router_group }}
+ExecStart={{ router_base_dir }}/bin/mysqlrouter -c {{ router_data_dir }}/mysqlrouter.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+LimitNPROC=65535
+
+# Directory creation and permissions
+RuntimeDirectory=mysqlrouter
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
+

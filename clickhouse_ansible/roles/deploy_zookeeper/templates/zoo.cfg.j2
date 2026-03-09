@@ -1,0 +1,13 @@
+tickTime={{ zookeeper_tick_time }}
+initLimit={{ zookeeper_init_limit }}
+syncLimit={{ zookeeper_sync_limit }}
+dataDir={{ zookeeper_data_dir }}
+dataLogDir={{ zookeeper_log_dir }}
+clientPort={{ zookeeper_client_port }}
+maxClientCnxns={{ zookeeper_max_client_cnxns }}
+autopurge.snapRetainCount={{ zookeeper_autopurge_snap_retain_count }}
+autopurge.purgeInterval={{ zookeeper_autopurge_purge_interval }}
+
+{% for node in groups['zookeeper_cluster'] | default([]) %}
+server.{{ hostvars[node]['zk_id'] | default(loop.index) }}={{ hostvars[node]['ansible_host'] | default(node) }}:{{ zookeeper_peer_port }}:{{ zookeeper_election_port }}
+{% endfor %}

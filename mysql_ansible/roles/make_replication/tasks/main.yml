@@ -1,0 +1,8 @@
+- name: Config replication
+  ansible.builtin.import_tasks: config_master_slaves.yml
+
+- name: Touch master_slave_finish.flag
+  ansible.builtin.file:
+    path: "{{ datadir }}/master_slave_finish.flag"
+    state: touch
+    mode: '0644'

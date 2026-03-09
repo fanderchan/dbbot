@@ -1,0 +1,18 @@
+[Unit]
+Description=Prometheus Server
+After=network.target
+
+[Service]
+User={{ prometheus_run_user }}
+Group={{ prometheus_run_user_group }}
+Type=simple
+ExecStart=/usr/local/prometheus/prometheus \
+    --config.file=/usr/local/prometheus/prometheus.yml \
+    --storage.tsdb.path=/usr/local/prometheus/data \
+    --web.external-url={{ prometheus_external_url }} \
+    --web.listen-address=:{{ prometheus_port }}
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

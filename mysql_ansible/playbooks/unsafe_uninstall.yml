@@ -1,0 +1,22 @@
+- name: Deploy single-node MySQL server using binary installation
+  hosts: dbbot_mysql
+  become: true
+  vars_files:
+    - common_config.yml
+    - advanced_config.yml
+  vars:
+    roles_to_execute:
+      - "../roles/unsafe_uninstall"
+  pre_tasks:
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Import confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation_uninstall.yml
+  tasks:
+    - name: Include role
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+      loop: "{{ roles_to_execute }}"
+      loop_control:
+        loop_var: role_name

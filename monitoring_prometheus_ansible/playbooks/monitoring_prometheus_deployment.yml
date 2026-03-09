@@ -1,0 +1,59 @@
+- name: Deploy Prometheus+Grafana+Alertmanager using binary installation
+  hosts: all
+  become: true
+  any_errors_fatal: true
+  gather_facts: yes
+  vars_files:
+    - default/common_config.yml
+    - default/var_monitoring_prometheus_deployment.yml
+    - common_config.yml
+    - vars/var_monitoring_prometheus_deployment.yml
+  vars:
+    skip_set_linux: true
+    prometheus_ip: "{{ hostvars[groups['prometheus'][0]].ansible_default_ipv4.address | default(hostvars[groups['prometheus'][0]].inventory_hostname) }}"
+    prometheus_external_url: "http://{{ prometheus_ip }}:{{ prometheus_port }}"
+    grafana_ip: "{{ hostvars[groups['grafana'][0]].inventory_hostname }}"
+    alertmanager_ip: "{{ hostvars[groups['alertmanager'][0]].inventory_hostname }}"
+  pre_tasks:
+    - name: Import tasks to validate setting in common_config.yml
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+#    - name: Import tasks to check for duplicate hostnames
+#      ansible.builtin.import_tasks: pre_tasks/check_duplicate_hostnames.yml
+
+    - name: Import tasks to check that each group has exactly one host
+      ansible.builtin.import_tasks: pre_tasks/check_group_hosts.yml
+
+    - name: Import tasks to check if packages exist
+      ansible.builtin.import_tasks: pre_tasks/check_if_packages_exist.yml
+
+    - name: Import confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+
+  tasks:
+    - name: Import task to check if /tmp/set_linux_finished exists
+      ansible.builtin.import_tasks: tasks/check_set_linux_finished.yml
+      when: not skip_set_linux
+
+    - name: Import task to include set_linux role
+      include_role:
+        name: "../roles/set_linux"
+      when: not skip_set_linux
+
+    - name: Include Prometheus role
+      include_role:
+        name: "../roles/prometheus"
+      when: "'prometheus' in group_names"
+
+    - name: Include Grafana role
+      include_role:
+        name: "../roles/grafana"
+      when: "'grafana' in group_names"
+
+    - name: Include Alertmanager role
+      include_role:
+        name: "../roles/alertmanager"
+      when: "'alertmanager' in group_names"

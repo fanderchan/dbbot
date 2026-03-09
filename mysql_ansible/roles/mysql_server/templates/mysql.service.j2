@@ -1,0 +1,34 @@
+[Unit]
+Description=MySQL Server
+Documentation=man:mysqld(8)
+Documentation=http://dev.mysql.com/doc/refman/en/using-systemd.html
+After=network.target
+After=syslog.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+{% if db_type == 'greatsql' and fcs_use_greatsql_ha and make_mgr_role_included is defined and make_mgr_role_included %}
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+{% endif %}
+User={{ mysql_user }}
+Group={{ mysql_group }}
+ExecStart={{ mysql_software_dir }}/bin/mysqld --defaults-file={{ mycnf_dir }}/my.cnf
+LimitNOFILE = 65536
+Restart=on-failure
+RestartPreventExitStatus=1
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=2
+TimeoutStartSec=900
+TimeoutStopSec=0
+Environment=MYSQLD_PARENT_PID=1
+{% if fcs_mysql_use_jemalloc | bool %}
+{% if os_type in ['Rocky9', 'openEuler24','openEuler22','openEuler20','BigCloud21', 'Kylin Linux Advanced ServerV10'] %}
+Environment="LD_PRELOAD=/usr/lib64/libjemalloc.so.2"
+{% else %}
+Environment="LD_PRELOAD=/usr/lib64/libjemalloc.so.1"
+{% endif %}
+{% endif %}
+

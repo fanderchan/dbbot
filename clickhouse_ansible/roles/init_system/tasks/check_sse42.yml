@@ -1,0 +1,13 @@
+- name: Check SSE 4.2 instruction set support
+  ansible.builtin.shell: grep -q sse4_2 /proc/cpuinfo && echo "SSE 4.2 supported" || echo "SSE 4.2 not supported"
+  register: sse42_check
+  changed_when: false
+
+- name: Fail if SSE 4.2 is not supported
+  ansible.builtin.fail:
+    msg: "SSE 4.2 instruction set is not supported. ClickHouse requires SSE 4.2 support."
+  when: "'not supported' in sse42_check.stdout"
+
+- name: Display SSE 4.2 check result
+  ansible.builtin.debug:
+    msg: "{{ sse42_check.stdout }}"

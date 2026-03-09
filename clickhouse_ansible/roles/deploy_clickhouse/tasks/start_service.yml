@@ -1,0 +1,162 @@
+- name: Stop ClickHouse service if running (cleanup)
+  ansible.builtin.systemd:
+    name: "{{ clickhouse_service_name }}"
+    state: stopped
+  ignore_errors: true
+
+- name: Kill stale ClickHouse process for this instance (if any)
+  ansible.builtin.shell: |
+    if [ -f "{{ clickhouse_pid_file }}" ]; then
+      pid=$(cat "{{ clickhouse_pid_file }}" 2>/dev/null || true)
+      if [ -n "$pid" ]; then
+        kill -9 "$pid" || true
+        sleep 2
+      fi
+    fi
+  ignore_errors: true
+  changed_when: false
+
+- name: Remove stale PID file if exists
+  ansible.builtin.file:
+    path: "{{ clickhouse_pid_file }}"
+    state: absent
+  ignore_errors: true
+
+- name: Start ClickHouse service
+  ansible.builtin.systemd:
+    name: "{{ clickhouse_service_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait a moment for service to initialize
+  ansible.builtin.pause:
+    seconds: 5
+
+- name: Check ClickHouse service status (initial)
+  ansible.builtin.systemd:
+    name: "{{ clickhouse_service_name }}"
+  register: service_status_initial
+  failed_when: false
+
+- name: Display initial service status
+  ansible.builtin.debug:
+    msg: "ClickHouse service initial state: {{ service_status_initial.status.ActiveState }}, SubState: {{ service_status_initial.status.SubState }}"
+
+- name: Wait for service to become active (retry loop)
+  ansible.builtin.wait_for:
+    timeout: 120
+    delay: 5
+  when: service_status_initial.status.ActiveState != 'active'
+  register: wait_result
+  failed_when: false
+  delegate_to: "{{ inventory_hostname }}"
+  # This is a dummy wait, we'll check status in next task
+
+- name: Check ClickHouse service status (final)
+  ansible.builtin.systemd:
+    name: "{{ clickhouse_service_name }}"
+  register: service_status
+
+- name: Display service status
+  ansible.builtin.debug:
+    msg: "ClickHouse service state: {{ service_status.status.ActiveState }}, SubState: {{ service_status.status.SubState }}"
+
+- name: Check ClickHouse error logs for recent errors
+  ansible.builtin.shell: |
+    if [ -f "{{ clickhouse_log_dir }}/clickhouse-server.err.log" ]; then
+      tail -100 "{{ clickhouse_log_dir }}/clickhouse-server.err.log"
+    elif [ -f "{{ clickhouse_log_dir }}/clickhouse-server.log" ]; then
+      tail -100 "{{ clickhouse_log_dir }}/clickhouse-server.log" | grep -i "error\|fatal\|exception" || tail -50 "{{ clickhouse_log_dir }}/clickhouse-server.log"
+    else
+      echo "Log files not found yet"
+    fi
+  register: clickhouse_error_logs
+  changed_when: false
+  failed_when: false
+
+- name: Display ClickHouse error logs
+  ansible.builtin.debug:
+    var: clickhouse_error_logs.stdout_lines
+  when: 
+    - clickhouse_error_logs.stdout_lines | length > 0
+    - service_status.status.ActiveState != 'active'
+
+- name: Check systemd journal for ClickHouse errors
+  ansible.builtin.shell: journalctl -u {{ clickhouse_service_name }} --no-pager -n 50 2>/dev/null || echo "Journal not available"
+  register: clickhouse_journal
+  changed_when: false
+  failed_when: false
+  when: service_status.status.ActiveState != 'active'
+
+- name: Display systemd journal logs
+  ansible.builtin.debug:
+    var: clickhouse_journal.stdout_lines
+  when: 
+    - clickhouse_journal is defined and (clickhouse_journal.stdout_lines | default([]) | length > 0)
+    - service_status.status.ActiveState != 'active'
+
+- name: Check if ClickHouse process is running
+  ansible.builtin.shell: pgrep -f clickhouse-server || echo "No process found"
+  register: clickhouse_process
+  changed_when: false
+  failed_when: false
+
+- name: Display ClickHouse process status
+  ansible.builtin.debug:
+    msg: "ClickHouse process: {{ clickhouse_process.stdout }}"
+
+- name: Check if ClickHouse HTTP port is listening
+  ansible.builtin.shell: netstat -tlnp 2>/dev/null | grep ":{{ clickhouse_http_port }} " || ss -tlnp 2>/dev/null | grep ":{{ clickhouse_http_port }} " || echo "Port not listening"
+  register: port_check
+  changed_when: false
+  failed_when: false
+
+- name: Display port status
+  ansible.builtin.debug:
+    msg: "Port {{ clickhouse_http_port }} status: {{ port_check.stdout }}"
+
+- name: Wait for ClickHouse HTTP port to be ready (only if service is active)
+  ansible.builtin.wait_for:
+    host: "{{ ansible_default_ipv4.address | default('127.0.0.1') }}"
+    port: "{{ clickhouse_http_port }}"
+    delay: 5
+    timeout: 120
+    msg: "ClickHouse HTTP port {{ clickhouse_http_port }} is not ready after 120 seconds"
+  when: service_status.status.ActiveState == 'active'
+  failed_when: false
+
+- name: Verify ClickHouse is responding (only if service is active)
+  ansible.builtin.uri:
+    url: "http://{{ ansible_default_ipv4.address | default('127.0.0.1') }}:{{ clickhouse_http_port }}/ping"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: clickhouse_ping
+  retries: 5
+  delay: 2
+  when: service_status.status.ActiveState == 'active'
+  failed_when: false
+
+- name: Display ClickHouse ping result
+  ansible.builtin.debug:
+    msg: "ClickHouse ping response: {{ clickhouse_ping.json | default(clickhouse_ping.content | default('')) }}"
+  when: 
+    - service_status.status.ActiveState == 'active'
+    - clickhouse_ping is defined
+
+- name: Fail if service is not active after waiting
+  ansible.builtin.fail:
+    msg: |
+      ClickHouse service failed to start after waiting.
+      State: {{ service_status.status.ActiveState }}
+      SubState: {{ service_status.status.SubState }}
+      
+      Please check:
+      1. ClickHouse configuration files: /etc/clickhouse-server/
+      2. Error logs: {{ clickhouse_log_dir }}/clickhouse-server.err.log
+      3. System logs: journalctl -u {{ clickhouse_service_name }}
+      4. Verify ports {{ clickhouse_http_port }}, {{ clickhouse_tcp_port }} are not in use
+      5. Check if ClickHouse Keeper/Zookeeper is accessible
+      6. Check if all required directories exist and have correct permissions
+  when: service_status.status.ActiveState != 'active'

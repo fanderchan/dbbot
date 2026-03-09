@@ -1,0 +1,58 @@
+#!/usr/bin/expect -f
+# Bootstrap MySQL Router with expect script
+# Handles two password prompts: cluster admin and router account
+
+set timeout 120
+set bootstrap_password "{{ router_bootstrap_password }}"
+set router_password "{{ mysql_router_password }}"
+
+spawn {{ router_base_dir }}/bin/mysqlrouter --bootstrap \
+    {{ router_bootstrap_user }}@{{ router_bootstrap_server }}:{{ mysql_port }} \
+    --directory {{ router_data_dir }} \
+    --conf-use-sockets \
+    --conf-use-gr-notifications \
+    --name {{ router_bootstrap_name | default(ansible_hostname) }} \
+    --user {{ router_user }} \
+    --account {{ mysql_router_user }} \
+    --account-host {{ innodb_cluster_router_user_sub_net | default('1%') }} \
+    --strict \
+{% if router_bootstrap_force | default(true) | bool %}    --force \
+{% endif %}
+
+# Important: match the two password prompts by the exact account names
+expect {
+    -re {Please enter MySQL password for {{ router_bootstrap_user }}:\s*$} {
+        send -- "$bootstrap_password\r"
+        exp_continue
+    }
+    -re {Enter password for {{ router_bootstrap_user }}:\s*$} {
+        send -- "$bootstrap_password\r"
+        exp_continue
+    }
+    -re {Please enter password for {{ router_bootstrap_user }}:\s*$} {
+        send -- "$bootstrap_password\r"
+        exp_continue
+    }
+
+    -re {Please enter MySQL password for {{ mysql_router_user }}:\s*$} {
+        send -- "$router_password\r"
+        exp_continue
+    }
+    -re {Enter password for {{ mysql_router_user }}:\s*$} {
+        send -- "$router_password\r"
+        exp_continue
+    }
+    -re {Please enter password for {{ mysql_router_user }}:\s*$} {
+        send -- "$router_password\r"
+        exp_continue
+    }
+
+    eof {
+        catch wait result
+        exit [lindex $result 3]
+    }
+    timeout {
+        send_user "Timeout waiting for password prompt\n"
+        exit 1
+    }
+}

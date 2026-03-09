@@ -1,0 +1,21 @@
+[Unit]
+Description=Grafana - Data visualization & Monitoring
+Documentation=https://grafana.com/docs/
+After=network.target
+
+[Service]
+User={{ grafana_run_user }}
+Group={{ grafana_run_user_group }}
+Type=simple
+ExecStart=/usr/local/grafana/bin/grafana server \
+    --config=/usr/local/grafana/conf/grafana.ini \
+    --homepath=/usr/local/grafana \
+    cfg:default.paths.logs=/var/log/grafana \
+    cfg:default.paths.data=/usr/local/grafana/data \
+    cfg:default.paths.plugins=/usr/local/grafana/plugins
+
+Restart=always
+Environment="GRAFANA_OPTS="
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+- name: Check if mysqld_exporter package is available locally (dbbot server)
+  ansible.builtin.stat:
+    path: "{{ mysql_packages_dir }}/{{ mysqld_exporter_package }}"
+  register: mysqld_exporter_package_stat
+  run_once: true
+  delegate_to: 127.0.0.1
+
+#- name: Fail if mysqld_exporter package is not found and auto download is disabled (dbbot server)
+#  ansible.builtin.fail:
+#    msg: "mysqld_exporter package not found and auto download is disabled"
+#  when:
+#    - not mysqld_exporter_package_stat.stat.exists
+#    - not fcs_auto_download_packages | bool
+#  run_once: true
+#  delegate_to: 127.0.0.1

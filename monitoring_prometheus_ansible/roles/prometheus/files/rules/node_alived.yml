@@ -1,0 +1,12 @@
+groups:
+- name: 实例存活告警规则
+  rules:
+  - alert: 实例存活告警
+    expr: up == 0
+    for: 1m
+    labels:
+      user: prometheus
+      severity: warning
+    annotations:
+      summary: "主机宕机 !!!"
+      description: "该实例主机已经宕机超过一分钟了。"

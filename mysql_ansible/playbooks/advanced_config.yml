@@ -1,0 +1,24 @@
+## dir
+mycnf_dir: "{{ mysql_data_dir_base }}/etc/{{ mysql_port }}"
+datadir: "{{ mysql_data_dir_base }}/data/{{ mysql_port }}"
+tmpdir: "{{ mysql_data_dir_base }}/tmp/{{ mysql_port }}"
+binlog_dir: "{{ mysql_data_dir_base }}/log/binlog/{{ mysql_port }}"
+relaylog_dir: "{{ mysql_data_dir_base }}/log/relaylog/{{ mysql_port }}"
+redolog_dir: "{{ mysql_data_dir_base }}/log/redolog/{{ mysql_port }}"
+socket_dir: "{{ datadir }}"
+mysqlx_socket_dir: "{{ datadir }}"
+
+
+auditlog_dir: "{{ datadir }}"  # Only applicable for Percona and GreatSQL
+slowlog_dir: "{{ datadir }}"
+errlog_dir: "{{ datadir }}"
+generallog_dir: "{{ datadir }}"
+
+## file
+socket: "{{ socket_dir }}/mysql.sock"
+mysqlx_socket: "{{ mysqlx_socket_dir }}/mysqlx.sock"
+
+## do not modify
+mysql_package: "{% if db_type == 'mysql' %}{{ 'mysql-' + mysql_version + '-linux-' + ('glibc2.12' if mysql_version.startswith('5.') else 'glibc2.17') + '-x86_64' + ('.tar.gz' if mysql_version.startswith('5.') else '-minimal.tar.xz') }}{% elif db_type == 'percona' %}{{ percona_package }}{% elif db_type == 'greatsql' %}{{ greatsql_package }}{% endif %}"
+greatsql_package: "GreatSQL-{{ mysql_version }}-Linux-glibc2.17-x86_64-minimal.tar.xz"  # dont modifiy
+percona_package: Percona-Server-8.0.29-21-Linux.x86_64.glibc2.17.tar.gz

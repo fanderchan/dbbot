@@ -1,0 +1,6 @@
+- name: Check if {{ mysql_package }} exists in ../downloads/ (local)
+  command: find ../downloads/ -type f -name "{{ mysql_package }}"
+  register: find_result
+  failed_when: find_result.stdout == ""
+  run_once: true
+  delegate_to: localhost

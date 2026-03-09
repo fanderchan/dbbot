@@ -1,0 +1,24 @@
+- name: Ensure /usr/local/grafana directory exists
+  ansible.builtin.file:
+    path: /usr/local/grafana
+    state: directory
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    mode: '0755'
+
+- name: Extract grafana tarball
+  ansible.builtin.unarchive:
+    creates: "/tmp/unarchive_grafana_package_finished"
+    copy: false
+    src: /tmp/{{ grafana_package }}
+    dest: /usr/local/grafana
+    owner: "{{ grafana_run_user }}"
+    group: "{{ grafana_run_user_group }}"
+    extra_opts:
+      - --strip-components=1
+
+- name: Touch unarchive_grafana_package_finished file
+  ansible.builtin.file:
+    path: "/tmp/unarchive_grafana_package_finished"
+    mode: '0755'
+    state: touch

@@ -1,0 +1,11 @@
+groups:
+- name: mysql_84_compatibility
+  rules:
+  - record: mysql_slave_status_seconds_behind_master
+    expr: mysql_slave_status_seconds_behind_master or mysql_slave_status_seconds_behind_source
+
+  - record: mysql_slave_status_slave_io_running
+    expr: mysql_slave_status_replica_io_running or mysql_slave_status_slave_io_running
+
+  - record: mysql_slave_status_slave_sql_running
+    expr: mysql_slave_status_replica_sql_running or mysql_slave_status_slave_sql_running

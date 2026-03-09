@@ -1,0 +1,71 @@
+# vars/var_restore_pitr_8.4.yml
+# Restore workflow:
+# 1) Restore a full clone snapshot
+# 2) (Optional) Apply binlog increments to a target time/GTID (PITR)
+
+# -----------------------------
+# Commonly modified parameters
+# -----------------------------
+
+# Restore mode:
+# - new_instance: deploy a fresh MySQL instance and restore into it
+# - existing_instance: restore into an already deployed instance
+restore_mode: "new_instance"
+
+# Backup snapshot identifier (must match the artifact name produced by backup_script_8.4.yml)
+# Example: backup_snapshot_id: "20260109_001240" 
+backup_snapshot_id: ""
+
+# Backup source MySQL port (used to locate backup paths: /backup/mysql<port>/...)
+backup_source_mysql_port: 3306
+
+# Restore target MySQL port (the restored MySQL instance will listen on this port)
+restore_target_mysql_port: 3388
+
+# Root directory where backup artifacts are stored on the restore host
+backup_root_dir: "/backup"
+
+# Backup snapshot directory (preferred input)
+# Example: /backup/mysql3306/20251221_142614
+backup_dir: "{{ backup_root_dir }}/mysql{{ backup_source_mysql_port }}/{{ backup_snapshot_id }}"
+
+# If true: clone restore + apply binlog increments (PITR).
+# If false: clone restore only (full restore only).
+enable_pitr: true
+
+# Restore target (choose EXACTLY ONE):
+# - pitr_target_time: stop at a wall-clock time (format: YYYY-MM-DD HH:MM:SS)
+# - pitr_target_gtid: stop at a single GTID (uuid:seq)
+pitr_target_time: ""
+# Example: pitr_target_gtid: "2642c056-dcd1-11f0-86b7-000c29375703:3002"
+pitr_target_gtid: ""
+
+# When targeting a single GTID (uuid:seq):
+# - true  => include the target GTID itself (inclusive)
+# - false => stop right before the target GTID (exclusive)
+pitr_target_gtid_inclusive: false
+
+# Debug switch for PITR helper (adds --debug for richer logs)
+restore_pitr_debug: true
+
+# Restore connection settings for applying binlogs
+restore_mysql_host: "127.0.0.1"
+restore_mysql_user: "{{ mysql_admin_user }}"
+restore_mysql_password: "{{ mysql_admin_127_password }}"
+
+# Safety switches
+# If true, existing datadir contents will be removed before restore.
+restore_allow_nonempty_datadir: false
+
+# Wait timeout for MySQL start (seconds)
+restore_mysql_start_timeout: 300
+
+# Keep mysql_port aligned with restore target
+mysql_port: "{{ restore_target_mysql_port }}"
+
+
+# -----------------------------------
+# Derived parameters (rarely modified)
+# -----------------------------------
+
+# No extra derived paths needed; restore script resolves meta/clone/binlog under backup_dir.

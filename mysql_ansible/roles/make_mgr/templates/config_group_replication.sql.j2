@@ -1,0 +1,30 @@
+set sql_log_bin=0;
+create user {{ mysql_mgr_user }}@'{{ sub_nets }}' identified by '{{ mysql_mgr_password }}';
+grant replication slave, backup_admin on *.* to {{ mysql_mgr_user }}@'{{ sub_nets }}';
+set sql_log_bin=1;
+
+install plugin group_replication soname 'group_replication.so';
+
+{% if mysql_version.startswith('8.4') and db_type == 'mysql' %}
+change replication source to
+    source_user='{{ mysql_mgr_user }}',
+    source_password='{{ mysql_mgr_password }}'
+    for channel 'group_replication_recovery';
+
+{% else %}
+
+change master to 
+    master_user='{{ mysql_mgr_user }}',
+    master_password='{{ mysql_mgr_password }}'
+    for channel 'group_replication_recovery';
+{% endif %}
+
+
+{% if mysql_mgr_hosts[0] in ansible_all_ipv4_addresses %}
+    set global group_replication_bootstrap_group=on;
+    start group_replication;
+    set global group_replication_bootstrap_group=off;
+{% else %}
+    select sleep(15);
+    start group_replication;
+{% endif %}

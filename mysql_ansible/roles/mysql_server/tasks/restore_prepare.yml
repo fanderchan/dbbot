@@ -1,0 +1,31 @@
+- name: Fail if mysql install flag exists
+  ansible.builtin.import_tasks: fail_if_flag_exists.yml
+
+- name: Check mysql port not in use
+  ansible.builtin.import_tasks: check_mysql_port_not_in_use.yml
+
+- name: Create mysql user and group
+  ansible.builtin.import_tasks: create_user.yml
+
+- name: Install MySQL dependents
+  ansible.builtin.import_tasks: install_mysql_dependents.yml
+
+- name: Install MySQL server
+  ansible.builtin.import_tasks: install_mysql.yml
+
+- name: Fix GreatSQL install when applicable
+  ansible.builtin.import_tasks: fix_greatsql_install.yml
+  when: db_type == 'greatsql'
+
+- name: Create directories and my.cnf
+  ansible.builtin.import_tasks: mkdir_and_config_file.yml
+
+- name: Install systemd service file without init
+  ansible.builtin.template:
+    src: mysql.service.j2
+    dest: /etc/systemd/system/{{ mysql_service_name }}.service
+    mode: '0644'
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
