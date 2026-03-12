@@ -12,8 +12,8 @@
 
 ## Website and Docs
 
-- Official website: http://dbbot.ai
-- Online documentation: http://dbbot.ai/docs/
+- Official website: https://dbbot.ai
+- Online documentation: https://dbbot.ai/docs/
 - GitHub repository: https://github.com/fanderchan/dbbot
 - Releases: https://github.com/fanderchan/dbbot/releases
 - Issues: https://github.com/fanderchan/dbbot/issues

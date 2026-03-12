@@ -12,8 +12,8 @@
 
 ## 官网与文档
 
-- 官方网站：http://dbbot.ai
-- 在线文档：http://dbbot.ai/docs/
+- 官方网站：https://dbbot.ai
+- 在线文档：https://dbbot.ai/docs/
 - GitHub 仓库：https://github.com/fanderchan/dbbot
 - Releases：https://github.com/fanderchan/dbbot/releases
 - Issues：https://github.com/fanderchan/dbbot/issues
