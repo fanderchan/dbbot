@@ -1,7 +1,12 @@
+- name: Select package-manager helper dependency for RedHat family
+  ansible.builtin.set_fact:
+    clickhouse_redhat_helper_package: "{{ 'dnf-plugins-core' if ansible_distribution == 'openEuler' else 'yum-utils' }}"
+  when: ansible_os_family == "RedHat"
+
 - name: Install ClickHouse dependencies (RedHat family)
   ansible.builtin.yum:
     name:
-      - yum-utils
+      - "{{ clickhouse_redhat_helper_package }}"
       - libtool
       - unixODBC
       - unixODBC-devel

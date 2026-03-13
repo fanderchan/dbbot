@@ -3,7 +3,7 @@
   changed_when: true
   failed_when: false
   when:
-    - fcs_set_hostname | default(true)
+    - fcs_set_hostname | default(true) | bool
     - ck_system_hostname is defined
     - ck_system_hostname | length > 0
     - ansible_service_mgr == "systemd"
@@ -15,7 +15,7 @@
   changed_when: true
   failed_when: false
   when:
-    - fcs_set_hostname | default(true)
+    - fcs_set_hostname | default(true) | bool
     - ck_system_hostname is defined
     - ck_system_hostname | length > 0
     - ansible_service_mgr != "systemd"
@@ -27,6 +27,6 @@
     line: "{{ ck_physical_host | default(ansible_host | default(inventory_hostname)) }} {{ ck_system_hostname }}"
     state: present
   when:
-    - fcs_set_hostname | default(true)
+    - fcs_set_hostname | default(true) | bool
     - ck_system_hostname is defined
     - ck_system_hostname | length > 0
