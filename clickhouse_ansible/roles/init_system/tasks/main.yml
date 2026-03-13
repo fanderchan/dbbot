@@ -1,3 +1,6 @@
+- name: Import tasks to ensure SELinux Python bindings exist
+  ansible.builtin.import_tasks: ensure_selinux_python.yml
+
 - name: Import tasks to disable transparent hugepage
   ansible.builtin.import_tasks: disable_thp.yml
 

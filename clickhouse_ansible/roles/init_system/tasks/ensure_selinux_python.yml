@@ -1,0 +1,15 @@
+- name: Select SELinux Python binding package for RedHat family
+  ansible.builtin.set_fact:
+    clickhouse_selinux_python_package: "{{ 'python3-libselinux' if ansible_distribution == 'openEuler' else 'libselinux-python3' }}"
+  when: ansible_os_family == "RedHat"
+
+- name: Ensure SELinux Python bindings are installed before managed-file tasks
+  ansible.builtin.yum:
+    name: "{{ clickhouse_selinux_python_package }}"
+    state: present
+    use_backend: auto
+  when:
+    - ansible_os_family == "RedHat"
+    - ansible_selinux is defined
+    - ansible_selinux.status is defined
+    - ansible_selinux.status != "disabled"
