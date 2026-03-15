@@ -94,6 +94,7 @@ fcs_role_mysqld_exporter_create_monitor_user: true
 fcs_mysql_use_jemalloc: true
 fcs_use_greatsql_ha: true
 fcs_mysql_fast_login_have_prompt: true
+dbbot_confirmation_input: ""   # Set to "confirm" only for non-interactive automation; keep empty for manual confirmation.
 
 ## Feature Control Switch vars
 fcs_create_mysql_fast_login_name: db{{ mysql_port }}

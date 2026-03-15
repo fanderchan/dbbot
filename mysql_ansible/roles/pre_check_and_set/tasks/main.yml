@@ -1,7 +1,49 @@
-# Verify yum connectivity by employing "install libselinux-python3"; when utilizing Python3, libselinux-python3 proves beneficial for configuring the target machine's SELinux settings.
-- name: Check yum and install libselinux-python3
+# Ensure the target has a SELinux Python binding that matches the interpreter
+# selected in pre_tasks/check_os_and_python.yml before ansible.posix.selinux runs.
+- name: Build SELinux Python binding package candidate list
+  ansible.builtin.set_fact:
+    pre_check_and_set__selinux_python_binding_candidates: >-
+      {{
+        ['libselinux-python']
+        if (ansible_python_interpreter | default('')) is search('python2')
+        else ['python3-libselinux', 'libselinux-python3']
+      }}
+
+- name: Probe SELinux Python binding package candidates
+  ansible.builtin.shell: >-
+    {{ ansible_pkg_mgr | default('yum') }} -q list installed {{ item }} >/dev/null 2>&1
+    || {{ ansible_pkg_mgr | default('yum') }} -q list available {{ item }} >/dev/null 2>&1
+  args:
+    warn: false
+  loop: "{{ pre_check_and_set__selinux_python_binding_candidates }}"
+  register: pre_check_and_set__selinux_python_binding_probe
+  changed_when: false
+  failed_when: false
+
+- name: Select SELinux Python binding package
+  ansible.builtin.set_fact:
+    pre_check_and_set__selinux_python_binding_package: >-
+      {{
+        (
+          pre_check_and_set__selinux_python_binding_probe.results
+          | selectattr('rc', 'equalto', 0)
+          | map(attribute='item')
+          | list
+          | first
+        ) | default('')
+      }}
+
+- name: Fail if no SELinux Python binding package matches the target interpreter
+  ansible.builtin.fail:
+    msg: >-
+      No SELinux Python binding package was found for interpreter
+      {{ ansible_python_interpreter | default('unknown') }} on {{ os_type }}.
+      Tried: {{ pre_check_and_set__selinux_python_binding_candidates | join(', ') }}
+  when: pre_check_and_set__selinux_python_binding_package == ''
+
+- name: Check yum and install SELinux Python binding
   ansible.builtin.yum:
-    name: libselinux-python3
+    name: "{{ pre_check_and_set__selinux_python_binding_package }}"
     state: present
     use_backend: auto
   ignore_errors: false

@@ -12,6 +12,13 @@
   register: confirmation
   run_once: true
   delegate_to: localhost
+  when: dbbot_confirmation_input | default('') == ''
+
+- name: Preseed confirmation for non-interactive execution
+  ansible.builtin.set_fact:
+    confirmation:
+      user_input: "{{ dbbot_confirmation_input }}"
+  when: dbbot_confirmation_input | default('') != ''
 
 - name: Check if user confirmed
   ansible.builtin.fail:

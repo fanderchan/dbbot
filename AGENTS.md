@@ -61,6 +61,10 @@
   - `python3 ${PORTABLE_ANSIBLE_HOME}/ansible ...`
 - 版本自检：
   - `python3 ${PORTABLE_ANSIBLE_HOME}/ansible-playbook --version`
+- 在最小化 IaaS 测试环境中：
+  - 优先保持客机为“只保证能正常 yum”的最小状态，不预装额外依赖包来掩盖 `dbbot` 缺口
+  - 将仓库拷贝到控制节点后，先执行 `sh setup_portable_ansible.sh` 并 `source ~/.bashrc`
+  - 若后续仍缺少依赖，应作为 `dbbot` 待补能力反馈，而不是先在客机上手工 `yum install`
 
 ## 入口约定
 - 只有 `playbooks/` 下顶层入口 playbook 允许直接执行。
