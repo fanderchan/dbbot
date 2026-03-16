@@ -19,6 +19,22 @@ socket: "{{ socket_dir }}/mysql.sock"
 mysqlx_socket: "{{ mysqlx_socket_dir }}/mysqlx.sock"
 
 ## do not modify
-mysql_package: "{% if db_type == 'mysql' %}{{ 'mysql-' + mysql_version + '-linux-' + ('glibc2.12' if mysql_version.startswith('5.') else 'glibc2.17') + '-x86_64' + ('.tar.gz' if mysql_version.startswith('5.') else '-minimal.tar.xz') }}{% elif db_type == 'percona' %}{{ percona_package }}{% elif db_type == 'greatsql' %}{{ greatsql_package }}{% endif %}"
+mysql_linux_glibc_tag: >-
+  {%- if mysql_version.startswith('5.') -%}
+  glibc2.12
+  {%- elif (os_type | default('')) in ['Rocky9'] -%}
+  glibc2.28
+  {%- else -%}
+  glibc2.17
+  {%- endif -%}
+mysql_linux_archive_suffix: >-
+  {%- if mysql_version.startswith('5.') -%}
+  .tar.gz
+  {%- elif (os_type | default('')) in ['Rocky9'] -%}
+  .tar.xz
+  {%- else -%}
+  -minimal.tar.xz
+  {%- endif -%}
+mysql_package: "{% if db_type == 'mysql' %}{{ 'mysql-' + mysql_version + '-linux-' + mysql_linux_glibc_tag + '-x86_64' + mysql_linux_archive_suffix }}{% elif db_type == 'percona' %}{{ percona_package }}{% elif db_type == 'greatsql' %}{{ greatsql_package }}{% endif %}"
 greatsql_package: "GreatSQL-{{ mysql_version }}-Linux-glibc2.17-x86_64-minimal.tar.xz"  # dont modifiy
 percona_package: Percona-Server-8.0.29-21-Linux.x86_64.glibc2.17.tar.gz

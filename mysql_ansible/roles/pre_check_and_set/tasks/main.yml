@@ -48,14 +48,13 @@
     use_backend: auto
   ignore_errors: false
 
-- name: Install ncurses-compat-libs if necessary
+- name: Install ncurses-compat-libs on platforms that still ship it
   ansible.builtin.yum:
     name: ncurses-compat-libs
     state: present
-    enablerepo: "{{ 'devel' if os_type == 'Rocky9' else omit }}"
-  when: os_type in ['Rocky9', 'BigCloud21', 'openEuler24', 'openEuler22', 'openEuler20', 'CentOS8', 'RedHat8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10']
+  when: os_type in ['BigCloud21', 'openEuler24', 'openEuler22', 'openEuler20', 'CentOS8', 'RedHat8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10']
 
-- name: Intall tar for openEuler20
+- name: Install tar required by archive extraction
   ansible.builtin.yum:
     name: tar
     state: present
