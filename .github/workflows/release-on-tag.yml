@@ -17,16 +17,36 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Build curated release package
+        id: package
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          asset_path="$(bash .github/scripts/build-release-package.sh "$RELEASE_TAG" dist)"
+          echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
+
       - name: Publish release from managed release note
         uses: actions/github-script@v7
         env:
           RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_ASSET_PATH: ${{ steps.package.outputs.asset_path }}
         with:
           script: |
-            const { upsertRelease } = require("./.github/scripts/release-manager.cjs");
+            const {
+              syncReleaseAsset,
+              upsertRelease,
+            } = require("./.github/scripts/release-manager.cjs");
             await upsertRelease({
               github,
               context,
               core,
               tag: process.env.RELEASE_TAG,
+            });
+            await syncReleaseAsset({
+              github,
+              context,
+              core,
+              tag: process.env.RELEASE_TAG,
+              assetPath: process.env.RELEASE_ASSET_PATH,
             });

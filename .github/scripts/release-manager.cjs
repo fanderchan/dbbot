@@ -35,6 +35,10 @@ function readReleaseNote(tag) {
   return fs.readFileSync(notePath, "utf8").trim();
 }
 
+function assetNameForTag(tag) {
+  return `dbbot-${tag}.tar.gz`;
+}
+
 function validateEnglishOnly(content, tag) {
   if (/[^\x00-\x7F]/.test(content)) {
     throw new Error(`Release note for ${tag} must be English only and ASCII-safe.`);
@@ -163,7 +167,7 @@ async function upsertRelease({ github, context, core, tag }) {
   const prerelease = isPrerelease(tag);
 
   if (existing) {
-    await github.rest.repos.updateRelease({
+    const response = await github.rest.repos.updateRelease({
       owner,
       repo,
       release_id: existing.id,
@@ -174,10 +178,10 @@ async function upsertRelease({ github, context, core, tag }) {
       prerelease,
     });
     core.info(`Updated managed release for ${tag}`);
-    return;
+    return response.data;
   }
 
-  await github.rest.repos.createRelease({
+  const response = await github.rest.repos.createRelease({
     owner,
     repo,
     tag_name: tag,
@@ -187,6 +191,58 @@ async function upsertRelease({ github, context, core, tag }) {
     prerelease,
   });
   core.info(`Created managed release for ${tag}`);
+  return response.data;
+}
+
+async function syncReleaseAsset({ github, context, core, tag, assetPath }) {
+  assertTag(tag);
+
+  if (!fs.existsSync(assetPath)) {
+    throw new Error(`Missing release asset file: ${assetPath}`);
+  }
+
+  const owner = context.repo.owner;
+  const repo = context.repo.repo;
+  const assetName = assetNameForTag(tag);
+  const releases = await listAllReleases(github, owner, repo);
+  const release = findReleaseByTag(releases, tag);
+
+  if (!release) {
+    throw new Error(`Release for ${tag} does not exist yet.`);
+  }
+
+  const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+    owner,
+    repo,
+    release_id: release.id,
+    per_page: 100,
+  });
+
+  for (const asset of assets) {
+    if (asset.name === assetName) {
+      await github.rest.repos.deleteReleaseAsset({
+        owner,
+        repo,
+        asset_id: asset.id,
+      });
+      core.info(`Deleted existing asset ${assetName} for ${tag}`);
+    }
+  }
+
+  const data = fs.readFileSync(assetPath);
+  await github.rest.repos.uploadReleaseAsset({
+    owner,
+    repo,
+    release_id: release.id,
+    name: assetName,
+    headers: {
+      "content-type": "application/gzip",
+      "content-length": data.length,
+    },
+    data,
+  });
+
+  core.info(`Uploaded asset ${assetName} for ${tag}`);
 }
 
 async function syncReleasesForTags({ github, context, core, tags }) {
@@ -233,7 +289,9 @@ async function deleteReleaseForTag({ github, context, core, tag }) {
 }
 
 module.exports = {
+  assetNameForTag,
   deleteReleaseForTag,
+  syncReleaseAsset,
   syncReleasesForTags,
   upsertRelease,
 };
