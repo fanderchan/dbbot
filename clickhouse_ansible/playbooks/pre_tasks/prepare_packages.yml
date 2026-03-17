@@ -189,47 +189,18 @@
       ansible.builtin.set_fact:
         required_package_names: "{{ required_packages | map(attribute='name') | list }}"
 
-    - name: Check each required package exists (local)
-      ansible.builtin.stat:
-        path: "{{ clickhouse_packages_dir }}/{{ pkg.name }}"
-      register: package_check_results
+    - name: Ensure each required ClickHouse package archive is ready (local)
+      ansible.builtin.include_tasks: ../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
       loop: "{{ required_packages }}"
       loop_control:
         loop_var: pkg
-      delegate_to: localhost
-      run_once: true
-
-    - name: Fail if packages missing and auto download is disabled (local)
-      ansible.builtin.fail:
-        msg: |
-          ClickHouse packages not found under {{ clickhouse_packages_dir }} and auto download is disabled.
-          Required packages:
-          {%- for pkg_name in required_package_names %}
-          - {{ pkg_name }}
-          {%- endfor %}
-          
-          Please download them manually or set fcs_auto_download_packages=true
-      when:
-        - package_check_results.results | selectattr('stat.exists') | list | length < (required_packages | length)
-        - not (fcs_auto_download_packages | default(false) | bool)
-      delegate_to: localhost
-      run_once: true
-
-    - name: Download ClickHouse packages when missing (local)
-      ansible.builtin.get_url:
-        url: "{{ pkg.url }}"
-        dest: "{{ clickhouse_packages_dir }}/{{ pkg.name }}"
-        mode: '0644'
-        timeout: 300
-      loop: "{{ required_packages }}"
-      loop_control:
-        loop_var: pkg
-        index_var: pkg_index
-      when:
-        - fcs_auto_download_packages | default(false) | bool
-        - package_check_results.results[pkg_index].stat.exists | default(false) == false
-      delegate_to: localhost
-      run_once: true
+        label: "{{ pkg.name }}"
+      vars:
+        local_tar_archive_label: "ClickHouse package {{ pkg.name }}"
+        local_tar_archive_path: "{{ clickhouse_packages_dir }}/{{ pkg.name }}"
+        local_tar_archive_auto_download: "{{ fcs_auto_download_packages | default(false) | bool }}"
+        local_tar_archive_url: "{{ pkg.url }}"
+        local_tar_archive_timeout: 300
 
     - name: Verify all ClickHouse packages are present after preparation (local)
       ansible.builtin.find:

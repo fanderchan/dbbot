@@ -1,24 +1,10 @@
-- name: Check if package exists locally (local)
-  ansible.builtin.stat:
-    path: "{{ packages_dir }}/{{ prometheus_package }}"
-  register: prometheus_package_file
-  delegate_to: 127.0.0.1
-
-- name: Fail if package not found and auto download is disabled (local)
-  ansible.builtin.fail:
-    msg: "Prometheus package not found and auto download is disabled"
-  when: not prometheus_package_file.stat.exists and not fcs_auto_download
-  delegate_to: 127.0.0.1
-
-- name: Download prometheus binary tarball if not found locally and auto download is enabled (local)
-  ansible.builtin.get_url:
-    url: "{{ prometheus_url }}"
-    dest: "{{ packages_dir }}/{{ prometheus_package }}"
-    mode: '0644'
-    timeout: 30
-    headers:
+- name: Ensure Prometheus package archive is ready (local)
+  ansible.builtin.import_tasks: ../../common_utils/tasks/ensure_local_tar_archive_ready.yml
+  vars:
+    local_tar_archive_label: "Prometheus package {{ prometheus_package }}"
+    local_tar_archive_path: "{{ packages_dir }}/{{ prometheus_package }}"
+    local_tar_archive_auto_download: "{{ fcs_auto_download | bool }}"
+    local_tar_archive_url: "{{ prometheus_url }}"
+    local_tar_archive_timeout: 30
+    local_tar_archive_headers:
       User-Agent: "Wget/1.21.1"
-  when: 
-    - not prometheus_package_file.stat.exists
-    - fcs_auto_download | bool
-  delegate_to: 127.0.0.1

@@ -3,15 +3,18 @@
 
 - name: Setup and configure mysqld_exporter if not installed
   block:
-    - name: Check if mysqld_exporter package availability(delegate_to dbbot server)
-      ansible.builtin.import_tasks: check_if_mysqld_exporter_package_availability.yml
-
-    - name: Download mysqld_exporter package if necessary(delegate_to dbbot server)
-      ansible.builtin.import_tasks: download_package.yml
-      when:
-        - mysqld_exporter_install_type == 'package'
-        - not mysqld_exporter_package_stat.stat.exists
-        - fcs_auto_download_packages | bool
+    - name: Ensure mysqld_exporter package archive is ready(delegate_to dbbot server)
+      ansible.builtin.import_tasks: ../../common_utils/tasks/ensure_local_tar_archive_ready.yml
+      vars:
+        local_tar_archive_label: "mysqld_exporter package {{ mysqld_exporter_package }}"
+        local_tar_archive_path: "{{ mysql_packages_dir }}/{{ mysqld_exporter_package }}"
+        local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
+        local_tar_archive_url: "{{ mysqld_exporter_url }}"
+        local_tar_archive_timeout: 60
+        local_tar_archive_headers:
+          User-Agent: "Wget/1.21.1"
+        local_tar_archive_validate_certs: false
+      when: mysqld_exporter_install_type == 'package'
 
     - name: Create user and make dir
       ansible.builtin.import_tasks: create_user_and_dir.yml

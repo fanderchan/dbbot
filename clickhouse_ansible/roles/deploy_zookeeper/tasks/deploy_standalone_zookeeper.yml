@@ -96,40 +96,18 @@
       when:
         - zookeeper_java_download_url | default('auto') == 'auto'
 
-    - name: Check Java tarball exists on control host
-      ansible.builtin.stat:
-        path: "{{ zookeeper_java_packages_dir }}/{{ zookeeper_java_tarball_name }}"
-      register: java_pkg_stat
-      delegate_to: localhost
-      run_once: true
-
-    - name: Download Java tarball if missing (local)
-      ansible.builtin.get_url:
-        url: "{{ zookeeper_java_download_url }}"
-        dest: "{{ zookeeper_java_packages_dir }}/{{ zookeeper_java_tarball_name }}"
-        mode: '0644'
-      when:
-        - not java_pkg_stat.stat.exists
-        - fcs_auto_download_java | default(false)
-        - zookeeper_java_download_url | default('') not in ['', 'auto']
-      delegate_to: localhost
-      run_once: true
-
-    - name: Re-check Java tarball exists on control host
-      ansible.builtin.stat:
-        path: "{{ zookeeper_java_packages_dir }}/{{ zookeeper_java_tarball_name }}"
-      register: java_pkg_stat_after
-      delegate_to: localhost
-      run_once: true
-
-    - name: Fail if Java tarball is missing
-      ansible.builtin.fail:
-        msg: "Java tarball not found under {{ zookeeper_java_packages_dir }}. Please download it or set zookeeper_java_download_url to a valid URL."
-      when:
-        - not java_pkg_stat_after.stat.exists
-        - (not fcs_auto_download_java | default(false)) or (zookeeper_java_download_url | default('') in ['', 'auto'])
-      delegate_to: localhost
-      run_once: true
+    - name: Ensure Java tarball archive is ready on control host
+      ansible.builtin.import_tasks: ../../common_utils/tasks/ensure_local_tar_archive_ready.yml
+      vars:
+        local_tar_archive_label: "Java tarball {{ zookeeper_java_tarball_name }}"
+        local_tar_archive_path: "{{ zookeeper_java_packages_dir }}/{{ zookeeper_java_tarball_name }}"
+        local_tar_archive_auto_download: "{{ fcs_auto_download_java | default(false) | bool }}"
+        local_tar_archive_url: >-
+          {{
+            zookeeper_java_download_url
+            if (zookeeper_java_download_url | default('') not in ['', 'auto'])
+            else ''
+          }}
 
     - name: Copy Java tarball to target host
       ansible.builtin.copy:
@@ -225,32 +203,13 @@
   delegate_to: localhost
   run_once: true
 
-- name: Ensure Zookeeper package exists on control host
-  ansible.builtin.stat:
-    path: "{{ zookeeper_packages_dir }}/{{ zookeeper_package_name }}"
-  register: zk_pkg_stat
-  delegate_to: localhost
-  run_once: true
-
-- name: Download Zookeeper package if missing (local)
-  ansible.builtin.get_url:
-    url: "{{ zookeeper_download_url }}"
-    dest: "{{ zookeeper_packages_dir }}/{{ zookeeper_package_name }}"
-    mode: '0644'
-  when:
-    - not zk_pkg_stat.stat.exists
-    - fcs_auto_download_zookeeper | default(false)
-  delegate_to: localhost
-  run_once: true
-
-- name: Fail if Zookeeper package is missing
-  ansible.builtin.fail:
-    msg: "Zookeeper package not found under {{ zookeeper_packages_dir }}. Please download it or set fcs_auto_download_zookeeper=true"
-  when:
-    - not zk_pkg_stat.stat.exists
-    - not fcs_auto_download_zookeeper | default(false)
-  delegate_to: localhost
-  run_once: true
+- name: Ensure Zookeeper package archive is ready on control host
+  ansible.builtin.import_tasks: ../../common_utils/tasks/ensure_local_tar_archive_ready.yml
+  vars:
+    local_tar_archive_label: "Zookeeper package {{ zookeeper_package_name }}"
+    local_tar_archive_path: "{{ zookeeper_packages_dir }}/{{ zookeeper_package_name }}"
+    local_tar_archive_auto_download: "{{ fcs_auto_download_zookeeper | default(false) | bool }}"
+    local_tar_archive_url: "{{ zookeeper_download_url | default('') }}"
 
 - name: Copy Zookeeper package to target host
   ansible.builtin.copy:

@@ -1,0 +1,88 @@
+---
+- name: Ensure parent directory for {{ local_tar_archive_label }} exists (local)
+  ansible.builtin.file:
+    path: "{{ local_tar_archive_path | dirname }}"
+    state: directory
+    mode: '0755'
+  delegate_to: 127.0.0.1
+  run_once: true
+
+- name: Check {{ local_tar_archive_label }} exists (local)
+  ansible.builtin.stat:
+    path: "{{ local_tar_archive_path }}"
+  register: local_tar_archive__stat
+  delegate_to: 127.0.0.1
+  run_once: true
+
+- name: Test existing {{ local_tar_archive_label }} (local)
+  ansible.builtin.shell:
+    cmd: tar tf "{{ local_tar_archive_path }}" >/dev/null 2>&1
+    warn: false
+  register: local_tar_archive__test
+  failed_when: false
+  changed_when: false
+  when: local_tar_archive__stat.stat.exists
+  delegate_to: 127.0.0.1
+  run_once: true
+  tags: [skip_ansible_lint]
+
+- name: Determine whether {{ local_tar_archive_label }} needs refresh (local)
+  ansible.builtin.set_fact:
+    local_tar_archive__needs_refresh: >-
+      {{
+        (not local_tar_archive__stat.stat.exists)
+        or ((local_tar_archive__test.rc | default(0)) != 0)
+      }}
+    local_tar_archive__can_download: >-
+      {{
+        (local_tar_archive_auto_download | bool)
+        and ((local_tar_archive_url | default('') | trim) != '')
+      }}
+  delegate_to: 127.0.0.1
+  run_once: true
+
+- name: Remove invalid cached {{ local_tar_archive_label }} before re-download (local)
+  ansible.builtin.file:
+    path: "{{ local_tar_archive_path }}"
+    state: absent
+  when:
+    - local_tar_archive__stat.stat.exists
+    - (local_tar_archive__test.rc | default(0)) != 0
+    - local_tar_archive__can_download | bool
+  delegate_to: 127.0.0.1
+  run_once: true
+
+- name: Fail if {{ local_tar_archive_label }} is missing or invalid and auto download is unavailable (local)
+  ansible.builtin.fail:
+    msg: "{{ local_tar_archive_label }} is missing or invalid: {{ local_tar_archive_path }}"
+  when:
+    - local_tar_archive__needs_refresh | bool
+    - not local_tar_archive__can_download | bool
+  delegate_to: 127.0.0.1
+  run_once: true
+
+- name: Download {{ local_tar_archive_label }} when needed (local)
+  ansible.builtin.get_url:
+    url: "{{ local_tar_archive_url }}"
+    dest: "{{ local_tar_archive_path }}"
+    mode: '0644'
+    timeout: "{{ local_tar_archive_timeout | default(300) }}"
+    headers: "{{ local_tar_archive_headers | default(omit) }}"
+    validate_certs: "{{ local_tar_archive_validate_certs | default(omit) }}"
+  when:
+    - local_tar_archive__needs_refresh | bool
+    - local_tar_archive__can_download | bool
+  delegate_to: 127.0.0.1
+  run_once: true
+
+- name: Validate prepared {{ local_tar_archive_label }} (local)
+  ansible.builtin.shell:
+    cmd: tar tf "{{ local_tar_archive_path }}" >/dev/null 2>&1
+    warn: false
+  register: local_tar_archive__final_test
+  changed_when: false
+  failed_when: local_tar_archive__final_test.rc != 0
+  when: local_tar_archive__needs_refresh | bool
+  delegate_to: 127.0.0.1
+  run_once: true
+  tags: [skip_ansible_lint]

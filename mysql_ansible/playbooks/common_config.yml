@@ -1,6 +1,6 @@
 ## In most cases, just adjust these two parameters.
-mysql_version: "8.0.44"
-mysql_port: 3307
+mysql_version: "8.4.8"
+mysql_port: 3306
 
 # The 'server_specs' variable defines the hardware specifications for the server deployment.
 # - If set to "auto", the script will automatically fetch and use the server's current hardware specifications.
