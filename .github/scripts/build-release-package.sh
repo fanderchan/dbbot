@@ -16,9 +16,12 @@ mkdir -p "$output_dir"
 
 file_list="$(mktemp)"
 dir_list="$(mktemp)"
+stage_parent="$(mktemp -d)"
+stage_root="${stage_parent}/${package_root}"
 cleanup() {
   rm -f "$file_list"
   rm -f "$dir_list"
+  rm -rf "$stage_parent"
 }
 trap cleanup EXIT
 
@@ -131,14 +134,23 @@ done
 sort -zu "$file_list" -o "$file_list"
 sort -zu "$dir_list" -o "$dir_list"
 
-cat "$dir_list" >> "$file_list"
+mkdir -p "$stage_root"
+
+while IFS= read -r -d '' dir; do
+  mkdir -p "${stage_root}/${dir}"
+done < "$dir_list"
+
+while IFS= read -r -d '' path; do
+  cp -a --parents "$path" "$stage_root"
+done < "$file_list"
 
 tar \
-  --no-recursion \
-  --null \
-  --files-from="$file_list" \
+  -C "$stage_parent" \
   --sort=name \
-  --transform="s#^#${package_root}/#" \
-  -czf "$package_path"
+  --owner=0 \
+  --group=0 \
+  --numeric-owner \
+  -czf "$package_path" \
+  "$package_root"
 
 printf '%s\n' "$package_path"
