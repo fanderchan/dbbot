@@ -1,0 +1,122 @@
+name: Bug report
+description: Report a reproducible problem in dbbot behavior.
+title: "[Bug]: "
+labels:
+  - "type: bug"
+  - "status: triage"
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Select the main area affected by this issue.
+      options:
+        - MySQL
+        - ClickHouse
+        - Monitoring
+        - Portable Ansible
+        - Website / Docs
+    validations:
+      required: true
+  - type: input
+    id: entry_playbook
+    attributes:
+      label: Entry playbook
+      description: Provide the exact top-level playbook path that was executed.
+      placeholder: mysql_ansible/playbooks/master_slave.yml
+    validations:
+      required: true
+  - type: input
+    id: dbbot_version
+    attributes:
+      label: dbbot version
+      description: "Example: 0.1.0"
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: os_distribution
+    attributes:
+      label: Target OS / distribution
+      description: Include version, such as Rocky Linux 9.5 or CentOS 7.9.
+      placeholder: Rocky Linux 9.5
+    validations:
+      required: true
+  - type: input
+    id: database_version
+    attributes:
+      label: Database version
+      description: MySQL / ClickHouse / other related component version when relevant.
+      placeholder: MySQL 8.0.36
+    validations:
+      required: false
+  - type: input
+    id: ansible_version
+    attributes:
+      label: Ansible version
+      description: Include the portable Ansible version or system Ansible version.
+      placeholder: ansible 2.10.5
+    validations:
+      required: false
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Initial urgency from the reporter point of view.
+      options:
+        - p1 - urgent
+        - p2 - normal
+        - p3 - low
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: Paste the exact command or commands that were run.
+      render: bash
+      placeholder: python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.ini single_node.yml
+    validations:
+      required: true
+  - type: textarea
+    id: inventory_excerpt
+    attributes:
+      label: Inventory excerpt
+      description: Paste the smallest useful redacted excerpt. Remove secrets before submitting.
+      render: ini
+      placeholder: |
+        [mysql]
+        db01 ansible_host=10.0.0.10
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: Describe what you expected dbbot to do.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: Describe what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or failing task
+      description: Include the failing task, traceback, or relevant log excerpt. Remove secrets first.
+      render: text
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: I removed sensitive data from logs, inventory, and screenshots.
+          required: true

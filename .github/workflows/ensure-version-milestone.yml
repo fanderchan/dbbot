@@ -1,0 +1,63 @@
+name: Ensure version milestone
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - VERSION
+      - .github/workflows/ensure-version-milestone.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  ensure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Ensure milestone exists for current VERSION
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const firstLine = fs
+              .readFileSync("VERSION", "utf8")
+              .split(/\r?\n/)
+              .find((line) => line.trim().length > 0) || "";
+            const match = firstLine.match(/^dbbot\s+([0-9A-Za-z.+-]+)$/);
+
+            if (!match) {
+              core.setFailed(`Could not parse VERSION first line: ${firstLine}`);
+              return;
+            }
+
+            const version = match[1];
+            const title = `v${version}`;
+            const milestones = await github.paginate(github.rest.issues.listMilestones, {
+              owner,
+              repo,
+              state: "all",
+              per_page: 100,
+            });
+            const existing = milestones.find((milestone) => milestone.title === title);
+
+            if (existing) {
+              core.info(`Milestone already exists: ${title}`);
+              return;
+            }
+
+            await github.rest.issues.createMilestone({
+              owner,
+              repo,
+              title,
+              description: `Tracks work targeted for ${title}.`,
+            });
+
+            core.info(`Created milestone: ${title}`);

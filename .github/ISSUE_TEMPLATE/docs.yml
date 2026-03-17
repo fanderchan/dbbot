@@ -1,0 +1,59 @@
+name: Docs / clarity
+description: Report unclear, incorrect, or missing documentation.
+title: "[Docs]: "
+labels:
+  - "type: docs"
+  - "status: triage"
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Select the main area for this documentation issue.
+      options:
+        - Website / Docs
+        - MySQL
+        - ClickHouse
+        - Monitoring
+        - Portable Ansible
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - p1 - urgent
+        - p2 - normal
+        - p3 - low
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Page or file
+      description: Link the page or provide the file path that needs work.
+      placeholder: https://dbbot.ai/docs/...
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing?
+      placeholder: Describe the incorrect statement, ambiguity, missing step, or outdated example.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix
+      placeholder: Describe the smallest useful documentation change.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and discussions.
+          required: true

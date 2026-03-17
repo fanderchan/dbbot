@@ -1,0 +1,96 @@
+name: Triage issues
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - reopened
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply area and priority labels from issue forms
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.issue.number;
+            const body = context.payload.issue.body || "";
+
+            const areaMap = {
+              "MySQL": "area: mysql",
+              "ClickHouse": "area: clickhouse",
+              "Monitoring": "area: monitoring",
+              "Portable Ansible": "area: portable-ansible",
+              "Website / Docs": "area: website",
+            };
+
+            const priorityMap = {
+              "p1 - urgent": "prio: p1",
+              "p2 - normal": "prio: p2",
+              "p3 - low": "prio: p3",
+            };
+
+            function extractField(label) {
+              const pattern = new RegExp(`### ${label}\\s+([\\s\\S]*?)(?=\\n### |$)`);
+              const match = body.match(pattern);
+              if (!match) {
+                return "";
+              }
+              return match[1].trim().replace(/\r/g, "");
+            }
+
+            const desiredLabels = [];
+            const areaValue = extractField("Area");
+            const priorityValue = extractField("Priority");
+
+            if (areaMap[areaValue]) {
+              desiredLabels.push(areaMap[areaValue]);
+            }
+            if (priorityMap[priorityValue]) {
+              desiredLabels.push(priorityMap[priorityValue]);
+            }
+
+            if (desiredLabels.length === 0) {
+              core.info("No form-derived labels found.");
+              return;
+            }
+
+            const currentLabels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            for (const label of currentLabels) {
+              if (label.name.startsWith("area: ") || label.name.startsWith("prio: ")) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner,
+                    repo,
+                    issue_number,
+                    name: label.name,
+                  });
+                  core.info(`Removed label: ${label.name}`);
+                } catch (error) {
+                  core.warning(`Could not remove label ${label.name}: ${error.message}`);
+                }
+              }
+            }
+
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number,
+              labels: desiredLabels,
+            });
+
+            core.info(`Applied labels: ${desiredLabels.join(", ")}`);

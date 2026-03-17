@@ -1,0 +1,72 @@
+name: Feature request
+description: Propose a scoped improvement or new capability for dbbot.
+title: "[Feature]: "
+labels:
+  - "type: feature"
+  - "status: triage"
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Select the main area for this request.
+      options:
+        - MySQL
+        - ClickHouse
+        - Monitoring
+        - Portable Ansible
+        - Website / Docs
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Initial urgency from the requester point of view.
+      options:
+        - p1 - urgent
+        - p2 - normal
+        - p3 - low
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+      placeholder: Describe the operational gap, repeated manual step, or missing workflow.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the smallest useful change that would solve the problem.
+      placeholder: Describe the desired playbook, variable, guard rail, or documentation change.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Constraints and non-goals
+      description: Mention any compatibility, rollout, or scope constraints.
+      placeholder: Describe what should not change or what must remain compatible.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance signal
+      description: How will we know this request is complete?
+      placeholder: Describe the expected outcome, validation, or user-visible behavior.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: This request does not silently change sensitive defaults without explicit review.
+          required: true

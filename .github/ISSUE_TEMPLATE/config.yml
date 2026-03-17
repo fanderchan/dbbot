@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and usage help
+    url: https://github.com/fanderchan/dbbot/discussions
+    about: Use Discussions for usage questions, design ideas, and open-ended support topics.
+  - name: Documentation
+    url: https://dbbot.ai/docs/
+    about: Check the official documentation before opening an issue.
+  - name: Security policy
+    url: https://github.com/fanderchan/dbbot/blob/main/.github/SECURITY.md
+    about: Read the security reporting policy before disclosing sensitive details.

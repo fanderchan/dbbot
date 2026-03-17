@@ -1,0 +1,92 @@
+[
+  {
+    "name": "type: bug",
+    "color": "d73a4a",
+    "description": "A reproducible bug or regression."
+  },
+  {
+    "name": "type: feature",
+    "color": "a2eeef",
+    "description": "A new capability or meaningful enhancement."
+  },
+  {
+    "name": "type: docs",
+    "color": "0075ca",
+    "description": "Documentation or clarity work."
+  },
+  {
+    "name": "type: question",
+    "color": "d876e3",
+    "description": "A question that may belong in Discussions."
+  },
+  {
+    "name": "area: mysql",
+    "color": "1f6feb",
+    "description": "mysql_ansible and related MySQL workflows."
+  },
+  {
+    "name": "area: clickhouse",
+    "color": "fbca04",
+    "description": "clickhouse_ansible and related workflows."
+  },
+  {
+    "name": "area: monitoring",
+    "color": "0e8a16",
+    "description": "monitoring_prometheus_ansible and exporter flows."
+  },
+  {
+    "name": "area: portable-ansible",
+    "color": "5319e7",
+    "description": "portable-ansible-v0.5.0-py3 runtime and execution packaging."
+  },
+  {
+    "name": "area: website",
+    "color": "bfdadc",
+    "description": "Website, docs site, and public-facing documentation."
+  },
+  {
+    "name": "status: triage",
+    "color": "ededed",
+    "description": "New item waiting for maintainer triage."
+  },
+  {
+    "name": "status: needs-info",
+    "color": "f9d0c4",
+    "description": "More information is needed before work can continue."
+  },
+  {
+    "name": "status: confirmed",
+    "color": "c2e0c6",
+    "description": "Confirmed bug or accepted request."
+  },
+  {
+    "name": "status: planned",
+    "color": "bfd4f2",
+    "description": "Approved and targeted for a future milestone."
+  },
+  {
+    "name": "status: in-progress",
+    "color": "0052cc",
+    "description": "Work is actively in progress."
+  },
+  {
+    "name": "status: released",
+    "color": "5319e7",
+    "description": "Included in a released version."
+  },
+  {
+    "name": "prio: p1",
+    "color": "b60205",
+    "description": "Urgent issue or request."
+  },
+  {
+    "name": "prio: p2",
+    "color": "d93f0b",
+    "description": "Normal priority."
+  },
+  {
+    "name": "prio: p3",
+    "color": "fbca04",
+    "description": "Low priority or nice-to-have."
+  }
+]
