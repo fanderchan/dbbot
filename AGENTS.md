@@ -125,6 +125,47 @@
 - 若公开文档位于站点仓：
   - 同步检查 `/vitepress/content`
 
+## Release Policy
+
+### Required Release Note File
+- 每个 release tag 或 pre-release tag 在推送前必须存在：
+  - `.github/release-notes/<tag>.md`
+- 若文件缺失，对应 release workflow 必须失败。
+
+### Release Note Language
+- 所有 release note 必须仅使用英文。
+
+### Content Source Policy
+- GitHub auto-generated release notes 不能作为最终 release body。
+- release workflow 必须：
+  1. 发布预先写好的 release note 文件内容。
+  2. 在其后追加 compare link。
+
+### Beta / Pre-release Policy
+- Beta release 不要求固定 section 布局。
+- 可以使用自由格式的英文总结。
+- 但 comparison baseline 仍必须是上一个 official release。
+- Beta release 绝不能与上一个 beta release 做比较。
+
+### Official Release Policy
+- Official release note 只能使用以下 section，并且顺序必须严格一致：
+  - `## [Note]`
+  - `## [Add]`
+  - `## [Change]`
+  - `## [Fix]`
+  - `## [Remove]`
+- 空 section 可以省略，但顺序不能变化。
+- summary baseline 必须是上一个 official release。
+- 若不存在上一个 official release，则将当前 official release 视为第一个 official release，并使用整个仓库历史 / 当前代码库作为比较范围。
+- Official release 绝不能以 beta release 作为 comparison baseline。
+
+### Sync Policy
+- 若某个 tag 已经发布，而 `.github/release-notes/<tag>.md` 之后被更新，对应 sync workflow 必须自动更新已有 GitHub Release body。
+
+### Source of Truth
+- `.github/release-notes/<tag>.md` 是 release body 的唯一真相源。
+- GitHub Release UI 中的手工编辑不能覆盖受管内容。
+
 ## 校验清单
 - 交付前至少做语法检查：
 

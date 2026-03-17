@@ -1,0 +1,110 @@
+name: Sync managed release notes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/release-notes/*.md
+  release:
+    types:
+      - edited
+      - published
+      - prereleased
+      - released
+
+permissions:
+  contents: write
+
+jobs:
+  collect-push-tags:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.collect.outputs.has_changes }}
+      tags: ${{ steps.collect.outputs.tags }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect changed release note tags
+        id: collect
+        shell: bash
+        run: |
+          before="${{ github.event.before }}"
+          if [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            before="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
+          fi
+
+          mapfile -t files < <(git diff --name-only "$before" "${{ github.sha }}" -- '.github/release-notes/*.md')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mapfile -t tags < <(
+            printf '%s\n' "${files[@]}" \
+            | sed -e 's#^.github/release-notes/##' -e 's#\.md$##' \
+            | sort -u
+          )
+
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            printf '%s\n' "${tags[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  sync-push:
+    if: github.event_name == 'push' && needs.collect-push-tags.outputs.has_changes == 'true'
+    needs:
+      - collect-push-tags
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync releases for changed release notes
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAGS: ${{ needs.collect-push-tags.outputs.tags }}
+        with:
+          script: |
+            const { syncReleasesForTags } = require("./.github/scripts/release-manager.cjs");
+            const tags = (process.env.RELEASE_TAGS || "")
+              .split("\n")
+              .map((value) => value.trim())
+              .filter(Boolean);
+            await syncReleasesForTags({
+              github,
+              context,
+              core,
+              tags,
+            });
+
+  sync-release-event:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Re-sync managed release after release event
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        with:
+          script: |
+            const { syncReleasesForTags } = require("./.github/scripts/release-manager.cjs");
+            await syncReleasesForTags({
+              github,
+              context,
+              core,
+              tags: [process.env.RELEASE_TAG],
+            });
