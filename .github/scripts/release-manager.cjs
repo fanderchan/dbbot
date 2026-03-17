@@ -290,7 +290,9 @@ async function deleteReleaseForTag({ github, context, core, tag }) {
 
 module.exports = {
   assetNameForTag,
+  buildManagedBody,
   deleteReleaseForTag,
+  isPrerelease,
   syncReleaseAsset,
   syncReleasesForTags,
   upsertRelease,

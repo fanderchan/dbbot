@@ -26,27 +26,31 @@ jobs:
           asset_path="$(bash .github/scripts/build-release-package.sh "$RELEASE_TAG" dist)"
           echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
 
-      - name: Publish release from managed release note
+      - name: Render managed release body
+        id: body
         uses: actions/github-script@v7
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-          RELEASE_ASSET_PATH: ${{ steps.package.outputs.asset_path }}
+          RELEASE_BODY_PATH: dist/release-body.md
         with:
           script: |
+            const fs = require("fs");
             const {
-              syncReleaseAsset,
-              upsertRelease,
+              buildManagedBody,
+              isPrerelease,
             } = require("./.github/scripts/release-manager.cjs");
-            await upsertRelease({
-              github,
-              context,
-              core,
-              tag: process.env.RELEASE_TAG,
-            });
-            await syncReleaseAsset({
-              github,
-              context,
-              core,
-              tag: process.env.RELEASE_TAG,
-              assetPath: process.env.RELEASE_ASSET_PATH,
-            });
+            const tag = process.env.RELEASE_TAG;
+            const body = await buildManagedBody(github, context.repo.owner, context.repo.repo, tag);
+            fs.writeFileSync(process.env.RELEASE_BODY_PATH, body);
+            core.setOutput("body_path", process.env.RELEASE_BODY_PATH);
+            core.setOutput("prerelease", String(isPrerelease(tag)));
+
+      - name: Publish release and upload curated package
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: ${{ steps.body.outputs.body_path }}
+          prerelease: ${{ steps.body.outputs.prerelease }}
+          files: ${{ steps.package.outputs.asset_path }}
+          fail_on_unmatched_files: true
