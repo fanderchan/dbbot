@@ -9,7 +9,7 @@ fi
 tag="$1"
 output_dir="$2"
 package_name="dbbot-${tag}.tar.gz"
-package_root="dbbot-${tag}"
+package_root="dbbot"
 package_path="${output_dir}/${package_name}"
 
 mkdir -p "$output_dir"
