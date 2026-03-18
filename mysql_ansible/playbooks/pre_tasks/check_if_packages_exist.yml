@@ -1,6 +1,13 @@
-- name: Check if {{ mysql_package }} exists in ../downloads/ (local)
-  command: find ../downloads/ -type f -name "{{ mysql_package }}"
-  register: find_result
-  failed_when: find_result.stdout == ""
+- name: Check if {{ mysql_package }} exists in {{ mysql_packages_dir }} (local)
+  ansible.builtin.stat:
+    path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
+  register: mysql_package_stat
+  run_once: true
+  delegate_to: localhost
+
+- name: Fail when {{ mysql_package }} is missing from {{ mysql_packages_dir }} (local)
+  ansible.builtin.fail:
+    msg: "MySQL package not found at {{ mysql_packages_dir }}/{{ mysql_package }}."
+  when: not mysql_package_stat.stat.exists
   run_once: true
   delegate_to: localhost

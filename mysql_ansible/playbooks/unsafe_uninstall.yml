@@ -1,4 +1,4 @@
-- name: Deploy single-node MySQL server using binary installation
+- name: Unsafe uninstall MySQL instance
   hosts: dbbot_mysql
   become: true
   vars_files:

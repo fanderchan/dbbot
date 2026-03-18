@@ -1,0 +1,16 @@
+- name: Verify MySQL package pre-check honors mysql_packages_dir
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    mysql_packages_dir: "{{ lookup('env', 'MYSQL_PACKAGES_DIR_TEST') }}"
+    mysql_package: "{{ lookup('env', 'MYSQL_PACKAGE_TEST') }}"
+  tasks:
+    - name: Validate test inputs
+      ansible.builtin.assert:
+        that:
+          - mysql_packages_dir | length > 0
+          - mysql_package | length > 0
+
+    - name: Import MySQL package existence pre-check
+      ansible.builtin.import_tasks: ../playbooks/pre_tasks/check_if_packages_exist.yml
