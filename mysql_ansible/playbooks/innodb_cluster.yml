@@ -28,6 +28,7 @@
     - advanced_config.yml
     - vars/var_innodb_cluster.yml
   vars:
+    dbbot_entry_playbook_name: "innodb_cluster.yml"
     roles_to_execute:
       - "../roles/pre_check_and_set"
       - "../roles/mysql_server"

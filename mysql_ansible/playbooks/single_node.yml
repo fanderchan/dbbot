@@ -10,6 +10,7 @@
     - advanced_config.yml
     - vars/var_single_node.yml
   vars:
+    dbbot_entry_playbook_name: "single_node.yml"
     roles_to_execute:
       - "../roles/pre_check_and_set"
       - "../roles/mysql_server"

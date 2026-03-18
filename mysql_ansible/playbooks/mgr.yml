@@ -10,6 +10,7 @@
     - vars/var_mgr.yml
   max_fail_percentage: 1
   vars:
+    dbbot_entry_playbook_name: "mgr.yml"
     roles_to_execute:
       - "../roles/pre_check_and_set"
       - "../roles/mysql_server"

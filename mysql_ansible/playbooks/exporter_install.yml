@@ -11,6 +11,7 @@
     - advanced_config.yml
     - vars/var_exporter_install.yml
   vars:
+    dbbot_entry_playbook_name: "exporter_install.yml"
     roles_to_execute:
       - { name: "../roles/node_exporter", condition: "{{ node_exporter_install }}" }
       - { name: "../roles/mysqld_exporter", condition: "{{ mysqld_exporter_install }}" }

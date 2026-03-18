@@ -11,6 +11,7 @@
     - advanced_config.yml
     - vars/var_keepalived_master_slave.yml
   vars:
+    dbbot_entry_playbook_name: "keepalived_master_slave.yml"
     roles_to_execute:
       - "../roles/pre_check_and_set"
       - "../roles/mysql_server"

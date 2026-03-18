@@ -8,6 +8,7 @@
     - common_config.yml
     - advanced_config.yml
   vars:
+    dbbot_entry_playbook_name: "backup_script.yml"
     roles_to_execute:
       - "../roles/install_xtrabackup"
       - "../roles/backup_script"

@@ -10,6 +10,7 @@
     - advanced_config.yml
     - vars/var_restore_pitr_8.4.yml
   vars:
+    dbbot_entry_playbook_name: "restore_pitr_8.4.yml"
     roles_to_execute:
       - "../roles/mysql_server"
       - "../roles/restore_pitr_84"

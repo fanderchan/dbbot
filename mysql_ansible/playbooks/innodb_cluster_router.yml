@@ -27,6 +27,7 @@
     - vars/var_innodb_cluster.yml
     - vars/var_innodb_cluster_router.yml
   vars:
+    dbbot_entry_playbook_name: "innodb_cluster_router.yml"
     roles_to_execute:
       - "../roles/mysql_router"
       - "../roles/make_mysqlrouter_ha"

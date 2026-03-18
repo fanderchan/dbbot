@@ -111,10 +111,15 @@
 
 - name: Block deployment when dbbot public default passwords are used
   ansible.builtin.fail:
-    msg: >-
+    msg: |-
       Detected dbbot public default password(s): {{ dbbot_default_password_hits | join(', ') }}.
-      Set fcs_allow_dbbot_default_passwd=true to explicitly allow these defaults,
-      or customize the password values in common_config.yml / vars files before running the playbook.
+      Customize the password values in common_config.yml / vars files before running the playbook.
+      If you intentionally want to continue with dbbot public defaults, explicitly pass:
+      -e '{"fcs_allow_dbbot_default_passwd": true}'
+      {% if (dbbot_entry_playbook_name | default('') | length) > 0 %}
+      Example:
+      ansible-playbook {{ dbbot_entry_playbook_name }} -e '{"fcs_allow_dbbot_default_passwd": true}'
+      {% endif %}
   when:
     - not (fcs_allow_dbbot_default_passwd | bool)
     - dbbot_default_password_hits | length > 0

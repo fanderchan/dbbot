@@ -12,6 +12,7 @@
     - advanced_config.yml
     - vars/var_router_exporter_install.yml
   vars:
+    dbbot_entry_playbook_name: "router_exporter_install.yml"
     roles_to_execute:
       - "../roles/mysqlrouter_exporter"
 
