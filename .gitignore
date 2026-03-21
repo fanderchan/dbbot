@@ -19,6 +19,7 @@ __pycache__/
 
 # Repository-local tooling
 **/.cursor/
+/.dbbotctl/
 **/build/
 
 # Package caches and offline installers

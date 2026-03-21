@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly DBBOTCTL_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly DBBOT_ROOT="$(cd "${DBBOTCTL_BIN_DIR}/.." && pwd)"
+readonly DBBOTCTL_LIBEXEC_DIR="${DBBOT_ROOT}/libexec/dbbotctl"
+
+if [[ ! -f "${DBBOTCTL_LIBEXEC_DIR}/common.sh" ]]; then
+  printf 'dbbotctl is incomplete: missing %s\n' "${DBBOTCTL_LIBEXEC_DIR}/common.sh" >&2
+  exit 1
+fi
+
+source "${DBBOTCTL_LIBEXEC_DIR}/common.sh"
+
+dbbotctl_usage() {
+  cat <<'EOF'
+Usage:
+  dbbotctl <command> [args]
+
+Commands:
+  version            Show installed dbbot version and runtime paths
+  doctor             Check local prerequisites for dbbot lifecycle operations
+  env setup          Run portable ansible bootstrap on the control host
+  release history    Show recorded upgrade and rollback history
+  release upgrade    Upgrade dbbot from a local package or GitHub release
+  release rollback   Restore a previously captured upgrade snapshot
+  help               Show this help
+
+Examples:
+  dbbotctl version
+  dbbotctl doctor
+  dbbotctl env setup
+  dbbotctl release history
+  dbbotctl release upgrade --latest
+  dbbotctl release upgrade --tag v0.2.0
+  dbbotctl release upgrade --package /tmp/dbbot-v0.2.0.tar.gz
+  dbbotctl release rollback
+  dbbotctl release rollback 20260321T235959Z_v0.2.0
+EOF
+}
+
+main() {
+  local command="${1:-help}"
+
+  case "${command}" in
+    help|-h|--help)
+      dbbotctl_usage
+      ;;
+    version)
+      shift
+      source "${DBBOTCTL_LIBEXEC_DIR}/commands/version.sh"
+      dbbot_cmd_version "$@"
+      ;;
+    doctor)
+      shift
+      source "${DBBOTCTL_LIBEXEC_DIR}/commands/doctor.sh"
+      dbbot_cmd_doctor "$@"
+      ;;
+    env)
+      shift
+      source "${DBBOTCTL_LIBEXEC_DIR}/commands/env.sh"
+      dbbot_cmd_env "$@"
+      ;;
+    release)
+      shift
+      source "${DBBOTCTL_LIBEXEC_DIR}/commands/release.sh"
+      dbbot_cmd_release "$@"
+      ;;
+    *)
+      dbbot_die "unknown command: ${command}"
+      ;;
+  esac
+}
+
+main "$@"

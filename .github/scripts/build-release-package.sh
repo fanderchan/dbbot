@@ -35,9 +35,11 @@ readonly ROOT_FILES=(
 )
 
 readonly ALLOWED_PREFIXES=(
+  "bin/"
   "clickhouse_ansible/inventory/"
   "clickhouse_ansible/playbooks/"
   "clickhouse_ansible/roles/"
+  "libexec/"
   "monitoring_prometheus_ansible/inventory/"
   "monitoring_prometheus_ansible/playbooks/"
   "monitoring_prometheus_ansible/roles/"
@@ -49,7 +51,9 @@ readonly ALLOWED_PREFIXES=(
 
 readonly EMPTY_DIRS=(
   "clickhouse_ansible/downloads"
+  "clickhouse_ansible/playbooks/logs"
   "monitoring_prometheus_ansible/downloads"
+  "monitoring_prometheus_ansible/playbooks/logs"
   "mysql_ansible/downloads"
   "mysql_ansible/playbooks/logs"
 )

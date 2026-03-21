@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+dbbot_cmd_env_usage() {
+  cat <<'EOF'
+Usage:
+  dbbotctl env setup
+EOF
+}
+
+dbbot_cmd_env_setup() {
+  dbbot_require_no_args "$@"
+
+  [[ -f "${DBBOT_PORTABLE_ANSIBLE_SETUP}" ]] || dbbot_die "missing ${DBBOT_PORTABLE_ANSIBLE_SETUP}"
+  dbbot_info "running portable ansible setup"
+  (
+    cd "${DBBOT_PORTABLE_ANSIBLE_HOME}"
+    bash "./setup_portable_ansible.sh"
+  )
+}
+
+dbbot_cmd_env() {
+  local subcommand="${1:-help}"
+
+  case "${subcommand}" in
+    help|-h|--help)
+      dbbot_cmd_env_usage
+      ;;
+    setup)
+      shift
+      dbbot_cmd_env_setup "$@"
+      ;;
+    *)
+      dbbot_die "unknown env subcommand: ${subcommand}"
+      ;;
+  esac
+}

@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echoError() { echo -e "\033[31m$*\033[0m"; }      # red
 echoWarning() { echo -e "\033[33m$*\033[0m"; }      # yellow
 echoSuccess() { echo -e "\033[32m$*\033[0m"; }      # green
@@ -55,16 +57,16 @@ fi
 
 # setting ~/.bashrc
 if ! grep -q 'alias ansible-playbook=' ~/.bashrc; then
-    echo 'alias ansible-playbook="python3 '"$PWD"'/ansible-playbook"' >> ~/.bashrc
+    echo 'alias ansible-playbook="python3 '"$SCRIPT_DIR"'/ansible-playbook"' >> ~/.bashrc
 fi
 
 if ! grep -q 'alias ansible=' ~/.bashrc; then
-    echo 'alias ansible="python3 '"$PWD"'/ansible"' >> ~/.bashrc
+    echo 'alias ansible="python3 '"$SCRIPT_DIR"'/ansible"' >> ~/.bashrc
 fi
 
 # install sshpass
 if ! which sshpass > /dev/null; then
-  cp sshpass-x64 /usr/bin/sshpass
+  cp "${SCRIPT_DIR}/sshpass-x64" /usr/bin/sshpass
   chmod +x /usr/bin/sshpass
 fi
 
