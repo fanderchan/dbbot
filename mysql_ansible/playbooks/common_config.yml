@@ -93,7 +93,12 @@ fcs_allow_dbbot_default_passwd: false
 fcs_create_mysql_fast_login: true
 fcs_backup_script_create_backup_user: true
 fcs_role_mysqld_exporter_create_monitor_user: true
-fcs_mysql_use_jemalloc: true
+# Keep the system default allocator by default.
+# Set to true only when you explicitly want jemalloc preload for this host/workload.
+fcs_mysql_use_jemalloc: false
+# When jemalloc is enabled, prefer the OS repository package first.
+# Only set to true if you explicitly allow dbbot to fall back to the bundled legacy RPM.
+fcs_mysql_allow_bundled_jemalloc_fallback: false
 fcs_use_greatsql_ha: true
 fcs_mysql_fast_login_have_prompt: true
 dbbot_confirmation_input: ""   # Set to "confirm" only for non-interactive automation; keep empty for manual confirmation.

@@ -1,3 +1,35 @@
+- name: Detect jemalloc preload library
+  when: fcs_mysql_use_jemalloc | bool
+  block:
+    - name: Check jemalloc library candidates
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/lib64/libjemalloc.so.2
+        - /usr/lib64/libjemalloc.so.1
+      register: mysql_server__jemalloc_library_stats
+
+    - name: Set jemalloc preload library path
+      ansible.builtin.set_fact:
+        mysql_server__jemalloc_preload_path: >-
+          {{
+            (
+              mysql_server__jemalloc_library_stats.results
+              | selectattr('stat.exists', 'equalto', true)
+              | map(attribute='stat.path')
+              | list
+              | first
+            ) | default('')
+          }}
+
+    - name: Assert jemalloc preload library was detected
+      ansible.builtin.assert:
+        that:
+          - mysql_server__jemalloc_preload_path | length > 0
+        fail_msg: >-
+          fcs_mysql_use_jemalloc=true but no supported libjemalloc soname was found under /usr/lib64.
+          Check the installed jemalloc package or set fcs_mysql_use_jemalloc=false.
+
 - name: Create systemd config file
   ansible.builtin.template:
     src: ../templates/mysql.service.j2

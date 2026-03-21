@@ -42,6 +42,7 @@
       when:
         - mysql_server__jemalloc_installed.rc != 0
         - mysql_server__jemalloc_repo_check.rc != 0
+        - fcs_mysql_allow_bundled_jemalloc_fallback | bool
 
     - name: Explain bundled jemalloc fallback
       ansible.builtin.debug:
@@ -49,6 +50,7 @@
       when:
         - mysql_server__jemalloc_installed.rc != 0
         - mysql_server__jemalloc_repo_check.rc != 0
+        - fcs_mysql_allow_bundled_jemalloc_fallback | bool
 
     - name: Copy jemalloc rpm to target server
       ansible.builtin.copy:
@@ -58,6 +60,7 @@
       when:
         - mysql_server__jemalloc_installed.rc != 0
         - mysql_server__jemalloc_repo_check.rc != 0
+        - fcs_mysql_allow_bundled_jemalloc_fallback | bool
 
     - name: Install jemalloc from local file
       ansible.builtin.yum:
@@ -67,3 +70,15 @@
       when:
         - mysql_server__jemalloc_installed.rc != 0
         - mysql_server__jemalloc_repo_check.rc != 0
+        - fcs_mysql_allow_bundled_jemalloc_fallback | bool
+
+    - name: Fail when jemalloc is requested but unavailable from yum repositories
+      ansible.builtin.fail:
+        msg: >-
+          fcs_mysql_use_jemalloc=true but jemalloc is not installed and not available from configured yum repositories.
+          dbbot no longer falls back to the bundled legacy RPM unless
+          fcs_mysql_allow_bundled_jemalloc_fallback=true is explicitly set.
+      when:
+        - mysql_server__jemalloc_installed.rc != 0
+        - mysql_server__jemalloc_repo_check.rc != 0
+        - not (fcs_mysql_allow_bundled_jemalloc_fallback | bool)

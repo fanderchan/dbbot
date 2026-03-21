@@ -25,10 +25,5 @@ TimeoutStartSec=900
 TimeoutStopSec=0
 Environment=MYSQLD_PARENT_PID=1
 {% if fcs_mysql_use_jemalloc | bool %}
-{% if os_type in ['Rocky9', 'openEuler24','openEuler22','openEuler20','BigCloud21', 'Kylin Linux Advanced ServerV10'] %}
-Environment="LD_PRELOAD=/usr/lib64/libjemalloc.so.2"
-{% else %}
-Environment="LD_PRELOAD=/usr/lib64/libjemalloc.so.1"
+Environment="LD_PRELOAD={{ mysql_server__jemalloc_preload_path }}"
 {% endif %}
-{% endif %}
-

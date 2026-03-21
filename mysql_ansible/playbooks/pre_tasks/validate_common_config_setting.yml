@@ -136,6 +136,7 @@
     - fcs_backup_script_create_backup_user
     - fcs_role_mysqld_exporter_create_monitor_user
     - fcs_mysql_use_jemalloc
+    - fcs_mysql_allow_bundled_jemalloc_fallback
     - fcs_use_greatsql_ha
   when:
     - vars[item] is not boolean
