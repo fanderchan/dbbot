@@ -1,18 +1,18 @@
 ## dir
-mycnf_dir: "{{ mysql_data_dir_base }}/etc/{{ mysql_port }}"
-datadir: "{{ mysql_data_dir_base }}/data/{{ mysql_port }}"
-tmpdir: "{{ mysql_data_dir_base }}/tmp/{{ mysql_port }}"
-binlog_dir: "{{ mysql_data_dir_base }}/log/binlog/{{ mysql_port }}"
-relaylog_dir: "{{ mysql_data_dir_base }}/log/relaylog/{{ mysql_port }}"
-redolog_dir: "{{ mysql_data_dir_base }}/log/redolog/{{ mysql_port }}"
+mycnf_dir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/etc"
+datadir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/data"
+tmpdir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/tmp"
+binlog_dir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/log"
+relaylog_dir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/log"
+redolog_dir: "{{ datadir }}"
 socket_dir: "{{ datadir }}"
 mysqlx_socket_dir: "{{ datadir }}"
 
 
-auditlog_dir: "{{ datadir }}"  # Only applicable for Percona and GreatSQL
-slowlog_dir: "{{ datadir }}"
-errlog_dir: "{{ datadir }}"
-generallog_dir: "{{ datadir }}"
+auditlog_dir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/log"  # Only applicable for Percona and GreatSQL
+slowlog_dir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/log"
+errlog_dir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/log"
+generallog_dir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/log"
 
 ## file
 socket: "{{ socket_dir }}/mysql.sock"

@@ -38,7 +38,14 @@
     binlog_dir_msg: "{% if binlog_dir is defined %}[\"binlog_dir: {{ binlog_dir }}\"]{% else %}[]{% endif %}"
     relaylog_dir_msg: "{% if relaylog_dir is defined %}[\"relaylog_dir: {{ relaylog_dir }}\"]{% else %}[]{% endif %}"
     redolog_dir_msg: "{% if redolog_dir is defined %}[\"redolog_dir: {{ redolog_dir }}\"]{% else %}[]{% endif %}"
-    note: "This script is not secure for production environments. Please test thoroughly before using. The script will only remove the following directories: datadir, tmpdir, binlog_dir, relaylog_dir, and redolog_dir. It will not remove the MySQL software, Linux user, my.cnf, or logs such as slow.log, err.log, general.log, and audit.log."
+    note: >-
+      This script is unsafe because dbbot supports custom data and log paths.
+      It removes the configured datadir, tmpdir, binlog_dir, relaylog_dir, and
+      redolog_dir for the target instance. With the default layout, that
+      removes both the instance data and log directories. It does not remove
+      the MySQL software base directory or binaries, the Linux user, or my.cnf.
+      Validate the exact impact against your configuration in a test
+      environment before considering any production use.
 
 
 - name: Prompt user for confirmation

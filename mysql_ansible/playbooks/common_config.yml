@@ -25,7 +25,9 @@ mysql_user_password: "Dbbot_{{ mysql_user }}@9999"
 ## mysql install directory
 mysql_software_dir: "/database/{{ db_type }}/base/{{ mysql_version }}"
 
-## mysql_data_dir_base define mysql datadir base, real datadir= mysql_data_dir_base + /port
+## mysql_data_dir_base defines the base path for instance storage. By default,
+## the real datadir is mysql_data_dir_base + /port/data, but advanced_config.yml
+## can override the final layout.
 mysql_data_dir_base: "/database/{{ db_type }}"
 
 ## mysql service name

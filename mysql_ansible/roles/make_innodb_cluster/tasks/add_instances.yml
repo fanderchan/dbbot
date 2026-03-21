@@ -25,6 +25,8 @@
   run_once: true
 
 - name: Wait for cluster to stabilize
-  ansible.builtin.pause:
-    seconds: 10
+  ansible.builtin.wait_for:
+    timeout: 10
   run_once: true
+  delegate_to: localhost
+  changed_when: false
