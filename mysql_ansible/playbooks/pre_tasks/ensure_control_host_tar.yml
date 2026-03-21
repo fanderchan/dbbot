@@ -1,0 +1,12 @@
+---
+- name: Ensure tar is installed on control host for local archive validation
+  ansible.builtin.package:
+    name: tar
+    state: present
+  delegate_to: 127.0.0.1
+  run_once: true
+  when: >-
+    '../roles/mysql_server' in (roles_to_execute | default([]))
+    or '../roles/setup_mysqlshell' in (roles_to_execute | default([]))
+    or '../roles/mysql_router' in (roles_to_execute | default([]))
+    or '../roles/install_mysql_shell' in (roles_to_execute | default([]))

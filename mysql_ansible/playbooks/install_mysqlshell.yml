@@ -15,6 +15,9 @@
     - name: Import tasks to check os_type and python
       ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
 
+    - name: Import tasks to ensure tar exists on control host
+      ansible.builtin.import_tasks: pre_tasks/ensure_control_host_tar.yml
+
     - name: Import confirmation tasks
       ansible.builtin.import_tasks: pre_tasks/confirmation.yml
   tasks:
