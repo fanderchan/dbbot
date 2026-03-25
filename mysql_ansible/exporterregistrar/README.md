@@ -2,6 +2,11 @@
 
 `exporterregistrar` 是 `dbbot` 随仓发布的辅助工具，用于把 `node_exporter` 和 `mysqld_exporter` 的目标地址写入 Prometheus `file_sd` 目标文件，避免手工编辑 YAML。
 
+## 标签行为
+
+- MySQL target 会写入 `instance` 与 `service_name`，默认值均为 `<host>:<db-port>`。
+- `--force` 不仅允许重复注册同一 target，也会刷新该 target 的 labels，适合修正 `cluster`、`replication_set`、`topology` 等标签。
+
 ## 仓库内二进制位置
 
 - 发布位置：`/usr/local/dbops/mysql_ansible/playbooks/exporterregistrar`

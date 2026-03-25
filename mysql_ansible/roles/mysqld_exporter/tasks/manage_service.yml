@@ -16,6 +16,7 @@
     mode: '0644'
   notify:
     - Reload systemd
+    - Restart mysqld_exporter
 
 - name: Start and enable mysqld_exporter service
   ansible.builtin.systemd:

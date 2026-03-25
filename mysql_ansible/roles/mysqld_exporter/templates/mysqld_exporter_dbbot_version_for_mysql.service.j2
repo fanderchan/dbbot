@@ -29,7 +29,7 @@ ExecStart={{ mysqld_exporter_install_dir }}/mysqld_exporter \
   --collect.perf_schema.tablelocks \
   --collect.perf_schema.indexiowaits \
   --collect.perf_schema.tableiowaits \
-{% if mysqld_exporter_topology | default('ms') == 'mgr' %}
+{% if mysqld_exporter_topology_effective | default(mysqld_exporter_topology | default('ms')) == 'mgr' %}
   --collect.perf_schema.replication_group_members \
   --collect.perf_schema.replication_group_member_stats \
   --collect.perf_schema.replication_applier_status_by_worker \

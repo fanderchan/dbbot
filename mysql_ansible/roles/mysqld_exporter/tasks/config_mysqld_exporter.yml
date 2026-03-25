@@ -12,7 +12,6 @@
   failed_when:
     - mysqld_exporter_mysql_basedir.rc != 0
     - mysqld_exporter_mysql_basedir.stdout == ""
-  when: fcs_role_mysqld_exporter_create_monitor_user
 
 - name: Create MySQL exporter database user
   ansible.builtin.shell: >
@@ -33,3 +32,33 @@
     mode: '0600'
     owner: "{{ mysqld_exporter_run_user }}"
     group: "{{ mysqld_exporter_run_user_group }}"
+  notify:
+    - Restart mysqld_exporter
+
+- name: Detect MGR members when mysqld_exporter_topology is auto
+  ansible.builtin.shell: >
+    {{ mysqld_exporter_mysql_basedir.stdout }}/bin/mysql --batch --skip-column-names
+    -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }}
+    -e "SELECT COUNT(*) FROM performance_schema.replication_group_members"
+  register: mysqld_exporter_mgr_member_count
+  changed_when: false
+  failed_when: false
+  when: (mysqld_exporter_topology | default('auto')) == 'auto'
+
+- name: Resolve effective mysqld_exporter topology
+  ansible.builtin.set_fact:
+    mysqld_exporter_topology_effective: >-
+      {{
+        'mgr'
+        if (mysqld_exporter_topology | default('auto')) == 'mgr'
+        else (
+          'mgr'
+          if (
+            (mysqld_exporter_topology | default('auto')) == 'auto'
+            and (mysqld_exporter_mgr_member_count is defined)
+            and (mysqld_exporter_mgr_member_count.rc == 0)
+            and ((mysqld_exporter_mgr_member_count.stdout | trim | int) > 0)
+          )
+          else 'ms'
+        )
+      }}

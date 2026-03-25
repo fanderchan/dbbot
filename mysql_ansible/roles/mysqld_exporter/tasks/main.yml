@@ -1,7 +1,7 @@
 - name: Check if mysqld_exporter is installed
   ansible.builtin.import_tasks: check_if_mysqld_exporter_installed.yml
 
-- name: Setup and configure mysqld_exporter if not installed
+- name: Install mysqld_exporter if not installed
   block:
     - name: Ensure mysqld_exporter package archive is ready(delegate_to dbbot server)
       ansible.builtin.import_tasks: ../../common_utils/tasks/ensure_local_tar_archive_ready.yml
@@ -27,12 +27,16 @@
       ansible.builtin.import_tasks: setup_mysqld_exporter.yml
       when: mysqld_exporter_install_type != 'package'
 
-    - name: Config mysqld_exporter
-      ansible.builtin.import_tasks: config_mysqld_exporter.yml
-
-    - name: Manage mysqld_exporter service (create systemd service, enable and start)
-      ansible.builtin.import_tasks: manage_service.yml
   when: not (mysqld_exporter_installed | default(false))
+
+- name: Config mysqld_exporter
+  ansible.builtin.import_tasks: config_mysqld_exporter.yml
+
+- name: Manage mysqld_exporter service (create systemd service, enable and start)
+  ansible.builtin.import_tasks: manage_service.yml
+
+- name: Apply pending mysqld_exporter handlers before validation
+  ansible.builtin.meta: flush_handlers
 
 - name: Validate mysqld_exporter service is operational
   ansible.builtin.import_tasks: validate_service.yml

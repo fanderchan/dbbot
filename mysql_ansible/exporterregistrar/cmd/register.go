@@ -118,6 +118,45 @@ func init() {
 	}
 }
 
+func buildTargetLabels(exporterType, ip string) map[string]string {
+	switch exporterType {
+	case "mysql", "mysqld":
+		labels := map[string]string{
+			"instance":        fmt.Sprintf("%s:%s", ip, dbPort),
+			"service_name":    fmt.Sprintf("%s:%s", ip, dbPort),
+			"environment":     "production",
+			"region":          region,
+			"cluster":         cluster,
+			"replication_set": replicationSet,
+		}
+		if nodeName != "" {
+			labels["node_name"] = nodeName
+		}
+		if topology != "" {
+			labels["topology"] = topology
+		}
+		return labels
+	case "router":
+		labels := map[string]string{
+			"instance":        fmt.Sprintf("%s:%s", ip, routerAPIPort),
+			"service_name":    fmt.Sprintf("%s:%s", ip, routerAPIPort),
+			"environment":     "production",
+			"region":          region,
+			"cluster":         cluster,
+			"replication_set": replicationSet,
+		}
+		if nodeName != "" {
+			labels["node_name"] = nodeName
+		}
+		if topology != "" {
+			labels["topology"] = topology
+		}
+		return labels
+	default:
+		return nil
+	}
+}
+
 // registerExporter handles the logic for registering the exporter in Prometheus' configuration file.
 func registerExporter(exporterType, ip, port, prometheusServer, sshUser, sshPassword, sshPort string, force bool) error {
 	if port == "" {
@@ -197,24 +236,6 @@ func registerExporter(exporterType, ip, port, prometheusServer, sshUser, sshPass
 		}
 	}
 
-	// Check if the same target already exists
-	newTarget := fmt.Sprintf("%s:%s", ip, port)
-	targetExists := false
-	for i, group := range targetGroups {
-		for j, existingTarget := range group.Targets {
-			if existingTarget == newTarget {
-				if force {
-					// If force parameter is used, update the existing target (in this case, it remains unchanged)
-					targetGroups[i].Targets[j] = newTarget
-					targetExists = true
-					fmt.Printf("Target %s already exists. Updating (no changes needed).\n", newTarget)
-				} else {
-					return fmt.Errorf("target %s already exists. Use --force to update", newTarget)
-				}
-			}
-		}
-	}
-
 	// Set default values for cluster and replicationSet if they are empty
 	if cluster == "" {
 		cluster = fmt.Sprintf("mysql%s", dbPort)
@@ -223,43 +244,32 @@ func registerExporter(exporterType, ip, port, prometheusServer, sshUser, sshPass
 		replicationSet = fmt.Sprintf("mysql%s", dbPort)
 	}
 
+	// Check if the same target already exists
+	newTarget := fmt.Sprintf("%s:%s", ip, port)
+	targetExists := false
+	for i, group := range targetGroups {
+		for j, existingTarget := range group.Targets {
+			if existingTarget == newTarget {
+				if force {
+					targetGroups[i].Targets[j] = newTarget
+					if labels := buildTargetLabels(exporterType, ip); labels != nil {
+						targetGroups[i].Labels = labels
+					}
+					targetExists = true
+					fmt.Printf("Target %s already exists. Updating labels.\n", newTarget)
+				} else {
+					return fmt.Errorf("target %s already exists. Use --force to update", newTarget)
+				}
+			}
+		}
+	}
+
 	// If the target doesn't exist, or if force is used but no match was found, add a new target
 	if !targetExists {
 		newTargetGroup := TargetGroup{
 			Targets: []string{newTarget},
 		}
-		if exporterType == "mysql" || exporterType == "mysqld" {
-			newTargetGroup.Labels = map[string]string{
-				"instance":        fmt.Sprintf("%s:%s", ip, dbPort),
-				"environment":     "production",
-				"region":          region,
-				"cluster":         cluster,
-				"replication_set": replicationSet,
-			}
-		}
-		if exporterType == "router" {
-			newTargetGroup.Labels = map[string]string{
-				"instance":        fmt.Sprintf("%s:%s", ip, routerAPIPort),
-				"service_name":    fmt.Sprintf("%s:%s", ip, routerAPIPort),
-				"environment":     "production",
-				"region":          region,
-				"cluster":         cluster,
-				"replication_set": replicationSet,
-			}
-		}
-		// 如果提供了 node_name，则添加到标签中
-		if nodeName != "" {
-			if newTargetGroup.Labels == nil {
-				newTargetGroup.Labels = make(map[string]string)
-			}
-			newTargetGroup.Labels["node_name"] = nodeName
-		}
-		if topology != "" {
-			if newTargetGroup.Labels == nil {
-				newTargetGroup.Labels = make(map[string]string)
-			}
-			newTargetGroup.Labels["topology"] = topology
-		}
+		newTargetGroup.Labels = buildTargetLabels(exporterType, ip)
 		targetGroups = append(targetGroups, newTargetGroup)
 		fmt.Printf("Adding new target: %s\n", newTarget)
 	}

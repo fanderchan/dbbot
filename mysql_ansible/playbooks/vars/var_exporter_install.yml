@@ -11,7 +11,7 @@ node_exporter_install_type: dbbot    # dbbot, pmm, package
 
 # MySQLd Exporter
 mysqld_exporter_install: true
-mysqld_exporter_topology: ms    # ms, mgr
+mysqld_exporter_topology: auto    # auto, ms, mgr
 mysqld_exporter_port: auto    # auto or explicit port number, e.g. 9108
 mysqld_exporter_port_auto_base: 9104
 mysqld_exporter_port_auto_mysql_base: 3306

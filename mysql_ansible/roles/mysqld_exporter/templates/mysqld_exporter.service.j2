@@ -10,7 +10,7 @@ Type=simple
 WorkingDirectory={{ mysqld_exporter_install_dir }}
 ExecStart={{ mysqld_exporter_install_dir }}/mysqld_exporter \
   --config.my-cnf={{ mysqld_exporter_install_dir }}/.my.cnf \
-{% if mysqld_exporter_topology | default('ms') == 'mgr' %}
+{% if mysqld_exporter_topology_effective | default(mysqld_exporter_topology | default('ms')) == 'mgr' %}
   --collect.perf_schema.replication_group_members \
   --collect.perf_schema.replication_group_member_stats \
   --collect.perf_schema.replication_applier_status_by_worker \

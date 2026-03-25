@@ -1,15 +1,33 @@
-- name: Check if multiple packages exist in ../downloads/ (local)
+---
+- name: Ensure Prometheus package archive is ready on control host
+  ansible.builtin.import_tasks: ../../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
   vars:
-    packages:
-      - "{{ prometheus_package }}"
-      - "{{ grafana_package }}"
-      - "{{ alertmanager_package }}"
-  block:
-    - name: Check if {{ item }} exists in ../downloads/
-      command: find ../downloads/ -type f -name "{{ item }}"
-      register: find_result
-      failed_when: find_result.stdout == ""
-      changed_when: false
-      run_once: true
-      delegate_to: localhost
-      loop: "{{ packages }}"
+    local_tar_archive_label: "Prometheus package {{ prometheus_package }}"
+    local_tar_archive_path: "{{ packages_dir }}/{{ prometheus_package }}"
+    local_tar_archive_auto_download: "{{ fcs_auto_download | bool }}"
+    local_tar_archive_url: "{{ prometheus_url }}"
+    local_tar_archive_timeout: 30
+    local_tar_archive_headers:
+      User-Agent: "Wget/1.21.1"
+
+- name: Ensure Grafana package archive is ready on control host
+  ansible.builtin.import_tasks: ../../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
+  vars:
+    local_tar_archive_label: "Grafana package {{ grafana_package }}"
+    local_tar_archive_path: "{{ packages_dir }}/{{ grafana_package }}"
+    local_tar_archive_auto_download: "{{ fcs_auto_download | bool }}"
+    local_tar_archive_url: "{{ grafana_url }}"
+    local_tar_archive_timeout: 30
+    local_tar_archive_headers:
+      User-Agent: "Wget/1.21.1"
+
+- name: Ensure Alertmanager package archive is ready on control host
+  ansible.builtin.import_tasks: ../../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
+  vars:
+    local_tar_archive_label: "Alertmanager package {{ alertmanager_package }}"
+    local_tar_archive_path: "{{ packages_dir }}/{{ alertmanager_package }}"
+    local_tar_archive_auto_download: "{{ fcs_auto_download | bool }}"
+    local_tar_archive_url: "{{ alertmanager_url }}"
+    local_tar_archive_timeout: 30
+    local_tar_archive_headers:
+      User-Agent: "Wget/1.21.1"
