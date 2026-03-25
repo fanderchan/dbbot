@@ -82,6 +82,13 @@ dbbot_success() {
   dbbot_print "OK" "32" 1 "$@"
 }
 
+dbbot_stage() {
+  local current="$1"
+  local total="$2"
+  shift 2
+  dbbot_info "[${current}/${total}] $*"
+}
+
 dbbot_die() {
   dbbot_print "ERROR" "31" 2 "$@"
   exit 1
@@ -364,10 +371,36 @@ dbbot_snapshot_current_root() {
 
 dbbot_run_post_upgrade_checks() {
   local log_path="$1"
+  local stream_live="${2:-0}"
 
   dbbot_require_commands python3
   mkdir -p "$(dirname "${log_path}")"
   : > "${log_path}"
+
+  if ((stream_live)); then
+    (
+      set -euo pipefail
+
+      printf '== ansible-playbook --version ==\n'
+      python3 "${DBBOT_ANSIBLE_PLAYBOOK}" --version
+
+      printf '\n== mysql syntax check ==\n'
+      cd "${DBBOT_ROOT}/mysql_ansible/playbooks"
+      python3 "${DBBOT_ANSIBLE_PLAYBOOK}" -i ../inventory/hosts.ini single_node.yml --syntax-check
+
+      printf '\n== clickhouse deploy syntax check ==\n'
+      cd "${DBBOT_ROOT}/clickhouse_ansible/playbooks"
+      python3 "${DBBOT_ANSIBLE_PLAYBOOK}" -i ../inventory/hosts.deploy.ini deploy_cluster.yml --syntax-check
+
+      printf '\n== clickhouse restore syntax check ==\n'
+      python3 "${DBBOT_ANSIBLE_PLAYBOOK}" -i ../inventory/hosts.restore.ini restore_cluster.yml --syntax-check
+
+      printf '\n== monitoring syntax check ==\n'
+      cd "${DBBOT_ROOT}/monitoring_prometheus_ansible/playbooks"
+      python3 "${DBBOT_ANSIBLE_PLAYBOOK}" -i ../inventory/hosts.ini monitoring_prometheus_deployment.yml --syntax-check
+    ) > >(tee "${log_path}") 2>&1
+    return 0
+  fi
 
   (
     set -euo pipefail

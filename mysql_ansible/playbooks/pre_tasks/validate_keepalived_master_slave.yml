@@ -18,8 +18,3 @@
     msg: "{{ ansible_play_name }}: inventory/hosts.ini's IP `{{ item }}` is not in keepalived_master_slave.yml"
   when: item not in  ([master_ip] + [slave_ip])
   loop: "{{ ansible_play_hosts }}"
-
-- name: Check if net_work_interface is valid
-  ansible.builtin.fail:
-    msg: "The net_work_interface is not valid or not found in the network interfaces list"
-  when: (net_work_interface | default('')) not in ansible_interfaces

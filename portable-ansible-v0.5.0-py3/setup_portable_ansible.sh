@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DBBOT_BIN_DIR="$(cd "${SCRIPT_DIR}/../bin" && pwd)"
+BASHRC_FILE="${HOME}/.bashrc"
 
 echoError() { echo -e "\033[31m$*\033[0m"; }      # red
 echoWarning() { echo -e "\033[33m$*\033[0m"; }      # yellow
@@ -56,12 +58,18 @@ if ! python3_has_selinux_binding; then
 fi
 
 # setting ~/.bashrc
-if ! grep -q 'alias ansible-playbook=' ~/.bashrc; then
-    echo 'alias ansible-playbook="python3 '"$SCRIPT_DIR"'/ansible-playbook"' >> ~/.bashrc
+touch "${BASHRC_FILE}"
+
+if ! grep -q 'alias ansible-playbook=' "${BASHRC_FILE}"; then
+    echo 'alias ansible-playbook="python3 '"$SCRIPT_DIR"'/ansible-playbook"' >> "${BASHRC_FILE}"
 fi
 
-if ! grep -q 'alias ansible=' ~/.bashrc; then
-    echo 'alias ansible="python3 '"$SCRIPT_DIR"'/ansible"' >> ~/.bashrc
+if ! grep -q 'alias ansible=' "${BASHRC_FILE}"; then
+    echo 'alias ansible="python3 '"$SCRIPT_DIR"'/ansible"' >> "${BASHRC_FILE}"
+fi
+
+if ! grep -Fqx 'export PATH="'"$DBBOT_BIN_DIR"':$PATH"' "${BASHRC_FILE}"; then
+    echo 'export PATH="'"$DBBOT_BIN_DIR"':$PATH"' >> "${BASHRC_FILE}"
 fi
 
 # install sshpass

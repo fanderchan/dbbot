@@ -25,11 +25,6 @@
     msg: "{{ ansible_play_name }}: `vip_netmask` is not valid. It should be between 0 and 32."
   when: vip_netmask is not defined or vip_netmask | int < 0 or vip_netmask | int > 32
 
-- name: Check if net_work_interface is valid
-  ansible.builtin.fail:
-    msg: "The net_work_interface is not valid or not found in the network interfaces list"
-  when: (net_work_interface | default('')) not in ansible_interfaces
-
 - name: Check if mha.yml 's IP are in inventory/hosts.ini
   ansible.builtin.fail:
     msg: "{{ ansible_play_name }}: mha.yml 's IP `{{ item }}` is not in inventory/hosts.ini"

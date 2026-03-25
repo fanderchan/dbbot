@@ -1,12 +1,34 @@
 ---
-- name: Ensure tar is installed on control host for local archive validation
-  ansible.builtin.package:
-    name: tar
-    state: present
-  delegate_to: 127.0.0.1
+- name: Check whether tar is available on control host for local archive validation
+  ansible.builtin.raw: command -v tar >/dev/null 2>&1
+  register: ensure_control_host_tar_check
+  changed_when: false
+  failed_when: false
+  delegate_to: localhost
   run_once: true
   when: >-
     '../roles/mysql_server' in (roles_to_execute | default([]))
     or '../roles/setup_mysqlshell' in (roles_to_execute | default([]))
     or '../roles/mysql_router' in (roles_to_execute | default([]))
     or '../roles/install_mysql_shell' in (roles_to_execute | default([]))
+
+- name: Ensure tar is installed on control host for local archive validation
+  ansible.builtin.raw: |
+    if command -v dnf >/dev/null 2>&1; then
+      dnf install -y tar
+    elif command -v yum >/dev/null 2>&1; then
+      yum install -y tar
+    else
+      echo "Neither yum nor dnf was found on the control host." >&2
+      exit 1
+    fi
+  changed_when: ensure_control_host_tar_check.rc != 0
+  delegate_to: localhost
+  run_once: true
+  when:
+    - >-
+      '../roles/mysql_server' in (roles_to_execute | default([]))
+      or '../roles/setup_mysqlshell' in (roles_to_execute | default([]))
+      or '../roles/mysql_router' in (roles_to_execute | default([]))
+      or '../roles/install_mysql_shell' in (roles_to_execute | default([]))
+    - ensure_control_host_tar_check.rc != 0

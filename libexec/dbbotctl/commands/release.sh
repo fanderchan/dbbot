@@ -4,8 +4,8 @@ dbbot_cmd_release_usage() {
   cat <<'EOF'
 Usage:
   dbbotctl release history
-  dbbotctl release upgrade (--latest | --tag <tag> | --package <path>) [--dry-run] [--skip-checks]
-  dbbotctl release rollback [snapshot_id] [--skip-checks]
+  dbbotctl release upgrade (--latest | --tag <tag> | --package <path>) [--dry-run] [--skip-checks] [--debug]
+  dbbotctl release rollback [snapshot_id] [--skip-checks] [--debug]
 EOF
 }
 
@@ -19,7 +19,7 @@ EOF
 dbbot_release_upgrade_usage() {
   cat <<'EOF'
 Usage:
-  dbbotctl release upgrade (--latest | --tag <tag> | --package <path>) [--dry-run] [--skip-checks]
+  dbbotctl release upgrade (--latest | --tag <tag> | --package <path>) [--dry-run] [--skip-checks] [--debug]
 
 Options:
   --latest           Resolve the latest official GitHub release tag and download it
@@ -27,13 +27,14 @@ Options:
   --package <path>   Use a local release tarball
   --dry-run          Validate the package and print the planned actions without changing files
   --skip-checks      Skip post-upgrade ansible version and syntax checks
+  --debug            Print stage progress and stream post-upgrade checks live
 EOF
 }
 
 dbbot_release_rollback_usage() {
   cat <<'EOF'
 Usage:
-  dbbotctl release rollback [snapshot_id] [--skip-checks]
+  dbbotctl release rollback [snapshot_id] [--skip-checks] [--debug]
 
 If snapshot_id is omitted, the latest recorded snapshot is used.
 EOF
@@ -81,6 +82,7 @@ dbbot_cmd_release_history() {
 dbbot_cmd_release_upgrade() {
   local dry_run=0
   local skip_checks=0
+  local debug=0
   local selector_count=0
   local requested_tag=""
   local package_path=""
@@ -101,6 +103,7 @@ dbbot_cmd_release_upgrade() {
   local created_at=""
   local history_timestamp=""
   local source_kind=""
+  local stage_total=7
 
   while (($# > 0)); do
     case "$1" in
@@ -129,6 +132,10 @@ dbbot_cmd_release_upgrade() {
         ;;
       --skip-checks)
         skip_checks=1
+        shift
+        ;;
+      --debug)
+        debug=1
         shift
         ;;
       help|-h|--help)
@@ -185,6 +192,7 @@ dbbot_cmd_release_upgrade() {
     printf 'package: %s\n' "${package_path}"
     printf 'source: %s\n' "${source_ref}"
     printf 'post_checks: %s\n' "$([[ ${skip_checks} -eq 1 ]] && printf 'skipped' || printf 'enabled')"
+    printf 'debug: %s\n' "$([[ ${debug} -eq 1 ]] && printf 'enabled' || printf 'disabled')"
     printf 'managed_roots:\n'
     printf '  %s\n' "${DBBOT_MANAGED_ROOT_DIRS[@]}"
     printf 'managed_root_files:\n'
@@ -218,22 +226,24 @@ dbbot_cmd_release_upgrade() {
     snapshot_tar "${snapshot_tar}" \
     post_checks "$([[ ${skip_checks} -eq 1 ]] && printf 'skipped' || printf 'pending')"
 
-  dbbot_info "creating rollback snapshot ${snapshot_id}"
+  dbbot_stage 1 "${stage_total}" "validated release package ${package_path}"
+  dbbot_stage 2 "${stage_total}" "creating rollback snapshot ${snapshot_id}"
   dbbot_snapshot_current_root "${snapshot_tar}"
 
-  dbbot_info "capturing preserved user state"
+  dbbot_stage 3 "${stage_total}" "capturing preserved user state"
   dbbot_capture_paths "${DBBOT_ROOT}" "${preserve_stage}" "${preserved_manifest}"
 
-  dbbot_info "replacing managed release files"
+  dbbot_stage 4 "${stage_total}" "replacing managed release files from ${package_path}"
   dbbot_remove_managed_paths
   tar -C "$(dirname "${DBBOT_ROOT}")" -xzf "${package_path}"
 
+  dbbot_stage 5 "${stage_total}" "restoring preserved user state over packaged files"
   dbbot_capture_paths "${DBBOT_ROOT}" "${package_templates_dir}" "${packaged_manifest}"
   cp -a "${preserve_stage}/." "${DBBOT_ROOT}/"
   rm -rf "${preserve_stage}"
 
   if ((skip_checks)); then
-    dbbot_info "post-upgrade checks skipped by option"
+    dbbot_stage 6 "${stage_total}" "post-upgrade checks skipped by option"
     dbbot_write_metadata_file "${metadata_file}" \
       snapshot_id "${snapshot_id}" \
       operation "upgrade" \
@@ -247,8 +257,13 @@ dbbot_cmd_release_upgrade() {
       snapshot_tar "${snapshot_tar}" \
       post_checks "skipped"
   else
-    dbbot_info "running post-upgrade checks"
-    dbbot_run_post_upgrade_checks "${checks_log}"
+    if ((debug)); then
+      dbbot_stage 6 "${stage_total}" "running post-upgrade checks live (log: ${checks_log})"
+      dbbot_run_post_upgrade_checks "${checks_log}" 1
+    else
+      dbbot_stage 6 "${stage_total}" "running post-upgrade checks (log: ${checks_log})"
+      dbbot_run_post_upgrade_checks "${checks_log}" 0
+    fi
     dbbot_write_metadata_file "${metadata_file}" \
       snapshot_id "${snapshot_id}" \
       operation "upgrade" \
@@ -264,6 +279,7 @@ dbbot_cmd_release_upgrade() {
       checks_log "${checks_log}"
   fi
 
+  dbbot_stage 7 "${stage_total}" "recording upgrade history and finalizing"
   history_timestamp="$(dbbot_now_utc)"
   dbbot_append_history "${history_timestamp}" "upgrade" "success" "${current_version}" "${target_version}" "${snapshot_id}" "${source_ref}" "package_replaced"
 
@@ -278,6 +294,7 @@ dbbot_cmd_release_upgrade() {
 
 dbbot_cmd_release_rollback() {
   local skip_checks=0
+  local debug=0
   local snapshot_id=""
   local snapshot_dir=""
   local metadata_file=""
@@ -285,11 +302,16 @@ dbbot_cmd_release_rollback() {
   local current_version=""
   local rollback_target_version="unknown"
   local history_timestamp=""
+  local stage_total=4
 
   while (($# > 0)); do
     case "$1" in
       --skip-checks)
         skip_checks=1
+        shift
+        ;;
+      --debug)
+        debug=1
         shift
         ;;
       help|-h|--help)
@@ -326,22 +348,29 @@ dbbot_cmd_release_rollback() {
   fi
 
   current_version="$(dbbot_current_version)"
-  dbbot_info "restoring snapshot ${snapshot_id}"
+  dbbot_stage 1 "${stage_total}" "restoring snapshot ${snapshot_id}"
 
   dbbot_remove_managed_paths
   tar -C "$(dirname "${DBBOT_ROOT}")" -xzf "${snapshot_tar}"
 
   if ((skip_checks)); then
-    dbbot_info "post-rollback checks skipped by option"
+    dbbot_stage 2 "${stage_total}" "post-rollback checks skipped by option"
   else
     local rollback_checks_log="${snapshot_dir}/post-rollback-checks.log"
-    dbbot_info "running post-rollback checks"
-    dbbot_run_post_upgrade_checks "${rollback_checks_log}"
+    if ((debug)); then
+      dbbot_stage 2 "${stage_total}" "running post-rollback checks live (log: ${rollback_checks_log})"
+      dbbot_run_post_upgrade_checks "${rollback_checks_log}" 1
+    else
+      dbbot_stage 2 "${stage_total}" "running post-rollback checks (log: ${rollback_checks_log})"
+      dbbot_run_post_upgrade_checks "${rollback_checks_log}" 0
+    fi
   fi
 
+  dbbot_stage 3 "${stage_total}" "recording rollback history"
   history_timestamp="$(dbbot_now_utc)"
   dbbot_append_history "${history_timestamp}" "rollback" "success" "${current_version}" "${rollback_target_version}" "${snapshot_id}" "snapshot:${snapshot_id}" "snapshot_restored"
 
+  dbbot_stage 4 "${stage_total}" "rollback finalized"
   dbbot_success "rollback completed: $(dbbot_tag_from_version "${current_version}") -> $(dbbot_tag_from_version "${rollback_target_version}")"
   printf 'snapshot_id: %s\n' "${snapshot_id}"
   printf 'restored_to: %s\n' "$(dbbot_tag_from_version "${rollback_target_version}")"

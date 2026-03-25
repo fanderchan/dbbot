@@ -7,8 +7,3 @@
   ansible.builtin.fail:
     msg: "{{ ansible_play_name }}: `greatsql_netmask` is not valid. It should be between 0 and 32."
   when: greatsql_netmask is not defined or greatsql_netmask | int < 0 or greatsql_netmask | int > 32
-
-- name: Check if greatsql_net_work_interface is valid
-  ansible.builtin.fail:
-    msg: "The greatsql_net_work_interface is not valid or not found in the network interfaces list"
-  when: (greatsql_net_work_interface | default('')) not in ansible_interfaces

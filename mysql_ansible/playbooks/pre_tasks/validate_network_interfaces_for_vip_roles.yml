@@ -1,0 +1,60 @@
+---
+- name: Build required network interface checks for VIP-related roles
+  ansible.builtin.set_fact:
+    vip_role_interface_requirements: >-
+      {{
+        []
+        + ([{
+          'feature_name': 'MHA VIP',
+          'variable_name': 'net_work_interface',
+          'interface_name': (net_work_interface | default(''))
+        }] if '../roles/make_mha' in (roles_to_execute | default([])) else [])
+        + ([{
+          'feature_name': 'master-slave keepalived VIP',
+          'variable_name': 'net_work_interface',
+          'interface_name': (net_work_interface | default(''))
+        }] if '../roles/make_keepalived' in (roles_to_execute | default([])) else [])
+        + ([{
+          'feature_name': 'MySQL Router HA VIP',
+          'variable_name': 'router_net_work_interface',
+          'interface_name': (router_net_work_interface | default(''))
+        }] if (
+          '../roles/make_mysqlrouter_ha' in (roles_to_execute | default([]))
+          and (router_enable_ha | default(false) | bool)
+        ) else [])
+        + ([{
+          'feature_name': 'GreatSQL MGR VIP',
+          'variable_name': 'greatsql_net_work_interface',
+          'interface_name': (greatsql_net_work_interface | default(''))
+        }] if (
+          '../roles/make_mgr' in (roles_to_execute | default([]))
+          and (db_type | default('')) == 'greatsql'
+          and (fcs_use_greatsql_ha | default(false) | bool)
+        ) else [])
+      }}
+
+- name: Validate configured network interface variables are not empty for VIP-related roles
+  ansible.builtin.assert:
+    that:
+      - item.interface_name | length > 0
+    fail_msg: >-
+      {{ ansible_play_name }}: {{ item.feature_name }} requires {{ item.variable_name }}
+      to be set for host {{ inventory_hostname }} before VIP-related tasks can run.
+  loop: "{{ vip_role_interface_requirements }}"
+  loop_control:
+    label: "{{ item.variable_name }}"
+  when: vip_role_interface_requirements | length > 0
+
+- name: Validate configured network interfaces exist on each host for VIP-related roles
+  ansible.builtin.assert:
+    that:
+      - item.interface_name in (ansible_interfaces | default([]))
+    fail_msg: >-
+      {{ ansible_play_name }}: {{ item.feature_name }} requires interface
+      {{ item.interface_name }} from {{ item.variable_name }}, but host
+      {{ inventory_hostname }} only reports interfaces:
+      {{ ((ansible_interfaces | default([])) | join(', ')) | default('none', true) }}.
+  loop: "{{ vip_role_interface_requirements }}"
+  loop_control:
+    label: "{{ item.interface_name }}"
+  when: vip_role_interface_requirements | length > 0

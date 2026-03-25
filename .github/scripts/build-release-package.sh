@@ -110,6 +110,10 @@ append_dir() {
 }
 
 while IFS= read -r -d '' path; do
+  if [[ ! -e "$path" ]]; then
+    continue
+  fi
+
   if is_root_file "$path"; then
     printf '%s\0' "$path" >> "$file_list"
     continue
@@ -129,7 +133,7 @@ while IFS= read -r -d '' path; do
   fi
 
   printf '%s\0' "$path" >> "$file_list"
-done < <(git ls-files -z)
+done < <(git ls-files -z --cached --others --exclude-standard)
 
 for dir in "${EMPTY_DIRS[@]}"; do
   append_dir "$dir"
