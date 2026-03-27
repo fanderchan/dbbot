@@ -9,6 +9,7 @@ dbbot_cmd_version() {
   printf 'state_dir: %s\n' "${DBBOT_STATE_DIR}"
   printf 'portable_ansible_home: %s\n' "${DBBOT_PORTABLE_ANSIBLE_HOME}"
   printf 'ansible_playbook: %s\n' "${DBBOT_ANSIBLE_PLAYBOOK}"
+  printf 'exporterregistrar: %s\n' "${DBBOTCTL_EXPORTERREGISTRAR_BIN}"
 
   if dbbot_has_command python3 && [[ -e "${DBBOT_ANSIBLE_PLAYBOOK}" ]]; then
     local ansible_version_line=""

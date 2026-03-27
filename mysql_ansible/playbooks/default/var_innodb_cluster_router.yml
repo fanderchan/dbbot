@@ -8,13 +8,13 @@ router_bootstrap_server: 192.0.2.131
 # ============================================================
 # HA settings (effective when router_enable_ha=true)
 # ============================================================
-router_vip: 198.51.100.150
+router_vip: 192.0.2.150
 router_net_work_interface: ens33
 router_ha_nodes:
-  - ip: 198.51.100.151
+  - ip: 192.0.2.151
     role: MASTER
     priority: 100
-  - ip: 198.51.100.152
+  - ip: 192.0.2.152
     role: BACKUP
     priority: 90
 router_vip_netmask: "32"

@@ -52,24 +52,27 @@ var registerCmd = &cobra.Command{
 
 Examples:
   mysql server: 192.0.2.131
-  prometheus server: 198.51.100.161
+  prometheus server: 192.0.2.161
   prometheus server ssh user: root
   prometheus server ssh password: <your_ssh_password>
 
   # Register a MySQL exporter
-  ./exporterregistrar register -t mysql -H 192.0.2.131 -s 198.51.100.161 -p <your_ssh_password>
+  ./exporterregistrar register -t mysql -H 192.0.2.131 -s 192.0.2.161 -p <your_ssh_password>
 
   # Register a MySQL exporter for MySQL 3307, metrics port auto-derived as 9105
-  ./exporterregistrar register -t mysql -H 192.0.2.131 --db-port 3307 -s 198.51.100.161 -p <your_ssh_password>
+  ./exporterregistrar register -t mysql -H 192.0.2.131 --db-port 3307 -s 192.0.2.161 -p <your_ssh_password>
 
   # Register a Node exporter
-  ./exporterregistrar register -t node -H 192.0.2.131 -s 198.51.100.161 -p <your_ssh_password>
+  ./exporterregistrar register -t node -H 192.0.2.131 -s 192.0.2.161 -p <your_ssh_password>
+
+  # Register a Router exporter
+  ./exporterregistrar register -t router -H 192.0.2.151 -s 192.0.2.161 -p <your_ssh_password>
 
   # Register a MySQL exporter with custom labels
-  ./exporterregistrar register -t mysql -H 192.0.2.131 -s 198.51.100.161 -p <your_ssh_password> -f --region cn-sz
+  ./exporterregistrar register -t mysql -H 192.0.2.131 -s 192.0.2.161 -p <your_ssh_password> -f --region cn-sz
  
   # force update a MySQL exporter with custom labels
-  ./exporterregistrar register -t mysql -H 192.0.2.131 -s 198.51.100.161 -p <your_ssh_password> -f --region cn-bj --node-name node1
+  ./exporterregistrar register -t mysql -H 192.0.2.131 -s 192.0.2.161 -p <your_ssh_password> -f --region cn-bj --node-name node1
   `,
 	Run: func(cmd *cobra.Command, args []string) {
 		err := registerExporter(exporterType, ip, port, prometheusServer, sshUser, sshPassword, sshPort, force)

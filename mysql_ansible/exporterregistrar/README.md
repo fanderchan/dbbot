@@ -9,8 +9,14 @@
 
 ## 仓库内二进制位置
 
-- 发布位置：`/usr/local/dbops/mysql_ansible/playbooks/exporterregistrar`
-- 源码位置：`/usr/local/dbops/mysql_ansible/exporterregistrar`
+- 发布二进制位置：`/usr/local/dbbot/libexec/dbbotctl/exporterregistrar`
+- 源码位置：`/usr/local/dbbot/mysql_ansible/exporterregistrar`
+
+推荐优先通过 `dbbotctl` 调用：
+
+```bash
+/usr/local/dbbot/bin/dbbotctl exporter register --help
+```
 
 ## 适用范围
 
@@ -36,13 +42,13 @@
 在源码目录执行：
 
 ```bash
-cd /usr/local/dbops/mysql_ansible/exporterregistrar
+cd /usr/local/dbbot/mysql_ansible/exporterregistrar
 sh build.sh
 ```
 
 构建成功后会同时生成：
 
 - `build/exporterregistrar`
-- `../playbooks/exporterregistrar`
+- `/usr/local/dbbot/libexec/dbbotctl/exporterregistrar`
 
 如需自定义目标平台，可自行调整 `build.sh` 中的 `GOOS`、`GOARCH`、`GOAMD64` 参数后重新编译。

@@ -1,12 +1,12 @@
 ## sample ##
 #- targets:
-#  - 198.51.100.151:9165
+#  - 192.0.2.151:9165
 #  labels:
-#    instance: 198.51.100.151:8443
-#    service_name: 198.51.100.151:8443
+#    instance: 192.0.2.151:8443
+#    service_name: 192.0.2.151:8443
 #    environment: production
 #    region: cn
 #    cluster: mysql3306
 #    replication_set: mysql3306
-#    node_name: 198.51.100.151
+#    node_name: 192.0.2.151
 #    topology: ms

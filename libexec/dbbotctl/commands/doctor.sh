@@ -81,6 +81,16 @@ dbbot_cmd_doctor() {
     failures=$((failures + 1))
   fi
 
+  if [[ -x "${DBBOTCTL_EXPORTERREGISTRAR_BIN}" ]]; then
+    dbbot_doctor_report "PASS" "exporterregistrar" "${DBBOTCTL_EXPORTERREGISTRAR_BIN}"
+  elif [[ -x "${DBBOT_ROOT}/mysql_ansible/playbooks/exporterregistrar" ]]; then
+    dbbot_doctor_report "WARN" "exporterregistrar" "legacy path in use: ${DBBOT_ROOT}/mysql_ansible/playbooks/exporterregistrar"
+    warnings=$((warnings + 1))
+  else
+    dbbot_doctor_report "WARN" "exporterregistrar" "missing, dbbotctl exporter register unavailable"
+    warnings=$((warnings + 1))
+  fi
+
   available_kb="$(df -Pk "${DBBOT_ROOT}" | awk 'NR == 2 { print $4 }')"
   if [[ -n "${available_kb}" ]]; then
     dbbot_doctor_report "PASS" "disk_free" "$((available_kb / 1024)) MB available"

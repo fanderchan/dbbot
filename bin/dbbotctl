@@ -21,6 +21,9 @@ Commands:
   version            Show installed dbbot version and runtime paths
   doctor             Check local prerequisites for dbbot lifecycle operations
   env setup          Run portable ansible bootstrap on the control host
+  exporter register  Register node/mysql/router exporters in Prometheus
+  monitoring register
+                     Alias of exporter register
   release history    Show recorded upgrade and rollback history
   release upgrade    Upgrade dbbot from a local package or GitHub release
   release rollback   Restore a previously captured upgrade snapshot
@@ -30,6 +33,7 @@ Examples:
   dbbotctl version
   dbbotctl doctor
   dbbotctl env setup
+  dbbotctl exporter register -t node -H 192.0.2.131 -s 192.0.2.161 -p '<your_ssh_password>'
   dbbotctl release history
   dbbotctl release upgrade --latest
   dbbotctl release upgrade --tag v0.2.0
@@ -60,6 +64,16 @@ main() {
       shift
       source "${DBBOTCTL_LIBEXEC_DIR}/commands/env.sh"
       dbbot_cmd_env "$@"
+      ;;
+    exporter)
+      shift
+      source "${DBBOTCTL_LIBEXEC_DIR}/commands/exporter.sh"
+      dbbot_cmd_exporter "$@"
+      ;;
+    monitoring)
+      shift
+      source "${DBBOTCTL_LIBEXEC_DIR}/commands/exporter.sh"
+      dbbot_cmd_monitoring "$@"
       ;;
     release)
       shift

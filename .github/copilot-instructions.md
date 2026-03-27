@@ -28,4 +28,4 @@ This repository is a database delivery and operations automation monorepo built 
 
 - If behavior changes, update related vars, sample inventory, and docs together.
 - Run the relevant `ansible-playbook --syntax-check` command for the touched subproject.
-- Do not remove `mysql_ansible/playbooks/exporterregistrar`; it is a shipped binary artifact.
+- Do not remove `libexec/dbbotctl/exporterregistrar`; it is a shipped binary artifact.
