@@ -1,0 +1,40 @@
+---
+- name: Deploy node_exporter
+  hosts: dbbot_node_exporter
+  become: true
+  any_errors_fatal: true
+  max_fail_percentage: 1
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_node_exporter_install.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_exporter_install.yml
+    - vars/var_node_exporter_install.yml
+  vars:
+    dbbot_entry_playbook_name: "node_exporter_install.yml"
+    roles_to_execute:
+      - "../roles/node_exporter"
+    mysqld_exporter_install: false
+  pre_tasks:
+    - name: Import tasks to validate setting in common_config.yml
+      ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
+
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Import tasks to check exporter ports
+      ansible.builtin.import_tasks: pre_tasks/check_exporter_ports.yml
+
+    - name: Import tasks to check if packages exist
+      ansible.builtin.import_tasks: pre_tasks/check_if_exporter_packages_exist.yml
+
+    - name: Import tasks to confirm deployment
+      ansible.builtin.import_tasks: pre_tasks/confirmation.yml
+
+  tasks:
+    - name: Include node_exporter role
+      ansible.builtin.include_role:
+        name: "../roles/node_exporter"
+      when: node_exporter_install | bool

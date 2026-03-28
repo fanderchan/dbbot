@@ -80,8 +80,10 @@
 - `backup_script.yml`
 - `backup_script_8.4.yml`
 - `restore_pitr_8.4.yml`
-- `exporter_install.yml`
+- `node_exporter_install.yml`
+- `mysqld_exporter_install.yml`
 - `router_exporter_install.yml`
+- `exporter_install.yml`（兼容旧入口，等价于 `mysqld_exporter_install.yml`）
 - `unsafe_uninstall.yml`
 
 ### ClickHouse 公开入口

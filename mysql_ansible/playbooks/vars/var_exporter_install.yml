@@ -1,3 +1,8 @@
+# Deprecated compatibility vars file.
+# New split files:
+#   - var_node_exporter_install.yml
+#   - var_mysqld_exporter_install.yml
+
 # Node Exporter
 node_exporter_install: true
 node_exporter_port: 9100

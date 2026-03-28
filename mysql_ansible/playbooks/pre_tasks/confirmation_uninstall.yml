@@ -23,15 +23,15 @@
     vip_msg: "{% if vip is defined %}[\"VIP: {{ vip }}\"]{% else %}[]{% endif %}"
     manager_ip_msg: "{% if manager_ip is defined %}[\"Manager IP: {{ manager_ip }}\"]{% else %}[]{% endif %}"
     # mysqld_exporter messages
-    mysqld_exporter_port_msg: "{% if mysqld_exporter_port is defined %}[\"mysqld_exporter port: {{ mysqld_exporter_port_resolved | int }}{% if (mysqld_exporter_port | string) == 'auto' %} (auto){% endif %}\"]{% else %}[]{% endif %}"
-    mysqld_exporter_install_type_msg: "{% if mysqld_exporter_install_type is defined %}[\"mysqld_exporter install type: {{ mysqld_exporter_install_type }}\"]{% else %}[]{% endif %}"
-    mysqld_exporter_package_msg: "{% if (mysqld_exporter_install_type | default('dbbot')) == 'package' and (mysqld_exporter_package is defined) %}[\"mysqld_exporter package: {{ mysqld_exporter_package }}\"]{% else %}[]{% endif %}"
-    mysqld_exporter_install_dir_msg: "{% if mysqld_exporter_install_dir is defined %}[\"mysqld_exporter install dir: {{ mysqld_exporter_install_dir }}\"]{% else %}[]{% endif %}"
+    mysqld_exporter_port_msg: "{% if mysqld_exporter_install | default(false) | bool and mysqld_exporter_port is defined %}[\"mysqld_exporter port: {{ mysqld_exporter_port_resolved | int }}{% if (mysqld_exporter_port | string) == 'auto' %} (auto){% endif %}\"]{% else %}[]{% endif %}"
+    mysqld_exporter_install_type_msg: "{% if mysqld_exporter_install | default(false) | bool and mysqld_exporter_install_type is defined %}[\"mysqld_exporter install type: {{ mysqld_exporter_install_type }}\"]{% else %}[]{% endif %}"
+    mysqld_exporter_package_msg: "{% if mysqld_exporter_install | default(false) | bool and (mysqld_exporter_install_type | default('dbbot')) == 'package' and (mysqld_exporter_package is defined) %}[\"mysqld_exporter package: {{ mysqld_exporter_package }}\"]{% else %}[]{% endif %}"
+    mysqld_exporter_install_dir_msg: "{% if mysqld_exporter_install | default(false) | bool and mysqld_exporter_install_dir is defined %}[\"mysqld_exporter install dir: {{ mysqld_exporter_install_dir }}\"]{% else %}[]{% endif %}"
     # node_exporter messages
-    node_exporter_port_msg: "{% if node_exporter_port is defined %}[\"node_exporter port: {{ node_exporter_port }}\"]{% else %}[]{% endif %}"
-    node_exporter_install_type_msg: "{% if node_exporter_install_type is defined %}[\"node_exporter install type: {{ node_exporter_install_type }}\"]{% else %}[]{% endif %}"
-    node_exporter_package_msg: "{% if (node_exporter_install_type | default('dbbot')) == 'package' and node_exporter_package is defined %}[\"node_exporter package: {{ node_exporter_package }}\"]{% else %}[]{% endif %}"
-    node_exporter_install_dir_msg: "{% if node_exporter_install_dir is defined %}[\"node_exporter install dir: {{ node_exporter_install_dir }}\"]{% else %}[]{% endif %}"
+    node_exporter_port_msg: "{% if node_exporter_install | default(false) | bool and node_exporter_port is defined %}[\"node_exporter port: {{ node_exporter_port }}\"]{% else %}[]{% endif %}"
+    node_exporter_install_type_msg: "{% if node_exporter_install | default(false) | bool and node_exporter_install_type is defined %}[\"node_exporter install type: {{ node_exporter_install_type }}\"]{% else %}[]{% endif %}"
+    node_exporter_package_msg: "{% if node_exporter_install | default(false) | bool and (node_exporter_install_type | default('dbbot')) == 'package' and node_exporter_package is defined %}[\"node_exporter package: {{ node_exporter_package }}\"]{% else %}[]{% endif %}"
+    node_exporter_install_dir_msg: "{% if node_exporter_install | default(false) | bool and node_exporter_install_dir is defined %}[\"node_exporter install dir: {{ node_exporter_install_dir }}\"]{% else %}[]{% endif %}"
     # Additional MySQL directory messages
     datadir_msg: "{% if datadir is defined %}[\"datadir: {{ datadir }}\"]{% else %}[]{% endif %}"
     tmpdir_msg: "{% if tmpdir is defined %}[\"tmpdir: {{ tmpdir }}\"]{% else %}[]{% endif %}"

@@ -2,7 +2,7 @@
   ansible.builtin.stat:
     path: "{{ mysql_packages_dir }}/{{ node_exporter_package }}"
   register: node_exporter_package_file
-  when: node_exporter_install
+  when: node_exporter_install | default(false) | bool
   run_once: true
   delegate_to: localhost
 
@@ -10,7 +10,7 @@
   ansible.builtin.fail:
     msg: "node_exporter package not found and auto download is disabled"
   when:
-    - node_exporter_install
+    - node_exporter_install | default(false) | bool
     - not node_exporter_package_file.stat.exists
     - not fcs_auto_download_packages | bool
     - node_exporter_install_type == 'package'
@@ -22,7 +22,7 @@
   ansible.builtin.stat:
     path: "{{ mysql_packages_dir }}/{{ mysqld_exporter_package }}"
   register: mysqld_exporter_package_file
-  when: mysqld_exporter_install
+  when: mysqld_exporter_install | default(false) | bool
   run_once: true
   delegate_to: localhost
 
@@ -30,7 +30,7 @@
   ansible.builtin.fail:
     msg: "mysqld_exporter package not found and auto download is disabled"
   when:
-    - mysqld_exporter_install
+    - mysqld_exporter_install | default(false) | bool
     - not mysqld_exporter_package_file.stat.exists
     - not fcs_auto_download_packages | bool
     - mysqld_exporter_install_type == 'package'
