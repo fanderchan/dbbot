@@ -22,7 +22,7 @@ alert_smtp_smarthost: 'smtp.example.com:587'  # The SMTP server address (e.g., s
 alert_smtp_auth_username: 'smtp-user@example.com'  # The SMTP server authentication username.
 alert_smtp_auth_password: '<your_smtp_password>'  # The SMTP server authentication password.
 
-fcs_auto_download: false   # Controls pre-task control-host download for Prometheus/Grafana/Alertmanager archives
+fcs_auto_download: true    # Controls pre-task control-host download for Prometheus/Grafana/Alertmanager archives
 fcs_grafana_import_node_dashboards: true
 fcs_grafana_import_mysql_dashboards: true
 fcs_grafana_import_router_dashboards: true
