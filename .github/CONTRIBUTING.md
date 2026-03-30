@@ -52,20 +52,20 @@ Run the relevant syntax checks before sending a PR.
 
 ```bash
 cd /usr/local/dbbot/mysql_ansible/playbooks
-python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.ini single_node.yml --syntax-check
+python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.ini single_node.yml --syntax-check
 ```
 
 ### ClickHouse
 
 ```bash
 cd /usr/local/dbbot/clickhouse_ansible/playbooks
-python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.deploy.ini deploy_cluster.yml --syntax-check
-python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.restore.ini restore_cluster.yml --syntax-check
+python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.deploy.ini deploy_cluster.yml --syntax-check
+python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.restore.ini restore_cluster.yml --syntax-check
 ```
 
 ### Monitoring
 
 ```bash
 cd /usr/local/dbbot/monitoring_prometheus_ansible/playbooks
-python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.ini monitoring_prometheus_deployment.yml --syntax-check
+python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.ini monitoring_prometheus_deployment.yml --syntax-check
 ```

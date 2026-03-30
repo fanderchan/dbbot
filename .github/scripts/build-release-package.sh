@@ -46,7 +46,7 @@ readonly ALLOWED_PREFIXES=(
   "mysql_ansible/inventory/"
   "mysql_ansible/playbooks/"
   "mysql_ansible/roles/"
-  "portable-ansible-v0.5.0-py3/"
+  "portable-ansible/"
 )
 
 readonly EMPTY_DIRS=(

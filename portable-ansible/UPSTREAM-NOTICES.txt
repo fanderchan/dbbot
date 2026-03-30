@@ -1,0 +1,17 @@
+Portable Ansible Bundle Notices
+===============================
+
+Source package: ansible-base 2.10.17
+
+This bundle contains upstream Ansible packages and Python dependencies
+under their own licenses.
+
+Repository launcher code and related project files in this bundle are
+distributed under Apache License 2.0. See LICENSE, NOTICE and
+ACKNOWLEDGEMENTS.md in the bundle root.
+
+Upstream package metadata and license files are normally kept under
+./ansible/*.dist-info.
+
+If you build with --strip-metadata, review redistribution obligations
+before sharing the resulting bundle.

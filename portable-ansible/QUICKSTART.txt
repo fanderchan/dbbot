@@ -1,0 +1,39 @@
+Portable Ansible Quickstart
+===========================
+
+Source package: ansible-base 2.10.17
+
+Run examples:
+  python3 ./ansible localhost -m ping
+  python3 ./ansible-playbook playbook.yml
+
+Installed command aliases:
+  ansible
+  ansible-config
+  ansible-connection
+  ansible-console
+  ansible-doc
+  ansible-galaxy
+  ansible-inventory
+  ansible-playbook
+  ansible-pull
+
+Vault support was omitted at build time.
+Encrypted vars/files and the ansible-vault command are unavailable in this bundle.
+
+PyYAML LibYAML C extension was omitted at build time.
+YAML parsing/emitting falls back to the pure-Python implementation.
+
+Third-party Python dependencies can be installed into ./ansible/extras.
+Manual example:
+  python3 -m pip install -t ./ansible/extras PyMySQL
+
+Project helper example (run from make_ansible_portable project root):
+  ./install-extras.sh --bundle /path/to/unpacked-bundle --extra-requirements requirements.txt
+
+Ansible collections can be installed into ./collections.
+Manual example:
+  python3 ./ansible-galaxy collection install -p ./collections ansible.posix:==1.5.4
+
+Project helper example (run from make_ansible_portable project root):
+  ./install-collections.sh --bundle /path/to/unpacked-bundle --extra-collection ansible.posix:==1.5.4

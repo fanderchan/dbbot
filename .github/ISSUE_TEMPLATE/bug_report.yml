@@ -55,7 +55,7 @@ body:
     attributes:
       label: Ansible version
       description: Include the portable Ansible version or system Ansible version.
-      placeholder: ansible 2.10.5
+      placeholder: ansible 2.10.17
     validations:
       required: false
   - type: dropdown
@@ -75,7 +75,7 @@ body:
       label: Command
       description: Paste the exact command or commands that were run.
       render: bash
-      placeholder: python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.ini single_node.yml
+      placeholder: python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.ini single_node.yml
     validations:
       required: true
   - type: textarea

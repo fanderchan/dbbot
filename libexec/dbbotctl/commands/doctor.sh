@@ -62,6 +62,13 @@ dbbot_cmd_doctor() {
     warnings=$((warnings + 1))
   fi
 
+  if [[ -f "${DBBOT_BUNDLED_SSHPASS}" ]]; then
+    dbbot_doctor_report "PASS" "bundled_sshpass" "${DBBOT_BUNDLED_SSHPASS}"
+  else
+    dbbot_doctor_report "WARN" "bundled_sshpass" "missing ${DBBOT_BUNDLED_SSHPASS}; env setup may fail on hosts without system sshpass"
+    warnings=$((warnings + 1))
+  fi
+
   if [[ -f "${DBBOT_PORTABLE_ANSIBLE_SETUP}" ]]; then
     dbbot_doctor_report "PASS" "env_setup" "${DBBOT_PORTABLE_ANSIBLE_SETUP}"
   else

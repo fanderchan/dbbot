@@ -6,14 +6,14 @@
   - `mysql_ansible/`
   - `clickhouse_ansible/`
   - `monitoring_prometheus_ansible/`
-  - `portable-ansible-v0.5.0-py3/`
+  - `portable-ansible/`
 - 当同仓内不存在更近层级的 `AGENTS.md` 时，默认以本文件为基线。
 
 ## 仓库结构
 - `mysql_ansible/`：MySQL 生态部署、备份、恢复、运维 Playbook。
 - `clickhouse_ansible/`：ClickHouse 集群、NFS、备份、恢复、校验、清理 Playbook。
 - `monitoring_prometheus_ansible/`：Prometheus / Alertmanager / Grafana 部署 Playbook。
-- `portable-ansible-v0.5.0-py3/`：绿色版 Ansible 运行时。
+- `portable-ansible/`：绿色版 Ansible 运行时。
 
 ## /init 基线
 - 首先必须读取：
@@ -51,10 +51,10 @@
 
 ## 绿色版 Ansible（统一约定）
 - 根仓默认使用绿色版 Ansible：
-  - `PORTABLE_ANSIBLE_HOME=/usr/local/dbbot/portable-ansible-v0.5.0-py3`
+  - `PORTABLE_ANSIBLE_HOME=/usr/local/dbbot/portable-ansible`
 - 文档面向用户时：
   - 可写 `ansible-playbook`
-  - 前提是已执行 `setup_portable_ansible.sh` 并 `source ~/.bashrc`
+  - 前提是已执行 `dbbotctl env setup` 或 `sh /usr/local/dbbot/libexec/dbbotctl/setup_portable_ansible.sh`，并 `source ~/.bashrc`
 - 自动化、脚本、非交互执行时：
   - 优先使用显式路径，不依赖 alias：
   - `python3 ${PORTABLE_ANSIBLE_HOME}/ansible-playbook ...`
@@ -63,7 +63,7 @@
   - `python3 ${PORTABLE_ANSIBLE_HOME}/ansible-playbook --version`
 - 在最小化 IaaS 测试环境中：
   - 优先保持客机为“只保证能正常 yum”的最小状态，不预装额外依赖包来掩盖 `dbbot` 缺口
-  - 将仓库拷贝到控制节点后，先执行 `sh setup_portable_ansible.sh` 并 `source ~/.bashrc`
+  - 将仓库拷贝到控制节点后，先执行 `sh /usr/local/dbbot/libexec/dbbotctl/setup_portable_ansible.sh` 并 `source ~/.bashrc`
   - 若后续仍缺少依赖，应作为 `dbbot` 待补能力反馈，而不是先在客机上手工 `yum install`
 
 ## 入口约定
@@ -173,16 +173,16 @@
 
 ### MySQL
 - `cd /usr/local/dbbot/mysql_ansible/playbooks`
-- `python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.ini single_node.yml --syntax-check`
+- `python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.ini single_node.yml --syntax-check`
 
 ### ClickHouse
 - `cd /usr/local/dbbot/clickhouse_ansible/playbooks`
-- `python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.deploy.ini deploy_cluster.yml --syntax-check`
-- `python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.restore.ini restore_cluster.yml --syntax-check`
+- `python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.deploy.ini deploy_cluster.yml --syntax-check`
+- `python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.restore.ini restore_cluster.yml --syntax-check`
 
 ### Monitoring
 - `cd /usr/local/dbbot/monitoring_prometheus_ansible/playbooks`
-- `python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook -i ../inventory/hosts.ini monitoring_prometheus_deployment.yml --syntax-check`
+- `python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.ini monitoring_prometheus_deployment.yml --syntax-check`
 
 - 若改动了 Hugo 文档站内容，还应执行：
   - `cd /vitepress && npm run build`

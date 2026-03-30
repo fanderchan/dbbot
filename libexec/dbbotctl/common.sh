@@ -9,8 +9,9 @@ readonly DBBOT_STATE_DIR="${DBBOT_ROOT}/.dbbotctl"
 readonly DBBOT_SNAPSHOT_DIR="${DBBOT_STATE_DIR}/snapshots"
 readonly DBBOT_CACHE_DIR="${DBBOT_STATE_DIR}/cache"
 readonly DBBOT_HISTORY_FILE="${DBBOT_STATE_DIR}/history.tsv"
-readonly DBBOT_PORTABLE_ANSIBLE_HOME="${DBBOT_ROOT}/portable-ansible-v0.5.0-py3"
-readonly DBBOT_PORTABLE_ANSIBLE_SETUP="${DBBOT_PORTABLE_ANSIBLE_HOME}/setup_portable_ansible.sh"
+readonly DBBOT_PORTABLE_ANSIBLE_HOME="${DBBOT_ROOT}/portable-ansible"
+readonly DBBOT_PORTABLE_ANSIBLE_SETUP="${DBBOTCTL_LIBEXEC_DIR}/setup_portable_ansible.sh"
+readonly DBBOT_BUNDLED_SSHPASS="${DBBOTCTL_LIBEXEC_DIR}/sshpass-x64"
 readonly DBBOT_ANSIBLE_PLAYBOOK="${DBBOT_PORTABLE_ANSIBLE_HOME}/ansible-playbook"
 readonly DBBOTCTL_EXPORTERREGISTRAR_BIN="${DBBOTCTL_LIBEXEC_DIR}/exporterregistrar"
 readonly DBBOT_RELEASE_OWNER="${DBBOT_RELEASE_OWNER:-fanderchan}"
@@ -33,7 +34,7 @@ readonly -a DBBOT_MANAGED_ROOT_DIRS=(
   "libexec"
   "monitoring_prometheus_ansible"
   "mysql_ansible"
-  "portable-ansible-v0.5.0-py3"
+  "portable-ansible"
 )
 
 readonly -a DBBOT_PRESERVE_PATHS=(
@@ -257,8 +258,12 @@ dbbot_validate_package() {
 
   grep -qx "${package_root}/README.md" <<<"${tar_listing}" || dbbot_die "package is missing ${package_root}/README.md"
   grep -qx "${package_root}/VERSION" <<<"${tar_listing}" || dbbot_die "package is missing ${package_root}/VERSION"
-  grep -qx "${package_root}/portable-ansible-v0.5.0-py3/ansible-playbook" <<<"${tar_listing}" || \
-    dbbot_die "package is missing ${package_root}/portable-ansible-v0.5.0-py3/ansible-playbook"
+  grep -qx "${package_root}/portable-ansible/ansible-playbook" <<<"${tar_listing}" || \
+    dbbot_die "package is missing ${package_root}/portable-ansible/ansible-playbook"
+  grep -qx "${package_root}/libexec/dbbotctl/setup_portable_ansible.sh" <<<"${tar_listing}" || \
+    dbbot_die "package is missing ${package_root}/libexec/dbbotctl/setup_portable_ansible.sh"
+  grep -qx "${package_root}/libexec/dbbotctl/sshpass-x64" <<<"${tar_listing}" || \
+    dbbot_die "package is missing ${package_root}/libexec/dbbotctl/sshpass-x64"
 
   package_version="$(dbbot_package_version "${package_path}")"
   [[ -n "${package_version}" ]] || dbbot_die "unable to read VERSION from package: ${package_path}"

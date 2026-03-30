@@ -12,7 +12,7 @@
 #
 # Usage:
 #   cd playbooks
-#   ../portable-ansible ansible-playbook innodb_cluster.yml
+#   python3 ../../portable-ansible/ansible-playbook innodb_cluster.yml
 # ============================================================
 
 - name: Deploy MySQL InnoDB Cluster

@@ -1,0 +1,131 @@
+{
+  "builder": {
+    "name": "make_ansible_portable",
+    "version": "0.3.0",
+    "built_at": "2026-03-30T15:35:39.053508+00:00"
+  },
+  "source": {
+    "input_source": "ansible-base==2.10.17",
+    "artifact_name": "ansible-base-2.10.17.tar.gz",
+    "artifact_path": null,
+    "package_name": "ansible-base",
+    "version": "2.10.17",
+    "requires_python": ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*",
+    "runtime_requirements": [
+      "jinja2",
+      "PyYAML",
+      "rstcheck",
+      "sphinx==2.1.2",
+      "sphinx-notfound-page",
+      "Pygments >= 2.4.0",
+      "straight.plugin # Needed for hacking/build-ansible.py which is the backend build script",
+      "antsibull >= 0.15.0",
+      "docutils==0.16 # pin for now until sphinx_rtd_theme is compatible with 0.17 or later"
+    ],
+    "official_controller_python": {
+      "minimum_python3": "3.5",
+      "display": "Python 2.7 or Python 3.5 - 3.9",
+      "source_url": "https://docs.ansible.com/projects/ansible-core/devel/reference_appendices/release_and_maintenance.html#ansible-core-support-matrix",
+      "note": null,
+      "note_source_url": null
+    }
+  },
+  "python": {
+    "executable": "/usr/bin/python3",
+    "version": "3.6.8 (default, Nov 14 2023, 16:29:52) \n[GCC 4.8.5 20150623 (Red Hat 4.8.5-44)]",
+    "version_info": [
+      3,
+      6,
+      8
+    ]
+  },
+  "build_python_tools": {
+    "tool_python": "/root/.cache/make_ansible_portable/build-python/3.6/usr-bin-python3/bin/python",
+    "cache_dir": "/root/.cache/make_ansible_portable/build-python/3.6/usr-bin-python3",
+    "versions": {
+      "pip": "21.3.1",
+      "setuptools": "59.6.0",
+      "wheel": "0.37.1"
+    }
+  },
+  "build_options": {
+    "without_vault": true,
+    "without_yaml_c_extension": true,
+    "omitted_commands": [
+      "ansible-vault"
+    ],
+    "omitted_runtime_distributions": [
+      "cryptography",
+      "cffi",
+      "pycparser",
+      "typing-extensions"
+    ],
+    "omitted_runtime_paths": [
+      "yaml/_yaml*.so"
+    ]
+  },
+  "bundle": {
+    "name": "portable-ansible-base-2.10.17",
+    "commands": [
+      "ansible",
+      "ansible-config",
+      "ansible-connection",
+      "ansible-console",
+      "ansible-doc",
+      "ansible-galaxy",
+      "ansible-inventory",
+      "ansible-playbook",
+      "ansible-pull"
+    ],
+    "ansible_dir": "ansible",
+    "extras_dir": "ansible/extras",
+    "collections_dir": "collections"
+  },
+  "build_extras": {
+    "build_constraint_file": "/usr/local/make_ansible_portable-0.3.0/locks/ansible-base-2.10.17-py36.txt",
+    "build_constraint_mode": "builtin",
+    "packages": [],
+    "requirement_files": [],
+    "constraint_file": null
+  },
+  "build_collections": {
+    "collections": [
+      "ansible.posix:==1.5.4"
+    ],
+    "requirement_files": []
+  },
+  "installed_distributions": [
+    {
+      "name": "ansible-base",
+      "version": "2.10.17",
+      "metadata_dir": "ansible_base-2.10.17.dist-info"
+    },
+    {
+      "name": "Jinja2",
+      "version": "3.0.3",
+      "metadata_dir": "Jinja2-3.0.3.dist-info"
+    },
+    {
+      "name": "MarkupSafe",
+      "version": "2.0.1",
+      "metadata_dir": "MarkupSafe-2.0.1.dist-info"
+    },
+    {
+      "name": "packaging",
+      "version": "21.3",
+      "metadata_dir": "packaging-21.3.dist-info"
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.1.4",
+      "metadata_dir": "pyparsing-3.1.4.dist-info"
+    },
+    {
+      "name": "PyYAML",
+      "version": "6.0.1",
+      "metadata_dir": "PyYAML-6.0.1.dist-info"
+    }
+  ],
+  "extra_installs": [],
+  "collection_installs": []
+}

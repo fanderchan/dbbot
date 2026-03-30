@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mysql_ansible_dir="$(cd "${script_dir}/.." && pwd)"
-portable_ansible_home="${PORTABLE_ANSIBLE_HOME:-/usr/local/dbbot/portable-ansible-v0.5.0-py3}"
+portable_ansible_home="${PORTABLE_ANSIBLE_HOME:-/usr/local/dbbot/portable-ansible}"
 package_name="mysql-8.4.8-linux-glibc2.17-x86_64-minimal.tar.xz"
 temp_dir="$(mktemp -d)"
 

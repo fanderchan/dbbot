@@ -4,7 +4,7 @@ dbbot third-party components
 The top-level Apache-2.0 license applies to original dbbot work unless a
 subdirectory or file is identified below or carries its own notice.
 
-1. portable-ansible-v0.5.0-py3/
+1. portable-ansible/
    - Nature: modified redistribution of Ansible runtime and bundled
      dependencies / collections.
    - Upstream project: https://github.com/ansible/ansible

@@ -6,7 +6,7 @@ This repository is a database delivery and operations automation monorepo built 
 
 - Public entry points are only the top-level playbooks under each `*/playbooks/` directory.
 - Files under `playbooks/tasks/`, `playbooks/pre_tasks/`, and `roles/*/tasks/` are internal reuse fragments, not standalone entry points.
-- Main subprojects are `mysql_ansible`, `clickhouse_ansible`, `monitoring_prometheus_ansible`, and `portable-ansible-v0.5.0-py3`.
+- Main subprojects are `mysql_ansible`, `clickhouse_ansible`, `monitoring_prometheus_ansible`, and `portable-ansible`.
 
 ## Implementation Rules
 
@@ -20,8 +20,8 @@ This repository is a database delivery and operations automation monorepo built 
 ## Execution
 
 - For automation and non-interactive commands, prefer explicit portable Ansible paths:
-  - `python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible-playbook ...`
-  - `python3 /usr/local/dbbot/portable-ansible-v0.5.0-py3/ansible ...`
+  - `python3 /usr/local/dbbot/portable-ansible/ansible-playbook ...`
+  - `python3 /usr/local/dbbot/portable-ansible/ansible ...`
 - Do not assume aliases or shell profile setup.
 
 ## Validation

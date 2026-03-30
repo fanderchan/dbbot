@@ -23,7 +23,7 @@
 - `mysql_ansible`: Playbooks for MySQL / Percona / GreatSQL deployment, replication, backup, recovery, and common operations.
 - `clickhouse_ansible`: Playbooks for ClickHouse cluster deployment, backup, recovery, and downstream analytics scenarios.
 - `monitoring_prometheus_ansible`: Playbooks for Prometheus, Grafana, Alertmanager, and exporters.
-- `portable-ansible-v0.5.0-py3`: A portable Ansible runtime for executing the playbooks in controlled environments.
+- `portable-ansible`: A portable Ansible runtime for executing the playbooks in controlled environments.
 
 ## Project Direction
 
@@ -38,7 +38,34 @@
 - `mysql_ansible` handles the core OLTP delivery path.
 - `clickhouse_ansible` covers downstream OLAP scenarios.
 - `monitoring_prometheus_ansible` provides observability integration.
-- `portable-ansible-v0.5.0-py3` supplies the shared runtime environment.
+- `portable-ansible` supplies the shared runtime environment.
+
+## Portable Ansible Runtime
+
+- The bundled runtime is currently based on `ansible-base 2.10.17`.
+- It is now built with [`make_ansible_portable`](https://github.com/fanderchan/make_ansible_portable) instead of consuming the upstream `ownport/portable-ansible` package directly.
+- The runtime now lives under `portable-ansible/`; the control-host bootstrap script and bundled `sshpass-x64` have moved to `libexec/dbbotctl/`.
+
+Current build command:
+
+```bash
+./build.sh \
+  --python /usr/bin/python3 \
+  --source ansible-base==2.10.17 \
+  --without-vault \
+  --without-yaml-c-extension \
+  --clean-output \
+  --extra-collection 'ansible.posix:==1.5.4'
+```
+
+What each flag does:
+
+- `--python /usr/bin/python3`: selects the control-node Python used for the build and self-test.
+- `--source ansible-base==2.10.17`: selects the official `ansible-base` package for the `2.10` line.
+- `--without-vault`: removes the `ansible-vault` entry point plus the `cryptography` / `cffi` dependency chain to shrink the bundle; the result no longer supports vault features.
+- `--without-yaml-c-extension`: drops the compiled `PyYAML` extension and falls back to the pure-Python YAML implementation.
+- `--clean-output`: removes previous build artifacts with the same output name before rebuilding.
+- `--extra-collection 'ansible.posix:==1.5.4'`: embeds a pinned `ansible.posix` collection into the bundle so runtime hosts do not need to install it separately.
 
 Even if you only use one capability area, deploying the full release package is recommended so the code, assets, and documentation stay aligned.
 

@@ -23,7 +23,7 @@
 - `mysql_ansible`：MySQL / Percona / GreatSQL 部署、复制、备份、恢复与常见运维剧本。
 - `clickhouse_ansible`：ClickHouse 集群部署、备份、恢复与下游分析接入相关剧本。
 - `monitoring_prometheus_ansible`：Prometheus、Grafana、Alertmanager 与 exporter 相关剧本。
-- `portable-ansible-v0.5.0-py3`：绿色版 Ansible 运行时，方便在目标环境中直接执行剧本。
+- `portable-ansible`：绿色版 Ansible 运行时，方便在目标环境中直接执行剧本。
 - `bin/dbbotctl`：根仓级生命周期 CLI，用于环境自检、绿色版 Ansible 初始化、release 升级与回滚。
 
 ## 项目定位
@@ -39,7 +39,34 @@
 - `mysql_ansible` 负责核心 OLTP 交付。
 - `clickhouse_ansible` 负责下游 OLAP 场景。
 - `monitoring_prometheus_ansible` 负责监控接入。
-- `portable-ansible-v0.5.0-py3` 提供统一运行环境。
+- `portable-ansible` 提供统一运行环境。
+
+## 绿色版 Ansible 说明
+
+- 仓库内置的绿色版运行时当前基于 `ansible-base 2.10.17`。
+- 该运行时现在由 [`make_ansible_portable`](https://github.com/fanderchan/make_ansible_portable) 构建，不再直接依赖上游 `ownport/portable-ansible` 成品包。
+- 运行时目录是 `portable-ansible/`；控制机初始化脚本与 `sshpass-x64` 已迁移到 `libexec/dbbotctl/`。
+
+当前构建命令如下：
+
+```bash
+./build.sh \
+  --python /usr/bin/python3 \
+  --source ansible-base==2.10.17 \
+  --without-vault \
+  --without-yaml-c-extension \
+  --clean-output \
+  --extra-collection 'ansible.posix:==1.5.4'
+```
+
+参数含义：
+
+- `--python /usr/bin/python3`：指定构建和自测时使用的控制机 Python。
+- `--source ansible-base==2.10.17`：选择 `2.10` 代 Ansible 对应的官方 `ansible-base` 包版本。
+- `--without-vault`：移除 `ansible-vault` 入口以及 `cryptography` / `cffi` 依赖链，减小体积；构建结果不再支持 vault。
+- `--without-yaml-c-extension`：移除 `PyYAML` 的 C 扩展，回退到纯 Python YAML 实现。
+- `--clean-output`：构建前清理同名旧产物。
+- `--extra-collection 'ansible.posix:==1.5.4'`：把固定版本的 `ansible.posix` collection 直接打进 bundle，避免运行时再临时安装。
 
 如果你只使用其中一个子目录，也建议按完整发版包部署，避免子目录版本与文档不一致。
 
