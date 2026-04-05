@@ -2,6 +2,25 @@
 
 A Prometheus exporter for MySQL Router's REST API.
 
+## Status
+
+The standalone, productized project now lives at:
+
+- `/usr/local/mysqlrouter_exporter`
+- `https://github.com/fanderchan/mysqlrouter_exporter`
+
+`dbbot` keeps a compatibility copy and deployment role for integrated delivery.
+
+The `mysqlrouter_exporter` Ansible role now resolves the binary in this order:
+
+1. `/usr/local/bin/mysqlrouter_exporter`
+2. `/usr/local/mysqlrouter_exporter/dist/mysqlrouter_exporter-linux-amd64`
+3. `/usr/local/mysqlrouter_exporter/build/mysqlrouter_exporter`
+4. bundled fallback: `roles/mysqlrouter_exporter/files/mysqlrouter_exporter`
+
+This keeps existing `dbbot` usage available while allowing the standalone project
+to become the primary build and release source.
+
 ## Build
 
 ```bash

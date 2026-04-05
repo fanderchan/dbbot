@@ -1,6 +1,6 @@
 - name: Copy mysqlrouter_exporter binary to target
   ansible.builtin.copy:
-    src: "{{ mysqlrouter_exporter_binary_path }}"
+    src: "{{ mysqlrouter_exporter_binary_path_resolved }}"
     dest: "{{ mysqlrouter_exporter_install_dir }}/mysqlrouter_exporter"
     owner: "{{ mysqlrouter_exporter_run_user }}"
     group: "{{ mysqlrouter_exporter_run_group }}"

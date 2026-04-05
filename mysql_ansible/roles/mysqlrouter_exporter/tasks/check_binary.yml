@@ -1,13 +1,48 @@
-- name: Check mysqlrouter_exporter binary exists on control host
+- name: Check explicit mysqlrouter_exporter binary path on control host
   ansible.builtin.stat:
     path: "{{ mysqlrouter_exporter_binary_path }}"
-  register: mysqlrouter_exporter__binary_stat
+  register: mysqlrouter_exporter__binary_path_stat
   delegate_to: localhost
-  run_once: true
+  when: mysqlrouter_exporter_binary_path | length > 0
 
-- name: Fail if mysqlrouter_exporter binary is missing
-  ansible.builtin.fail:
-    msg: "mysqlrouter_exporter binary not found at {{ mysqlrouter_exporter_binary_path }}. Build it first."
-  when: not mysqlrouter_exporter__binary_stat.stat.exists
+- name: Check mysqlrouter_exporter binary candidates on control host
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ mysqlrouter_exporter_binary_path_candidates }}"
+  register: mysqlrouter_exporter__binary_candidate_stats
   delegate_to: localhost
-  run_once: true
+  when: mysqlrouter_exporter_binary_path | length == 0
+
+- name: Resolve mysqlrouter_exporter binary path
+  ansible.builtin.set_fact:
+    mysqlrouter_exporter_binary_path_resolved: >-
+      {{
+        mysqlrouter_exporter_binary_path
+        if (mysqlrouter_exporter_binary_path | length > 0)
+        else (
+          mysqlrouter_exporter__binary_candidate_stats.results
+          | selectattr('stat.exists')
+          | map(attribute='item')
+          | list
+          | first
+          | default('')
+        )
+      }}
+
+- name: Fail if mysqlrouter_exporter binary is missing on control host
+  ansible.builtin.fail:
+    msg: >-
+      mysqlrouter_exporter binary not found on control host.
+      Explicit path: {{ mysqlrouter_exporter_binary_path | default('') }}
+      Candidate paths: {{ mysqlrouter_exporter_binary_path_candidates | join(', ') }}
+      Build the standalone project under /usr/local/mysqlrouter_exporter or keep the bundled role binary available.
+  when: >-
+    (
+      mysqlrouter_exporter_binary_path | length > 0
+      and not mysqlrouter_exporter__binary_path_stat.stat.exists
+    )
+    or
+    (
+      mysqlrouter_exporter_binary_path | length == 0
+      and mysqlrouter_exporter_binary_path_resolved | length == 0
+    )
