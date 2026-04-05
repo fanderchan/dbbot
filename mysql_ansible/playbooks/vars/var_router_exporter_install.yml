@@ -3,6 +3,10 @@
 # MySQL Router Exporter
 # ============================================================
 mysqlrouter_exporter_install: true
+mysqlrouter_exporter_install_type: dbbot   # dbbot, package
+mysqlrouter_exporter_version: "0.0.1"
+mysqlrouter_exporter_package: "mysqlrouter_exporter_{{ mysqlrouter_exporter_version }}_linux_amd64.tar.gz"
+mysqlrouter_exporter_url: "https://github.com/fanderchan/mysqlrouter_exporter/releases/download/v{{ mysqlrouter_exporter_version }}/{{ mysqlrouter_exporter_package }}"
 mysqlrouter_exporter_port: 9165
 mysqlrouter_exporter_listen_address: 0.0.0.0
 mysqlrouter_exporter_metrics_path: /metrics

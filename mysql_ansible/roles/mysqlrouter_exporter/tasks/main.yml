@@ -1,17 +1,42 @@
 - name: Install and configure mysqlrouter_exporter
   when: mysqlrouter_exporter_install | bool
   block:
+    - name: Validate mysqlrouter_exporter install type
+      ansible.builtin.assert:
+        that:
+          - mysqlrouter_exporter_install_type in ['dbbot', 'package']
+        fail_msg: "mysqlrouter_exporter_install_type must be dbbot or package"
+
     - name: Check mysqlrouter_exporter port availability
       ansible.builtin.import_tasks: check_port_not_in_use.yml
 
-    - name: Check mysqlrouter_exporter binary availability
+    - name: Ensure mysqlrouter_exporter package archive is ready on control host
+      ansible.builtin.import_tasks: ../../common_utils/tasks/ensure_local_tar_archive_ready.yml
+      vars:
+        local_tar_archive_label: "mysqlrouter_exporter package {{ mysqlrouter_exporter_package }}"
+        local_tar_archive_path: "{{ mysql_packages_dir }}/{{ mysqlrouter_exporter_package }}"
+        local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
+        local_tar_archive_url: "{{ mysqlrouter_exporter_url }}"
+        local_tar_archive_timeout: 60
+        local_tar_archive_headers:
+          User-Agent: "Wget/1.21.1"
+        local_tar_archive_validate_certs: false
+      when: mysqlrouter_exporter_install_type == 'package'
+
+    - name: Check bundled mysqlrouter_exporter binary availability
       ansible.builtin.import_tasks: check_binary.yml
+      when: mysqlrouter_exporter_install_type == 'dbbot'
 
     - name: Create mysqlrouter_exporter user and directories
       ansible.builtin.import_tasks: create_user_and_dir.yml
 
-    - name: Install mysqlrouter_exporter binary
+    - name: Install bundled mysqlrouter_exporter binary
       ansible.builtin.import_tasks: install_binary.yml
+      when: mysqlrouter_exporter_install_type == 'dbbot'
+
+    - name: Install mysqlrouter_exporter from package
+      ansible.builtin.import_tasks: install_package.yml
+      when: mysqlrouter_exporter_install_type == 'package'
 
     - name: Configure mysqlrouter_exporter
       ansible.builtin.import_tasks: configure_exporter.yml

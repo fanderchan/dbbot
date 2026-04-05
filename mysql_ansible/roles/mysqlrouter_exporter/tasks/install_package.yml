@@ -1,0 +1,42 @@
+- name: Copy mysqlrouter_exporter package to target server
+  ansible.builtin.copy:
+    src: "{{ mysql_packages_dir }}/{{ mysqlrouter_exporter_package }}"
+    dest: "/tmp/{{ mysqlrouter_exporter_package }}"
+
+- name: Remove temporary extraction directory if it exists
+  ansible.builtin.file:
+    path: "{{ mysqlrouter_exporter_package_extract_dir }}"
+    state: absent
+
+- name: Ensure temporary extraction directory exists
+  ansible.builtin.file:
+    path: "{{ mysqlrouter_exporter_package_extract_dir }}"
+    state: directory
+    owner: "{{ mysqlrouter_exporter_run_user }}"
+    group: "{{ mysqlrouter_exporter_run_group }}"
+    mode: '0755'
+
+- name: Extract mysqlrouter_exporter package on target server
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ mysqlrouter_exporter_package }}"
+    dest: "{{ mysqlrouter_exporter_package_extract_dir }}"
+    remote_src: true
+    owner: "{{ mysqlrouter_exporter_run_user }}"
+    group: "{{ mysqlrouter_exporter_run_group }}"
+    mode: '0755'
+
+- name: Install mysqlrouter_exporter binary from extracted package
+  ansible.builtin.copy:
+    src: "{{ mysqlrouter_exporter_package_extract_dir }}/mysqlrouter_exporter"
+    dest: "{{ mysqlrouter_exporter_install_dir }}/mysqlrouter_exporter"
+    remote_src: true
+    owner: "{{ mysqlrouter_exporter_run_user }}"
+    group: "{{ mysqlrouter_exporter_run_group }}"
+    mode: '0755'
+  notify:
+    - Restart mysqlrouter_exporter
+
+- name: Remove temporary extraction directory
+  ansible.builtin.file:
+    path: "{{ mysqlrouter_exporter_package_extract_dir }}"
+    state: absent
