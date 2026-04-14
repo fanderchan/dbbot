@@ -1,0 +1,11 @@
+# Grant the mysql OS user permission to run ip/arping via sudo on all nodes.
+# The VIP failover script (running on the manager node as mysql user) SSHes
+# to old/new primary and invokes these commands.
+
+- name: Add sudo rules for mysql user (ip, arping) if not already present
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    line: "# added by dbbot make_mha_go\n{{ mysql_user }}   ALL=(ALL) NOPASSWD: /usr/sbin/ip,/sbin/arping"
+    regexp: "^{{ mysql_user }}.*NOPASSWD.*ip.*arping"
+    validate: /usr/sbin/visudo -cf %s
+    state: present

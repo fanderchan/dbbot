@@ -1,0 +1,37 @@
+# Generate /etc/mha/cluster.yaml on the manager node.
+
+- name: Create mha config directory
+  ansible.builtin.file:
+    path: "{{ mha_go_config_dir }}"
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0750'
+
+- name: Create mha log directory
+  ansible.builtin.file:
+    path: "{{ mha_go_log_dir }}"
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0750'
+
+- name: Render cluster.yaml from template
+  ansible.builtin.template:
+    src: ../templates/cluster.yaml.j2
+    dest: "{{ mha_go_config_dir }}/cluster.yaml"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0640'
+
+- name: Verify cluster config passes check-repl
+  ansible.builtin.command: >-
+    {{ mha_go_binary_dest }} check-repl
+    --config {{ mha_go_config_dir }}/cluster.yaml
+  register: make_mha_go__check_repl
+  changed_when: false
+  become_user: "{{ mysql_user }}"
+
+- name: Show check-repl output
+  ansible.builtin.debug:
+    var: make_mha_go__check_repl.stdout_lines

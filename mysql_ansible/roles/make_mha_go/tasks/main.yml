@@ -1,0 +1,31 @@
+# make_mha_go role — deploys the Go-rewrite of MHA on a dbbot master-slave cluster.
+# Runs on all hosts; individual tasks use `when` to target the right node.
+
+- name: Check prerequisites (MySQL installed by dbbot, SSH passwordless ready)
+  ansible.builtin.import_tasks: check_prereqs.yml
+
+- name: Install mha binary on manager node
+  ansible.builtin.import_tasks: install_binary.yml
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Create mha MySQL user on primary (replicates to slaves automatically)
+  ansible.builtin.import_tasks: create_mha_user.yml
+  when: master_ip in ansible_all_ipv4_addresses
+
+- name: Add sudo rules for mysql user on all nodes (required for VIP script)
+  ansible.builtin.import_tasks: edit_sudoer.yml
+  when: mha_go_writer_endpoint_enabled | bool
+
+- name: Deploy mha-go cluster config on manager node
+  ansible.builtin.import_tasks: deploy_config.yml
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Deploy VIP failover script on manager node
+  ansible.builtin.import_tasks: deploy_vip_script.yml
+  when:
+    - manager_ip in ansible_all_ipv4_addresses
+    - mha_go_writer_endpoint_enabled | bool
+
+- name: Deploy and enable systemd service on manager node
+  ansible.builtin.import_tasks: deploy_service.yml
+  when: manager_ip in ansible_all_ipv4_addresses

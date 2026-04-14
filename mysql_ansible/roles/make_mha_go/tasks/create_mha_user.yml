@@ -1,0 +1,23 @@
+# Create the mha MySQL account on the primary. GTID replication propagates it to all replicas.
+# Requires SELECT, RELOAD, SUPER, REPLICATION SLAVE, REPLICATION CLIENT.
+
+- name: Render create_mha_user.sql
+  ansible.builtin.template:
+    src: ../templates/create_mha_user.sql.j2
+    dest: /tmp/create_mha_user.sql
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Execute create_mha_user.sql on primary
+  ansible.builtin.shell: >-
+    {{ mysql_software_dir }}/bin/mysql
+    -h127.0.0.1 -P{{ mysql_port }}
+    -u{{ mysql_admin_user }} -p{{ mysql_admin_127_password }}
+    < /tmp/create_mha_user.sql
+  changed_when: true
+
+- name: Remove temporary SQL file
+  ansible.builtin.file:
+    path: /tmp/create_mha_user.sql
+    state: absent

@@ -1,0 +1,21 @@
+# vars loading order: common_config -> default/var_mha_go.yml -> this file
+# Adjust the values below for your environment.
+
+master_ip: 192.0.2.131
+slave_ips:
+  - 192.0.2.132
+  - 192.0.2.133
+sub_nets: 1%
+
+# manager defaults to last slave — change if you want a different node
+manager_ip: "{{ slave_ips[-1] }}"
+
+# Cluster name shown in `mha check-repl` output and log lines
+mha_go_cluster_name: app1
+
+# --- Writer endpoint ---
+# Uncomment and fill to enable VIP failover script.
+# mha_go_writer_endpoint_enabled: true
+# vip: 192.0.2.130
+# vip_netmask: "32"
+# net_work_interface: "ens33"

@@ -1,0 +1,83 @@
+# Pre-task validation for mha_go.yml
+# Checks topology vars, manager placement, and optional VIP config.
+
+- name: Validate master_ip is a valid IP
+  ansible.builtin.fail:
+    msg: "mha_go.yml: `master_ip` is undefined or not a valid IP"
+  when: not (master_ip | default('') is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
+  run_once: true
+  delegate_to: localhost
+
+- name: Validate each IP in slave_ips is a valid IP
+  ansible.builtin.fail:
+    msg: "mha_go.yml: slave_ip `{{ item }}` is not a valid IP"
+  loop: "{{ slave_ips | default([]) }}"
+  when: not (item is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
+  run_once: true
+  delegate_to: localhost
+
+- name: Validate slave_ips has at least one entry
+  ansible.builtin.fail:
+    msg: "mha_go.yml: `slave_ips` must contain at least one slave IP"
+  when: (slave_ips | default([])) | length < 1
+  run_once: true
+  delegate_to: localhost
+
+- name: Validate manager_ip is a valid IP
+  ansible.builtin.fail:
+    msg: "mha_go.yml: `manager_ip` is undefined or not a valid IP"
+  when: not (manager_ip | default('') is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
+  run_once: true
+  delegate_to: localhost
+
+- name: Validate manager_ip is one of the slave nodes (not the primary)
+  ansible.builtin.fail:
+    msg: "mha_go.yml: `manager_ip` ({{ manager_ip }}) must be in `slave_ips` — do not run the manager on the primary"
+  when: manager_ip not in slave_ips
+  run_once: true
+  delegate_to: localhost
+
+- name: Validate mha_go.yml IPs are all present in inventory/hosts.ini
+  ansible.builtin.fail:
+    msg: "mha_go.yml: IP `{{ item }}` is listed in vars but absent from inventory"
+  when: item not in ansible_play_hosts
+  loop: "{{ [master_ip] + slave_ips }}"
+  run_once: true
+  delegate_to: localhost
+
+- name: Validate inventory/hosts.ini IPs are all accounted for in mha_go.yml vars
+  ansible.builtin.fail:
+    msg: "mha_go.yml: inventory host `{{ item }}` is not listed in master_ip or slave_ips"
+  when: item not in ([master_ip] + slave_ips)
+  loop: "{{ ansible_play_hosts }}"
+  run_once: true
+  delegate_to: localhost
+
+# --- VIP-specific validation (only when writer endpoint is enabled) ---
+
+- name: Validate vip is a valid IP when writer endpoint is enabled
+  ansible.builtin.fail:
+    msg: "mha_go.yml: `vip` must be a valid IP when mha_go_writer_endpoint_enabled=true"
+  when:
+    - mha_go_writer_endpoint_enabled | bool
+    - not (vip | default('') is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
+  run_once: true
+  delegate_to: localhost
+
+- name: Validate vip_netmask is valid when writer endpoint is enabled
+  ansible.builtin.fail:
+    msg: "mha_go.yml: `vip_netmask` must be 0–32 when mha_go_writer_endpoint_enabled=true"
+  when:
+    - mha_go_writer_endpoint_enabled | bool
+    - vip_netmask is not defined or (vip_netmask | int < 0) or (vip_netmask | int > 32)
+  run_once: true
+  delegate_to: localhost
+
+- name: Validate net_work_interface is not empty when writer endpoint is enabled
+  ansible.builtin.fail:
+    msg: "mha_go.yml: `net_work_interface` must be set when mha_go_writer_endpoint_enabled=true"
+  when:
+    - mha_go_writer_endpoint_enabled | bool
+    - (net_work_interface | default('')) | length == 0
+  run_once: true
+  delegate_to: localhost

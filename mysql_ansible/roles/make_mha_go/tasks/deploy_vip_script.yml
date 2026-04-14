@@ -1,0 +1,18 @@
+# Deploy the VIP failover script on the manager node.
+# The script is invoked by mha manager via writer_endpoint.command on failover/switchover.
+
+- name: Create script directory
+  ansible.builtin.file:
+    path: /usr/local/bin
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Render mha_ip_failover.sh from template
+  ansible.builtin.template:
+    src: ../templates/mha_ip_failover.sh.j2
+    dest: /usr/local/bin/mha_ip_failover.sh
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0750'

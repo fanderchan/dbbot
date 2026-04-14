@@ -1,0 +1,23 @@
+# Copy the pre-built static mha binary to the manager node.
+
+- name: Create binary destination directory
+  ansible.builtin.file:
+    path: "{{ mha_go_binary_dest | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Copy mha static binary to manager node
+  ansible.builtin.copy:
+    src: "../files/mha"
+    dest: "{{ mha_go_binary_dest }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Verify mha binary runs correctly
+  ansible.builtin.command: "{{ mha_go_binary_dest }} version"
+  register: make_mha_go__binary_check
+  changed_when: false
+  failed_when: make_mha_go__binary_check.rc != 0

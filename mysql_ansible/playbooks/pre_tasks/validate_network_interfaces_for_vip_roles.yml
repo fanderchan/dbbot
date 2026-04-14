@@ -10,6 +10,14 @@
           'interface_name': (net_work_interface | default(''))
         }] if '../roles/make_mha' in (roles_to_execute | default([])) else [])
         + ([{
+          'feature_name': 'mha-go VIP',
+          'variable_name': 'net_work_interface',
+          'interface_name': (net_work_interface | default(''))
+        }] if (
+          '../roles/make_mha_go' in (roles_to_execute | default([]))
+          and (mha_go_writer_endpoint_enabled | default(false) | bool)
+        ) else [])
+        + ([{
           'feature_name': 'master-slave keepalived VIP',
           'variable_name': 'net_work_interface',
           'interface_name': (net_work_interface | default(''))

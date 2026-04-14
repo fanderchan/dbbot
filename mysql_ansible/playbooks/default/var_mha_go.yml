@@ -1,0 +1,32 @@
+# vars loading order: common_config -> this file
+# Default values for mha_go.yml. Override in vars/var_mha_go.yml.
+master_ip: 192.0.2.131
+slave_ips:
+  - 192.0.2.132
+  - 192.0.2.133
+sub_nets: 1%
+
+# manager_ip: node that runs `mha manager`.
+# Convention: last slave. Override in vars/var_mha_go.yml if needed.
+manager_ip: 192.0.2.133
+
+# --- mha-go specific defaults ---
+
+# Config and log directories on the manager node
+mha_go_config_dir: /etc/mha
+mha_go_log_dir: /var/log/mha
+
+# Cluster name written into cluster.yaml
+mha_go_cluster_name: app1
+
+# Destination path of the mha binary on the manager node
+mha_go_binary_dest: /usr/local/bin/mha
+
+# Enable systemd service for the manager process
+mha_go_service_enabled: true
+
+# --- Writer endpoint (VIP failover script) ---
+# Set to true and fill vip / vip_netmask / net_work_interface to enable
+mha_go_writer_endpoint_enabled: false
+net_work_interface: "ens33"
+vip_netmask: "32"

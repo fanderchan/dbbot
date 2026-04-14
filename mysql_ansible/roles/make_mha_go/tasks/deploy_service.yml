@@ -1,0 +1,33 @@
+# Install and start the mha-manager systemd service on the manager node.
+
+- name: Render mha-manager.service unit file
+  ansible.builtin.template:
+    src: ../templates/mha-manager.service.j2
+    dest: /etc/systemd/system/mha-manager.service
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable and start mha-manager service
+  ansible.builtin.systemd:
+    name: mha-manager
+    state: started
+    enabled: "{{ mha_go_service_enabled | bool }}"
+
+- name: Verify mha-manager service is active
+  ansible.builtin.command: systemctl is-active mha-manager
+  register: make_mha_go__svc_status
+  changed_when: false
+  failed_when: make_mha_go__svc_status.stdout != 'active'
+
+- name: Touch mha_go_finish.flag
+  ansible.builtin.file:
+    path: "{{ datadir }}/mha_go_finish.flag"
+    state: touch
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
