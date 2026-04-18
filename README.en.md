@@ -45,6 +45,9 @@
 - The bundled runtime is currently based on `ansible-base 2.10.17`.
 - It is now built with [`make_ansible_portable`](https://github.com/fanderchan/make_ansible_portable) instead of consuming the upstream `ownport/portable-ansible` package directly.
 - The runtime now lives under `portable-ansible/`; the control-host bootstrap script and bundled `sshpass-x64` have moved to `libexec/dbbotctl/`.
+- `dbbotctl env setup` supports registering the portable Ansible runtime on Linux and macOS control hosts. A macOS control host is intended to manage supported Linux targets; MySQL deployment targets still follow each playbook's Linux OS allowlist.
+- SSH key authentication is recommended on macOS control hosts. If an inventory uses `ansible_ssh_pass`, install a macOS-compatible `sshpass` separately; the bundled `sshpass-x64` is Linux x86_64 only.
+- On macOS control hosts, setup installs `passlib` into `portable-ansible/ansible/extras` so Ansible's `password_hash` filter works.
 
 Current build command:
 

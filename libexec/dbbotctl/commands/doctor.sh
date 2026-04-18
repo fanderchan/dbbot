@@ -15,6 +15,9 @@ dbbot_cmd_doctor() {
   local warnings=0
   local available_kb=""
   local ansible_version_line=""
+  local os_name=""
+
+  os_name="$(uname -s)"
 
   if [[ -d "${DBBOT_ROOT}" ]]; then
     dbbot_doctor_report "PASS" "install_root" "${DBBOT_ROOT}"
@@ -57,12 +60,17 @@ dbbot_cmd_doctor() {
 
   if dbbot_has_command sshpass; then
     dbbot_doctor_report "PASS" "sshpass" "$(command -v sshpass)"
+  elif [[ "${os_name}" == "Darwin" ]]; then
+    dbbot_doctor_report "WARN" "sshpass" "missing; use SSH key auth or install a macOS-compatible sshpass"
+    warnings=$((warnings + 1))
   else
     dbbot_doctor_report "WARN" "sshpass" "missing, playbooks using password auth may fail until env setup runs"
     warnings=$((warnings + 1))
   fi
 
-  if [[ -f "${DBBOT_BUNDLED_SSHPASS}" ]]; then
+  if [[ "${os_name}" == "Darwin" ]]; then
+    dbbot_doctor_report "INFO" "bundled_sshpass" "skipped on macOS; bundled binary is Linux x86_64"
+  elif [[ -f "${DBBOT_BUNDLED_SSHPASS}" ]]; then
     dbbot_doctor_report "PASS" "bundled_sshpass" "${DBBOT_BUNDLED_SSHPASS}"
   else
     dbbot_doctor_report "WARN" "bundled_sshpass" "missing ${DBBOT_BUNDLED_SSHPASS}; env setup may fail on hosts without system sshpass"

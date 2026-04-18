@@ -14,7 +14,10 @@
 
 - name: Ensure tar is installed on control host for local archive validation
   ansible.builtin.raw: |
-    if command -v dnf >/dev/null 2>&1; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+      echo "tar was not found on the macOS control host. Install the macOS Command Line Tools, then rerun the playbook." >&2
+      exit 1
+    elif command -v dnf >/dev/null 2>&1; then
       dnf install -y tar
     elif command -v yum >/dev/null 2>&1; then
       yum install -y tar

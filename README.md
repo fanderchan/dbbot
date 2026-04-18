@@ -46,6 +46,9 @@
 - 仓库内置的绿色版运行时当前基于 `ansible-base 2.10.17`。
 - 该运行时现在由 [`make_ansible_portable`](https://github.com/fanderchan/make_ansible_portable) 构建，不再直接依赖上游 `ownport/portable-ansible` 成品包。
 - 运行时目录是 `portable-ansible/`；控制机初始化脚本与 `sshpass-x64` 已迁移到 `libexec/dbbotctl/`。
+- `dbbotctl env setup` 支持 Linux 与 macOS 控制机注册绿色版 Ansible。macOS 控制机用于管理受支持的 Linux 目标机；MySQL 被部署目标机仍以各 Playbook 的 Linux 系统白名单为准。
+- macOS 控制机默认建议使用 SSH key。若 inventory 使用 `ansible_ssh_pass`，需额外安装 macOS 可用的 `sshpass`；随仓 `sshpass-x64` 仅面向 Linux x86_64。
+- macOS 控制机执行初始化时会把 `passlib` 安装到 `portable-ansible/ansible/extras`，用于支持 Ansible 的 `password_hash` 过滤器。
 
 当前构建命令如下：
 

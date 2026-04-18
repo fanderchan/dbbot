@@ -12,7 +12,7 @@ dbbot_cmd_env_setup() {
 
   [[ -f "${DBBOT_PORTABLE_ANSIBLE_SETUP}" ]] || dbbot_die "missing ${DBBOT_PORTABLE_ANSIBLE_SETUP}"
   dbbot_info "running portable ansible setup"
-  dbbot_info "this updates ~/.bashrc with ansible aliases backed by ${DBBOT_PORTABLE_ANSIBLE_HOME} and prepends ${DBBOT_ROOT}/bin to PATH"
+  dbbot_info "this registers ansible aliases backed by ${DBBOT_PORTABLE_ANSIBLE_HOME} and prepends ${DBBOT_ROOT}/bin to PATH"
   bash "${DBBOT_PORTABLE_ANSIBLE_SETUP}"
 }
 
