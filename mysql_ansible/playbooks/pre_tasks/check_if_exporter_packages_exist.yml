@@ -5,6 +5,7 @@
   when: node_exporter_install | default(false) | bool
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Fail if node_exporter package not found and auto download is disabled
   ansible.builtin.fail:
@@ -16,6 +17,7 @@
     - node_exporter_install_type == 'package'
   run_once: true
   delegate_to: localhost
+  become: false
 
 
 - name: Check if mysqld_exporter package exists (dbbot server)
@@ -25,6 +27,7 @@
   when: mysqld_exporter_install | default(false) | bool
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Fail if mysqld_exporter package not found and auto download is disabled
   ansible.builtin.fail:
@@ -36,3 +39,4 @@
     - mysqld_exporter_install_type == 'package'
   run_once: true
   delegate_to: localhost
+  become: false

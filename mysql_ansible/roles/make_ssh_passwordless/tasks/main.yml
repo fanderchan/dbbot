@@ -27,6 +27,7 @@
   changed_when: true
   run_once: true
   delegate_to: 127.0.0.1
+  become: false
 
 - name: Copy authorized_keys
   ansible.builtin.copy:
@@ -50,3 +51,4 @@
     state: absent
   run_once: true
   delegate_to: 127.0.0.1
+  become: false

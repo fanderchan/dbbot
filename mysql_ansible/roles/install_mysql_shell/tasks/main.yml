@@ -25,6 +25,7 @@
     path: "{{ mysql_shell_package_path }}"
   register: install_mysql_shell__package_file
   delegate_to: 127.0.0.1
+  become: false
 
 - name: Test MySQL Shell package
   ansible.builtin.shell:
@@ -34,6 +35,7 @@
   failed_when: false
   changed_when: false
   delegate_to: 127.0.0.1
+  become: false
   tags: [skip_ansible_lint]
 
 - name: Fail if MySQL Shell package not found, not fully downloaded or auto download is disabled(local)
@@ -43,6 +45,7 @@
     - not fcs_auto_download_packages | bool
     - not install_mysql_shell__package_file.stat.exists or install_mysql_shell__tar_test.rc != 0
   delegate_to: 127.0.0.1
+  become: false
 
 - name: (local) Download MySQL Shell {{ mysqlshell_version }}
   ansible.builtin.import_tasks: download_mysqlshell.yml
@@ -50,6 +53,7 @@
     - fcs_auto_download_packages | bool
     - not install_mysql_shell__package_file.stat.exists or install_mysql_shell__tar_test.rc != 0
   delegate_to: 127.0.0.1
+  become: false
 
 - name: Transfer mysqlshell install package to remote host
   ansible.builtin.copy:

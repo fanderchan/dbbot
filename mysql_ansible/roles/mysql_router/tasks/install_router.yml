@@ -11,6 +11,7 @@
     path: "{{ router_packages_dir }}/{{ router_package }}"
   register: mysql_router__package_stat
   delegate_to: localhost
+  become: false
 
 - name: Fail if router package not found
   ansible.builtin.fail:

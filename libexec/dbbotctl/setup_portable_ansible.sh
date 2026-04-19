@@ -11,6 +11,48 @@ PORTABLE_ANSIBLE_EXTRAS="${PORTABLE_ANSIBLE_HOME}/ansible/extras"
 SSHPASS_SOURCE="${SCRIPT_DIR}/sshpass-x64"
 OS_NAME="$(uname -s)"
 
+# ansible-base 2.10.x supports Python 3.6-3.9 on the controller.
+# distutils was removed in Python 3.12, so 3.10/3.11 are the practical ceiling.
+ANSIBLE_MAX_PYTHON_MINOR=11
+
+# Find the first python3 interpreter whose minor version is <= ANSIBLE_MAX_PYTHON_MINOR.
+# On macOS this guards against Homebrew Python 3.12+ shadowing the system Python.
+find_compatible_python3() {
+    local candidates=()
+
+    if [[ "${OS_NAME}" == "Darwin" ]]; then
+        # Prefer the Apple-bundled Python that portable-ansible was built against.
+        candidates+=("/usr/bin/python3")
+    fi
+
+    # Also check any python3 / python3.X on PATH (3.9 down to 3.6)
+    candidates+=("python3")
+    local minor
+    for minor in 11 10 9 8 7 6; do
+        candidates+=("python3.${minor}")
+    done
+
+    local cmd minor_ver
+    for cmd in "${candidates[@]}"; do
+        if ! command -v "${cmd}" >/dev/null 2>&1; then
+            continue
+        fi
+        minor_ver="$("${cmd}" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null)" || continue
+        if [[ "${minor_ver}" -le "${ANSIBLE_MAX_PYTHON_MINOR}" ]]; then
+            echo "${cmd}"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+if ! PYTHON3_CMD="$(find_compatible_python3)"; then
+    echoError "No compatible Python 3 interpreter found (need Python 3.x where x <= ${ANSIBLE_MAX_PYTHON_MINOR})."
+    echoError "ansible-base 2.10.x does not support Python 3.12+."
+    exit 1
+fi
+
 echoError() { echo -e "\033[31m$*\033[0m"; }
 echoWarning() { echo -e "\033[33m$*\033[0m"; }
 echoSuccess() { echo -e "\033[32m$*\033[0m"; }
@@ -46,9 +88,9 @@ register_shell_rc() {
     local rc_file="$1"
 
     upsert_rc_line "${rc_file}" '^alias ansible-playbook=' \
-        "alias ansible-playbook=\"python3 ${PORTABLE_ANSIBLE_PLAYBOOK}\""
+        "alias ansible-playbook=\"${PYTHON3_CMD} ${PORTABLE_ANSIBLE_PLAYBOOK}\""
     upsert_rc_line "${rc_file}" '^alias ansible=' \
-        "alias ansible=\"python3 ${PORTABLE_ANSIBLE_BIN}\""
+        "alias ansible=\"${PYTHON3_CMD} ${PORTABLE_ANSIBLE_BIN}\""
     upsert_rc_line "${rc_file}" '^export PATH=\".*/dbbot(/libexec)?/bin:\\$PATH\"$' \
         "export PATH=\"${DBBOT_BIN_DIR}:\$PATH\""
 }
@@ -56,13 +98,13 @@ register_shell_rc() {
 validate_portable_ansible() {
     local ansible_version_output=""
 
-    if ! command -v python3 >/dev/null 2>&1; then
-        echoError "python3 was not found; portable ansible requires python3 on the control host."
+    if ! command -v "${PYTHON3_CMD}" >/dev/null 2>&1; then
+        echoError "${PYTHON3_CMD} was not found; portable ansible requires python3 on the control host."
         exit 1
     fi
 
-    if ! ansible_version_output="$(python3 "${PORTABLE_ANSIBLE_PLAYBOOK}" --version 2>&1)"; then
-        echoError "Portable ansible failed to start: python3 ${PORTABLE_ANSIBLE_PLAYBOOK} --version"
+    if ! ansible_version_output="$("${PYTHON3_CMD}" "${PORTABLE_ANSIBLE_PLAYBOOK}" --version 2>&1)"; then
+        echoError "Portable ansible failed to start: ${PYTHON3_CMD} ${PORTABLE_ANSIBLE_PLAYBOOK} --version"
         printf '%s\n' "${ansible_version_output}" >&2
         exit 1
     fi
@@ -95,14 +137,14 @@ install_first_available_package() {
 }
 
 python3_has_selinux_binding() {
-    python3 - <<'PY' >/dev/null 2>&1
+    "${PYTHON3_CMD}" - <<'PY' >/dev/null 2>&1
 import selinux
 PY
 }
 
 portable_python_has_passlib() {
     PYTHONPATH="${PORTABLE_ANSIBLE_EXTRAS}:${PORTABLE_ANSIBLE_HOME}/ansible${PYTHONPATH:+:${PYTHONPATH}}" \
-        python3 - <<'PY' >/dev/null 2>&1
+        "${PYTHON3_CMD}" - <<'PY' >/dev/null 2>&1
 import passlib.hash
 PY
 }
@@ -112,14 +154,14 @@ ensure_macos_passlib() {
         return 0
     fi
 
-    if ! python3 -m pip --version >/dev/null 2>&1; then
-        echoError "passlib is required for password_hash on macOS, but python3 pip is unavailable."
-        echoError "Install Python 3 with pip, then rerun: dbbotctl env setup"
+    if ! "${PYTHON3_CMD}" -m pip --version >/dev/null 2>&1; then
+        echoError "passlib is required for password_hash on macOS, but ${PYTHON3_CMD} pip is unavailable."
+        echoError "Install Xcode Command Line Tools (xcode-select --install), then rerun: dbbotctl env setup"
         exit 1
     fi
 
     mkdir -p "${PORTABLE_ANSIBLE_EXTRAS}"
-    python3 -m pip install \
+    "${PYTHON3_CMD}" -m pip install \
         --disable-pip-version-check \
         --no-warn-script-location \
         -t "${PORTABLE_ANSIBLE_EXTRAS}" \
@@ -191,8 +233,13 @@ setup_macos_control_host() {
     register_shell_rc "${HOME}/.bashrc"
 
     if ! command -v sshpass >/dev/null 2>&1; then
-        echoWarning "sshpass was not found. SSH key authentication is recommended on macOS."
-        echoWarning "Inventories using ansible_ssh_pass require a macOS-compatible sshpass installed separately."
+        if command -v brew >/dev/null 2>&1; then
+            echoWarning "sshpass not found; installing via Homebrew..."
+            brew install hudochenkov/sshpass/sshpass
+        else
+            echoWarning "sshpass was not found and Homebrew is unavailable."
+            echoWarning "Install sshpass manually or via: brew install hudochenkov/sshpass/sshpass"
+        fi
     fi
 
     echoSuccess "Portable Ansible dependencies are ready for macOS control host usage."

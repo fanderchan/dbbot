@@ -29,4 +29,5 @@
     timeout: 10
   run_once: true
   delegate_to: localhost
+  become: false
   changed_when: false

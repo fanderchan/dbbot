@@ -6,6 +6,7 @@
     path: "{{ mysql_packages_dir }}"
     state: directory
     mode: '0755'
+  become: false
   delegate_to: localhost
   run_once: true
   when: >
@@ -15,6 +16,7 @@
 
 - name: Prepare MySQL Server package on control host
   when: "'../roles/mysql_server' in roles_to_execute"
+  become: false
   delegate_to: localhost
   run_once: true
   vars:
@@ -42,6 +44,7 @@
 
 - name: Prepare MySQL Shell package on control host
   when: "'../roles/setup_mysqlshell' in roles_to_execute"
+  become: false
   delegate_to: localhost
   run_once: true
   vars:
@@ -59,6 +62,7 @@
 
 - name: Prepare MySQL Router package on control host
   when: "'../roles/mysql_router' in roles_to_execute"
+  become: false
   delegate_to: localhost
   run_once: true
   vars:

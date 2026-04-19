@@ -27,3 +27,6 @@ __pycache__/
 !**/downloads/.gitignore
 !**/downloads/.gitkeep
 !**/downloads/README.md
+
+# Portable ansible runtime artifacts (passlib etc installed by env setup)
+portable-ansible/ansible/extras/

@@ -3,6 +3,7 @@
     path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
   register: mysql_server__package_file
   delegate_to: 127.0.0.1
+  become: false
 
 - name: Fail if MySQL package not found (local)
   ansible.builtin.fail:
@@ -10,6 +11,7 @@
   when: 
     - not mysql_server__package_file.stat.exists
   delegate_to: 127.0.0.1
+  become: false
 
 # - name: Download MySQL binary tarball with wget if not found locally and auto download is enabled(local)
 #  ansible.builtin.shell:

@@ -7,6 +7,7 @@
   when: not (master_ip | default('') is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Validate each IP in slave_ips is a valid IP
   ansible.builtin.fail:
@@ -15,6 +16,7 @@
   when: not (item is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Validate slave_ips has at least one entry
   ansible.builtin.fail:
@@ -22,6 +24,7 @@
   when: (slave_ips | default([])) | length < 1
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Validate manager_ip is a valid IP
   ansible.builtin.fail:
@@ -29,6 +32,7 @@
   when: not (manager_ip | default('') is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Validate manager_ip is one of the slave nodes (not the primary)
   ansible.builtin.fail:
@@ -36,6 +40,7 @@
   when: manager_ip not in slave_ips
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Validate mha_go.yml IPs are all present in inventory/hosts.ini
   ansible.builtin.fail:
@@ -44,6 +49,7 @@
   loop: "{{ [master_ip] + slave_ips }}"
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Validate inventory/hosts.ini IPs are all accounted for in mha_go.yml vars
   ansible.builtin.fail:
@@ -52,6 +58,7 @@
   loop: "{{ ansible_play_hosts }}"
   run_once: true
   delegate_to: localhost
+  become: false
 
 # --- VIP-specific validation (only when writer endpoint is enabled) ---
 
@@ -63,6 +70,7 @@
     - not (vip | default('') is regex("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"))
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Validate vip_netmask is valid when writer endpoint is enabled
   ansible.builtin.fail:
@@ -72,6 +80,7 @@
     - vip_netmask is not defined or (vip_netmask | int < 0) or (vip_netmask | int > 32)
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Validate net_work_interface is not empty when writer endpoint is enabled
   ansible.builtin.fail:
@@ -81,3 +90,4 @@
     - (net_work_interface | default('')) | length == 0
   run_once: true
   delegate_to: localhost
+  become: false

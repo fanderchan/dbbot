@@ -11,6 +11,7 @@
     path: "{{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}"
   register: setup_mysqlshell__package_stat
   delegate_to: localhost
+  become: false
   when: not setup_mysqlshell__installed.stat.exists
 
 - name: Fail if MySQL Shell package not found (local)
@@ -20,6 +21,7 @@
     - not setup_mysqlshell__installed.stat.exists
     - not setup_mysqlshell__package_stat.stat.exists
   delegate_to: localhost
+  become: false
 
 - name: Install MySQL Shell
   ansible.builtin.import_tasks: install.yml

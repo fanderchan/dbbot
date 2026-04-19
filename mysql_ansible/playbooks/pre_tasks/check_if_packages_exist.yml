@@ -4,6 +4,7 @@
   register: mysql_package_stat
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Fail when {{ mysql_package }} is missing from {{ mysql_packages_dir }} (local)
   ansible.builtin.fail:
@@ -11,3 +12,4 @@
   when: not mysql_package_stat.stat.exists
   run_once: true
   delegate_to: localhost
+  become: false

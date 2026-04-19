@@ -8,6 +8,7 @@
             + [note] }}"
   run_once: true
   delegate_to: localhost
+  become: false
   vars:
     base_msg:
       - "Hosts to be affected by {{ ansible_play_name }}: {{ play_hosts | join(', ') }}"
@@ -54,6 +55,7 @@
   register: confirmation
   run_once: true
   delegate_to: localhost
+  become: false
   when: dbbot_confirmation_input | default('') == ''
 
 - name: Preseed confirmation for non-interactive execution

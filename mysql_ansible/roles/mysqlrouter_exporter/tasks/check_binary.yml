@@ -3,6 +3,7 @@
     path: "{{ role_path }}/files/dbbot/mysqlrouter_exporter"
   register: mysqlrouter_exporter__bundled_binary_stat
   delegate_to: localhost
+  become: false
 
 - name: Fail if mysqlrouter_exporter binary is missing on control host
   ansible.builtin.fail:

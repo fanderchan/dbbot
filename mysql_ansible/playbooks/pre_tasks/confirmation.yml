@@ -16,6 +16,7 @@
          | select('defined')
          | list }}
   delegate_to: localhost
+  become: false
   run_once: true
 
 - name: Check for duplicate mysql_server_id
@@ -24,6 +25,7 @@
     msg: "Duplicate mysql_server_id detected!"
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Generate random UUID if mgr_use_random_uuid is set to 1
   command: uuidgen
@@ -31,6 +33,7 @@
   when: mgr_use_random_uuid == 1
   run_once: true
   delegate_to: localhost
+  become: false
 
 - set_fact:
     mysql_group_replication_group_name: "{{ random_uuid_result.stdout }}"
@@ -45,6 +48,7 @@
             + mycnf_dir_msg + datadir_msg + tmpdir_msg + binlog_dir_msg + relaylog_dir_msg + redolog_dir_msg + socket_dir_msg + mysqlx_socket_dir_msg }}"
   run_once: true
   delegate_to: localhost
+  become: false
   vars:
     base_msg:
       - "Hosts to be affected by {{ ansible_play_name }}: {{ play_hosts | join(', ') }}"
@@ -85,6 +89,7 @@
   register: confirmation
   run_once: true
   delegate_to: localhost
+  become: false
   when: dbbot_confirmation_input | default('') == ''
 
 - name: Preseed confirmation for non-interactive execution

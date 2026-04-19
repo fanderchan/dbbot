@@ -4,6 +4,7 @@
   register: mysqld_exporter_package_stat
   run_once: true
   delegate_to: 127.0.0.1
+  become: false
 
 #- name: Fail if mysqld_exporter package is not found and auto download is disabled (dbbot server)
 #  ansible.builtin.fail:

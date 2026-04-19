@@ -202,6 +202,7 @@
   changed_when: false
   run_once: true
   delegate_to: 127.0.0.1
+  become: false
 
 - name: Check if shell output is 1
   ansible.builtin.assert:
@@ -209,6 +210,7 @@
     fail_msg: "Network card names are different!"
   run_once: true
   delegate_to: 127.0.0.1
+  become: false
   when: roles_precheckandset_check_networkcardnames is not defined or roles_precheckandset_check_networkcardnames != 0
 
 - name: Delete /tmp/net_aliases.txt
@@ -222,3 +224,4 @@
     state: absent
   run_once: true
   delegate_to: 127.0.0.1
+  become: false

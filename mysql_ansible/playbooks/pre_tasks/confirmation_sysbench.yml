@@ -5,6 +5,7 @@
       - "sysbench_install_path: {{ sysbench_install_path }}"
   run_once: true
   delegate_to: localhost
+  become: false
 
 - name: Prompt user for confirmation
   ansible.builtin.pause:
@@ -12,6 +13,7 @@
   register: confirmation
   run_once: true
   delegate_to: localhost
+  become: false
   when: dbbot_confirmation_input | default('') == ''
 
 - name: Preseed confirmation for non-interactive execution

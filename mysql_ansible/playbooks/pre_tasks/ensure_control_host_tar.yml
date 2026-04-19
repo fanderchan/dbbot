@@ -4,6 +4,7 @@
   register: ensure_control_host_tar_check
   changed_when: false
   failed_when: false
+  become: false
   delegate_to: localhost
   run_once: true
   when: >-

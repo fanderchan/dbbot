@@ -1,6 +1,6 @@
 # vars loading order: common_config -> this file
-master_ip: 192.0.2.131
+master_ip: 192.168.199.131
 slave_ips:
-  - 192.0.2.132
-  - 192.0.2.133
+  - 192.168.199.132
+  - 192.168.199.133
 sub_nets: 1%

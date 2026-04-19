@@ -7,6 +7,7 @@
     state: directory
     mode: '0755'
   delegate_to: localhost
+  become: false
   run_once: true
 
 - name: Check if MySQL Shell package exists locally
@@ -14,6 +15,7 @@
     path: "{{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}"
   register: setup_mysqlshell__package_stat
   delegate_to: localhost
+  become: false
 
 - name: Download MySQL Shell from MySQL CDN
   ansible.builtin.get_url:
@@ -22,6 +24,7 @@
     mode: '0644'
     timeout: 300
   delegate_to: localhost
+  become: false
   run_once: true
   when: not setup_mysqlshell__package_stat.stat.exists
 
@@ -30,6 +33,7 @@
     path: "{{ mysqlshell_packages_dir }}/{{ mysqlshell_package }}"
   register: setup_mysqlshell__package_verify
   delegate_to: localhost
+  become: false
 
 - name: Fail if package not found
   ansible.builtin.fail:
