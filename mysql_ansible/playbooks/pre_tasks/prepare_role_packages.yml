@@ -48,7 +48,9 @@
   delegate_to: localhost
   run_once: true
   vars:
-    prepare_mysqlshell_package: "{{ mysqlshell_package | default('mysql-shell-' + (mysqlshell_version | default(mysql_version)) + '-linux-glibc2.17-x86-64bit.tar.gz') }}"
+    prepare_mysqlshell_version: "{{ mysqlshell_version | default(mysql_version) }}"
+    prepare_mysqlshell_linux_glibc_tag: "{{ 'glibc2.28' if prepare_mysqlshell_version.startswith('9.7') else 'glibc2.17' }}"
+    prepare_mysqlshell_package: "{{ mysqlshell_package | default('mysql-shell-' + prepare_mysqlshell_version + '-linux-' + prepare_mysqlshell_linux_glibc_tag + '-x86-64bit.tar.gz') }}"
     prepare_mysqlshell_dir: "{{ mysqlshell_packages_dir | default(mysql_packages_dir) }}"
   block:
     - name: Ensure MySQL Shell package archive is ready (local)
