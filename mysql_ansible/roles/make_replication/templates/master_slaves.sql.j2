@@ -1,6 +1,6 @@
 {% if master_ip in ansible_all_ipv4_addresses %}
 create user {{mysql_rple_user}}@'{{ sub_nets }}' identified by '{{mysql_rple_password}}';
-{% if mysql_version.startswith('8.4') and db_type == 'mysql' %}
+{% if db_type == 'mysql' and (mysql_version.startswith('8.4') or mysql_version.startswith('9.7')) %}
 grant replication slave, replication client on *.* to {{mysql_rple_user}}@'{{ sub_nets }}';
 grant SYSTEM_USER on *.* to {{mysql_rple_user}}@'{{ sub_nets }}';
 {% else %}
@@ -12,7 +12,7 @@ select sleep(10);
 
 set @@global.super_read_only=on;
 
-{% if mysql_version.startswith('8.4') and db_type == 'mysql' %}
+{% if db_type == 'mysql' and (mysql_version.startswith('8.4') or mysql_version.startswith('9.7')) %}
 change replication source to
     source_host='{{master_ip}}',
     source_port={{mysql_port}},

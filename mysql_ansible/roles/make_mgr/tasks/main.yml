@@ -1,7 +1,7 @@
-- name: Fail if mysql version is not 8.0.x or 8.4.x
+- name: Fail if mysql version is not 8.0.x, 8.4.x, or 9.7.x
   ansible.builtin.fail:
-    msg: "group replication install playbook only support 8.0.x or 8.4.x!"
-  when: not (mysql_version.startswith('8.0') or mysql_version.startswith('8.4'))
+    msg: "group replication install playbook only support 8.0.x, 8.4.x, or 9.7.x!"
+  when: not (mysql_version.startswith('8.0') or mysql_version.startswith('8.4') or mysql_version.startswith('9.7'))
 
 - name: Check is mysqld install by dbbot or not
   ansible.builtin.stat:

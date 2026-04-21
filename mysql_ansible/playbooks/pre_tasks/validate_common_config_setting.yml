@@ -161,7 +161,8 @@
         (mysql_version.startswith('5.7') and mysql_version is version('5.7.26', '<')) or
         (mysql_version.startswith('8.0') and mysql_version is version('8.0.21', '<')) or
         (mysql_version.startswith('8.4') and mysql_version is version('8.4.0', '<')) or
-        (not (mysql_version.startswith('5.7') or mysql_version.startswith('8.0') or mysql_version.startswith('8.4')))
+        (mysql_version.startswith('9.7') and mysql_version is version('9.7.0', '<')) or
+        (not (mysql_version.startswith('5.7') or mysql_version.startswith('8.0') or mysql_version.startswith('8.4') or mysql_version.startswith('9.7')))
       )
 
 - name: Validate db_type is a valid option

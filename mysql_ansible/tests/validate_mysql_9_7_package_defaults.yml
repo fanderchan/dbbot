@@ -1,0 +1,28 @@
+- name: Validate MySQL 9.7 package defaults
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    mysql_version: "9.7.0"
+    db_type: mysql
+    os_type: Rocky8
+    mysql_packages_dir: ../downloads/
+    metadata_cluster_name: testcluster
+  tasks:
+    - name: Load MySQL package defaults
+      ansible.builtin.include_vars: ../playbooks/default/advanced_config.yml
+
+    - name: Load MySQL Shell defaults
+      ansible.builtin.include_vars: ../roles/setup_mysqlshell/defaults/main.yml
+
+    - name: Load MySQL Router defaults
+      ansible.builtin.include_vars: ../roles/mysql_router/defaults/main.yml
+
+    - name: Assert MySQL 9.7 package names
+      ansible.builtin.assert:
+        that:
+          - mysql_linux_glibc_tag == 'glibc2.28'
+          - mysql_linux_archive_suffix == '-minimal.tar.xz'
+          - mysql_package == 'mysql-9.7.0-linux-glibc2.28-x86_64-minimal.tar.xz'
+          - mysqlshell_package == 'mysql-shell-9.7.0-linux-glibc2.28-x86-64bit.tar.gz'
+          - router_package == 'mysql-router-9.7.0-linux-glibc2.28-x86_64.tar.xz'

@@ -1,24 +1,26 @@
 ---
 # InnoDB Cluster Configuration Validation
-# Includes MySQL 8.4 version enforcement
+# Includes MySQL 8.4 / 9.7 version enforcement
 
 # ============================================================
-# MySQL Version Validation - Only 8.4.x Supported
+# MySQL Version Validation - Only 8.4.x and 9.7.x Supported
 # ============================================================
 
-- name: Validate MySQL version is 8.4.x for InnoDB Cluster
+- name: Validate MySQL version is 8.4.x or 9.7.x for InnoDB Cluster
   ansible.builtin.fail:
     msg: |
       =====================================================
-      ERROR: InnoDB Cluster only supports MySQL 8.4.x!
+      ERROR: InnoDB Cluster only supports MySQL 8.4.x or 9.7.x!
       =====================================================
       Current configured version: {{ mysql_version }}
-      Supported version range: 8.4.0 - 8.4.x
+      Supported version ranges:
+      - 8.4.0 - 8.4.x
+      - 9.7.0 - 9.7.x
       
-      Please update mysql_version in common_config.yml to 8.4.x
-      Example: mysql_version: "8.4.6"
+      Please update mysql_version in common_config.yml to 8.4.x or 9.7.x
+      Example: mysql_version: "9.7.0"
       =====================================================
-  when: not mysql_version.startswith('8.4')
+  when: not (mysql_version.startswith('8.4') or mysql_version.startswith('9.7'))
 
 - name: Validate db_type is mysql for InnoDB Cluster
   ansible.builtin.fail:

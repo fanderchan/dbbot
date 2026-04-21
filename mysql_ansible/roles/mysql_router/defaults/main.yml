@@ -2,8 +2,11 @@
 
 router_version: "{{ mysql_version }}"
 
+# Router Linux glibc tag
+router_linux_glibc_tag: "{{ 'glibc2.28' if router_version.startswith('9.7') else 'glibc2.17' }}"
+
 # Router package name pattern
-router_package: "mysql-router-{{ router_version }}-linux-glibc2.17-x86_64.tar.xz"
+router_package: "mysql-router-{{ router_version }}-linux-{{ router_linux_glibc_tag }}-x86_64.tar.xz"
 
 # Package download directory
 router_packages_dir: "{{ mysql_packages_dir | default('../downloads/') }}"

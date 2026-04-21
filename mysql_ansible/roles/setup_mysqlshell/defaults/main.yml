@@ -3,8 +3,11 @@
 # MySQL Shell version (defaults to mysql_version)
 mysqlshell_version: "{{ mysql_version }}"
 
+# MySQL Shell Linux glibc tag
+mysqlshell_linux_glibc_tag: "{{ 'glibc2.28' if mysqlshell_version.startswith('9.7') else 'glibc2.17' }}"
+
 # Package name pattern
-mysqlshell_package: "mysql-shell-{{ mysqlshell_version }}-linux-glibc2.17-x86-64bit.tar.gz"
+mysqlshell_package: "mysql-shell-{{ mysqlshell_version }}-linux-{{ mysqlshell_linux_glibc_tag }}-x86-64bit.tar.gz"
 
 # Installation directories
 mysqlshell_base_dir: "/usr/local/mysqlshell"

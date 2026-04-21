@@ -5,7 +5,7 @@ set sql_log_bin=1;
 
 install plugin group_replication soname 'group_replication.so';
 
-{% if mysql_version.startswith('8.4') and db_type == 'mysql' %}
+{% if db_type == 'mysql' and (mysql_version.startswith('8.4') or mysql_version.startswith('9.7')) %}
 change replication source to
     source_user='{{ mysql_mgr_user }}',
     source_password='{{ mysql_mgr_password }}'

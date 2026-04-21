@@ -22,6 +22,8 @@ mysqlx_socket: "{{ mysqlx_socket_dir }}/mysqlx.sock"
 mysql_linux_glibc_tag: >-
   {%- if mysql_version.startswith('5.') -%}
   glibc2.12
+  {%- elif mysql_version.startswith('9.7') -%}
+  glibc2.28
   {%- elif (os_type | default('')) in ['Rocky9'] -%}
   glibc2.28
   {%- else -%}
@@ -30,6 +32,8 @@ mysql_linux_glibc_tag: >-
 mysql_linux_archive_suffix: >-
   {%- if mysql_version.startswith('5.') -%}
   .tar.gz
+  {%- elif mysql_version.startswith('9.7') -%}
+  -minimal.tar.xz
   {%- elif (os_type | default('')) in ['Rocky9'] -%}
   .tar.xz
   {%- else -%}

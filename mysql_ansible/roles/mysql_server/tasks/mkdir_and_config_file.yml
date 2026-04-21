@@ -71,6 +71,16 @@
     mode: '0644'
     backup: true
 
+- name: Config my.cnf for mysql-9.7.x
+  when: mysql_version.startswith('9.7') and db_type == 'mysql'
+  ansible.builtin.template:
+    src: ../templates/9.7/my.cnf.j2
+    dest: "{{ mycnf_dir }}/my.cnf"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0644'
+    backup: true
+
 - name: Config my.cnf for percona-5.7.x
   when: mysql_version.startswith('5.7') and db_type == 'percona'
   ansible.builtin.template:

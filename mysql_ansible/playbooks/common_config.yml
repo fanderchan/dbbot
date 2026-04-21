@@ -1,5 +1,5 @@
 ## In most cases, just adjust these two parameters.
-mysql_version: "8.4.8"
+mysql_version: "9.7.0"
 mysql_port: 3306
 
 # The 'server_specs' variable defines the hardware specifications for the server deployment.
