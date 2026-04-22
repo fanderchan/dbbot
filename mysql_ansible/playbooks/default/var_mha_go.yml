@@ -4,7 +4,7 @@ master_ip: 192.0.2.131
 slave_ips:
   - 192.0.2.132
   - 192.0.2.133
-sub_nets: 1%
+sub_nets: "192.0.2.%"
 
 # manager_ip: node that runs `mha manager`.
 # Convention: last slave. Override in vars/var_mha_go.yml if needed.

@@ -10,7 +10,7 @@
     
     -- Global privileges on *.* (all with GRANT OPTION)
     -- Note: Even though SUPER includes some of these, MySQL Shell 8.4 requires explicit dynamic privileges
-    GRANT RELOAD, SHUTDOWN, PROCESS, FILE, SELECT, SUPER, REPLICATION SLAVE, REPLICATION CLIENT, REPLICATION_APPLIER, CREATE USER, SYSTEM_VARIABLES_ADMIN, PERSIST_RO_VARIABLES_ADMIN, BACKUP_ADMIN, CLONE_ADMIN, EXECUTE, CONNECTION_ADMIN, GROUP_REPLICATION_ADMIN, REPLICATION_SLAVE_ADMIN, ROLE_ADMIN ON *.* TO '{{ mysql_cluster_admin_user }}'@'{{ innodb_cluster_admin_user_sub_net | default("1%") }}' WITH GRANT OPTION;
+    GRANT RELOAD, SHUTDOWN, PROCESS, FILE, SELECT, SUPER, REPLICATION SLAVE, REPLICATION CLIENT, REPLICATION_APPLIER, CREATE USER, SYSTEM_VARIABLES_ADMIN, PERSIST_RO_VARIABLES_ADMIN, BACKUP_ADMIN, CLONE_ADMIN, EXECUTE, CONNECTION_ADMIN, GROUP_REPLICATION_ADMIN, REPLICATION_SLAVE_ADMIN, ROLE_ADMIN{% if mysql_version.startswith('9.7') %}, TRANSACTION_GTID_TAG{% endif %} ON *.* TO '{{ mysql_cluster_admin_user }}'@'{{ innodb_cluster_admin_user_sub_net | default("1%") }}' WITH GRANT OPTION;
     
     -- Schema privileges for mysql_innodb_cluster_metadata.*, mysql_innodb_cluster_metadata_bkp.*, mysql_innodb_cluster_metadata_previous.*
     GRANT ALTER, ALTER ROUTINE, CREATE, CREATE ROUTINE, CREATE TEMPORARY TABLES, CREATE VIEW, DELETE, DROP, EVENT, EXECUTE, INDEX, INSERT, LOCK TABLES, REFERENCES, SHOW VIEW, TRIGGER, UPDATE ON mysql_innodb_cluster_metadata.* TO '{{ mysql_cluster_admin_user }}'@'{{ innodb_cluster_admin_user_sub_net | default("1%") }}' WITH GRANT OPTION;
@@ -32,7 +32,7 @@
     
     -- Global privileges on *.* (all with GRANT OPTION)
     -- Note: Even though SUPER includes some of these, MySQL Shell 8.4 requires explicit dynamic privileges
-    GRANT RELOAD, SHUTDOWN, PROCESS, FILE, SELECT, SUPER, REPLICATION SLAVE, REPLICATION CLIENT, REPLICATION_APPLIER, CREATE USER, SYSTEM_VARIABLES_ADMIN, PERSIST_RO_VARIABLES_ADMIN, BACKUP_ADMIN, CLONE_ADMIN, EXECUTE, CONNECTION_ADMIN, GROUP_REPLICATION_ADMIN, REPLICATION_SLAVE_ADMIN, ROLE_ADMIN ON *.* TO '{{ mysql_cluster_admin_user }}'@'localhost' WITH GRANT OPTION;
+    GRANT RELOAD, SHUTDOWN, PROCESS, FILE, SELECT, SUPER, REPLICATION SLAVE, REPLICATION CLIENT, REPLICATION_APPLIER, CREATE USER, SYSTEM_VARIABLES_ADMIN, PERSIST_RO_VARIABLES_ADMIN, BACKUP_ADMIN, CLONE_ADMIN, EXECUTE, CONNECTION_ADMIN, GROUP_REPLICATION_ADMIN, REPLICATION_SLAVE_ADMIN, ROLE_ADMIN{% if mysql_version.startswith('9.7') %}, TRANSACTION_GTID_TAG{% endif %} ON *.* TO '{{ mysql_cluster_admin_user }}'@'localhost' WITH GRANT OPTION;
     
     -- Schema privileges for mysql_innodb_cluster_metadata.*, mysql_innodb_cluster_metadata_bkp.*, mysql_innodb_cluster_metadata_previous.*
     GRANT ALTER, ALTER ROUTINE, CREATE, CREATE ROUTINE, CREATE TEMPORARY TABLES, CREATE VIEW, DELETE, DROP, EVENT, EXECUTE, INDEX, INSERT, LOCK TABLES, REFERENCES, SHOW VIEW, TRIGGER, UPDATE ON mysql_innodb_cluster_metadata.* TO '{{ mysql_cluster_admin_user }}'@'localhost' WITH GRANT OPTION;

@@ -5,7 +5,7 @@ master_ip: 192.0.2.131
 slave_ips:
   - 192.0.2.132
   - 192.0.2.133
-sub_nets: 1%
+sub_nets: "192.0.2.%"
 
 # manager defaults to last slave — change if you want a different node
 manager_ip: "{{ slave_ips[-1] }}"

@@ -60,16 +60,16 @@ mysql_kha_password: "Dbbot_{{ mysql_kha_user }}@8888"
 # Cluster admin account (for mysqlsh operations)
 mysql_cluster_admin_user: clusteradmin
 mysql_cluster_admin_password: "Dbbot_{{ mysql_cluster_admin_user }}@8888"
-innodb_cluster_admin_user_sub_net: 1%
+innodb_cluster_admin_user_sub_net: "1%"
 
 # Note: Group Replication internal accounts (mysql_innodb_cluster_*) are
 # automatically created by MySQL Shell. Do NOT manually modify them.
-innodb_cluster_replication_allowed_host: 1%
+innodb_cluster_replication_allowed_host: "1%"
 
 # MySQL Router account (for Router to read cluster metadata)
 mysql_router_user: mysqlrouter
 mysql_router_password: "Dbbot_{{ mysql_router_user }}@8888"
-innodb_cluster_router_user_sub_net: 1%
+innodb_cluster_router_user_sub_net: "1%"
 
 ## mysql my.cnf
 mysql_binlog_format: row
