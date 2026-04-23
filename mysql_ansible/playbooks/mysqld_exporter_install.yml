@@ -38,3 +38,7 @@
       ansible.builtin.include_role:
         name: "../roles/mysqld_exporter"
       when: mysqld_exporter_install | bool
+
+  post_tasks:
+    - name: Run dbbot post-deploy checks
+      ansible.builtin.import_tasks: post_tasks/run_post_checks.yml

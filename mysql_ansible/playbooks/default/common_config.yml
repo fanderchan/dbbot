@@ -101,7 +101,13 @@ fcs_mysql_use_jemalloc: false
 fcs_mysql_allow_bundled_jemalloc_fallback: false
 fcs_use_greatsql_ha: true
 fcs_mysql_fast_login_have_prompt: true
+fcs_run_post_deploy_checks: true
 dbbot_confirmation_input: ""   # Set to "confirm" only for non-interactive automation; keep empty for manual confirmation.
 
 ## Feature Control Switch vars
 fcs_create_mysql_fast_login_name: db{{ mysql_port }}
+dbbot_post_check_enabled: "{{ fcs_run_post_deploy_checks }}"
+dbbot_post_check_wait_timeout: 60
+dbbot_post_check_retries: 12
+dbbot_post_check_delay: 5
+dbbot_post_check_replication_max_lag_seconds: 0

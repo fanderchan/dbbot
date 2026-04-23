@@ -36,3 +36,7 @@
       loop: "{{ roles_to_execute }}"
       loop_control:
         loop_var: role_name
+
+  post_tasks:
+    - name: Run dbbot post-deploy checks
+      ansible.builtin.import_tasks: post_tasks/run_post_checks.yml

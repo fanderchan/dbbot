@@ -1,0 +1,18 @@
+---
+- name: Check MySQL Router service is active
+  ansible.builtin.command: "systemctl is-active {{ router_service_name | default('mysqlrouter') }}"
+  register: dbbot_post_check__router_service_status
+  changed_when: false
+  failed_when: dbbot_post_check__router_service_status.stdout != "active"
+
+- name: Wait for enabled MySQL Router ports to listen
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ dbbot_post_check__router_port.value.port | int }}"
+    state: started
+    timeout: "{{ dbbot_post_check_wait_timeout | int }}"
+  loop: "{{ router_ports | dict2items }}"
+  loop_control:
+    loop_var: dbbot_post_check__router_port
+    label: "{{ dbbot_post_check__router_port.key }}:{{ dbbot_post_check__router_port.value.port }}"
+  when: dbbot_post_check__router_port.value.enabled | default(false) | bool

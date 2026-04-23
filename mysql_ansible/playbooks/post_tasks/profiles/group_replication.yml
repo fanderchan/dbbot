@@ -1,0 +1,103 @@
+---
+- name: Assert group replication topology variables are available
+  ansible.builtin.assert:
+    that:
+      - mysql_mgr_hosts is defined
+      - mysql_mgr_hosts | length > 0
+    fail_msg: "Group replication post-check requires mysql_mgr_hosts."
+    success_msg: "Group replication topology variables are ready for post-checks."
+  run_once: true
+
+- name: Check group replication members
+  ansible.builtin.shell: |
+    set -o pipefail
+    expected_count={{ mysql_mgr_hosts | length }}
+    expected_hosts="{{ mysql_mgr_hosts | join(' ') }}"
+    status_file="$(mktemp)"
+    trap 'rm -f "${status_file}"' EXIT
+
+    "{{ mysql_software_dir }}/bin/mysql" \
+      --protocol=socket \
+      --socket="{{ socket }}" \
+      --user="{{ mysql_admin_user }}" \
+      --connect-timeout=5 \
+      -N -B \
+      -e "SELECT MEMBER_HOST, MEMBER_STATE, MEMBER_ROLE FROM performance_schema.replication_group_members ORDER BY MEMBER_HOST" \
+      > "${status_file}"
+
+    row_count="$(awk 'NF > 0 {count++} END {print count+0}' "${status_file}")"
+    if [ "${row_count}" -ne "${expected_count}" ]; then
+      echo "group replication member count mismatch: expected=${expected_count} actual=${row_count}" >&2
+      cat "${status_file}" >&2
+      exit 1
+    fi
+
+    for expected_host in ${expected_hosts}; do
+      if ! awk -v host="${expected_host}" '$1 == host {found=1} END {exit found ? 0 : 1}' "${status_file}"; then
+        echo "group replication expected host is missing: ${expected_host}" >&2
+        cat "${status_file}" >&2
+        exit 2
+      fi
+    done
+
+    offline_count="$(awk '$2 != "ONLINE" {count++} END {print count+0}' "${status_file}")"
+    if [ "${offline_count}" -ne 0 ]; then
+      echo "group replication has non-ONLINE members" >&2
+      cat "${status_file}" >&2
+      exit 3
+    fi
+
+    primary_count="$(awk '$3 == "PRIMARY" {count++} END {print count+0}' "${status_file}")"
+    if [ "${primary_count}" -ne 1 ]; then
+      echo "group replication primary count mismatch: expected=1 actual=${primary_count}" >&2
+      cat "${status_file}" >&2
+      exit 4
+    fi
+
+    echo "group_replication_ok members=${row_count} primary=${primary_count}"
+  args:
+    executable: /bin/bash
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
+  register: dbbot_post_check__group_replication
+  changed_when: false
+  until: dbbot_post_check__group_replication.rc == 0
+  retries: "{{ dbbot_post_check_retries | int }}"
+  delay: "{{ dbbot_post_check_delay | int }}"
+  no_log: true
+
+- name: Check GreatSQL MGR VIP placement when enabled
+  ansible.builtin.command: "ip addr show {{ greatsql_net_work_interface }}"
+  register: dbbot_post_check__greatsql_vip_status
+  changed_when: false
+  retries: "{{ dbbot_post_check_retries | int }}"
+  delay: "{{ dbbot_post_check_delay | int }}"
+  until: greatsql_vip in dbbot_post_check__greatsql_vip_status.stdout
+  ignore_errors: true
+  when:
+    - db_type == "greatsql"
+    - fcs_use_greatsql_ha | bool
+    - greatsql_vip is defined
+    - greatsql_net_work_interface is defined
+
+- name: Assert GreatSQL MGR VIP exists on exactly one node
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          ansible_play_hosts
+          | map('extract', hostvars, 'dbbot_post_check__greatsql_vip_status')
+          | select('defined')
+          | map(attribute='stdout')
+          | select('search', greatsql_vip)
+          | list
+          | length == 1
+        }}
+    fail_msg: "GreatSQL MGR VIP {{ greatsql_vip }} must exist on exactly one node."
+    success_msg: "GreatSQL MGR VIP {{ greatsql_vip }} exists on exactly one node."
+  run_once: true
+  when:
+    - db_type == "greatsql"
+    - fcs_use_greatsql_ha | bool
+    - greatsql_vip is defined
+    - greatsql_net_work_interface is defined

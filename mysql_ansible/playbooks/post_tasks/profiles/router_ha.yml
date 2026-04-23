@@ -1,0 +1,35 @@
+---
+- name: Check Router keepalived service is active
+  ansible.builtin.command: systemctl is-active keepalived
+  register: dbbot_post_check__router_keepalived_status
+  changed_when: false
+  failed_when: dbbot_post_check__router_keepalived_status.stdout != "active"
+  when: router_enable_ha | bool
+
+- name: Check Router VIP placement
+  ansible.builtin.command: "ip addr show {{ router_net_work_interface }}"
+  register: dbbot_post_check__router_vip_status
+  changed_when: false
+  retries: "{{ dbbot_post_check_retries | int }}"
+  delay: "{{ dbbot_post_check_delay | int }}"
+  until: router_vip in dbbot_post_check__router_vip_status.stdout
+  ignore_errors: true
+  when: router_enable_ha | bool
+
+- name: Assert Router VIP exists on exactly one router
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          ansible_play_hosts
+          | map('extract', hostvars, 'dbbot_post_check__router_vip_status')
+          | select('defined')
+          | map(attribute='stdout')
+          | select('search', router_vip)
+          | list
+          | length == 1
+        }}
+    fail_msg: "Router VIP {{ router_vip }} must exist on exactly one router."
+    success_msg: "Router VIP {{ router_vip }} exists on exactly one router."
+  run_once: true
+  when: router_enable_ha | bool

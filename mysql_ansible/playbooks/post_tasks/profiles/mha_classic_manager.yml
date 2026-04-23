@@ -1,0 +1,48 @@
+---
+- name: Check classic MHA manager process
+  ansible.builtin.shell: |
+    set -o pipefail
+    pgrep -f 'masterha_manager.*--conf=/etc/masterha/app.cnf'
+  args:
+    executable: /bin/bash
+  register: dbbot_post_check__mha_classic_process
+  changed_when: false
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Check classic MHA replication config
+  ansible.builtin.command: masterha_check_repl --conf=/etc/masterha/app.cnf
+  register: dbbot_post_check__mha_classic_check_repl
+  changed_when: false
+  become_user: "{{ mysql_user }}"
+  no_log: true
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Check classic MHA VIP placement
+  ansible.builtin.command: "ip addr show {{ net_work_interface }}"
+  register: dbbot_post_check__mha_classic_vip_status
+  changed_when: false
+  retries: "{{ dbbot_post_check_retries | int }}"
+  delay: "{{ dbbot_post_check_delay | int }}"
+  until: vip in dbbot_post_check__mha_classic_vip_status.stdout
+  ignore_errors: true
+
+- name: Assert classic MHA VIP exists only on master
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          ansible_play_hosts
+          | map('extract', hostvars, 'dbbot_post_check__mha_classic_vip_status')
+          | select('defined')
+          | map(attribute='stdout')
+          | select('search', vip)
+          | list
+          | length == 1
+        }}
+      - >-
+        {{
+          hostvars[master_ip].dbbot_post_check__mha_classic_vip_status.stdout is search(vip)
+        }}
+    fail_msg: "Classic MHA VIP {{ vip }} must exist only on master {{ master_ip }}."
+    success_msg: "Classic MHA VIP {{ vip }} exists only on master {{ master_ip }}."
+  run_once: true

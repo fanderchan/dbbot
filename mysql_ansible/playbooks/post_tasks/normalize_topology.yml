@@ -1,0 +1,14 @@
+---
+- name: Normalize MySQL topology variables for post-checks
+  ansible.builtin.set_fact:
+    dbbot_post_check_master_ip_resolved: "{{ master_ip | default(innodb_cluster_primary | default('')) }}"
+    dbbot_post_check_replica_ips_resolved: >-
+      {{
+        (
+          (slave_ips | default([]))
+          + ([slave_ip] if (slave_ip is defined and (slave_ip | string | length > 0)) else [])
+        )
+        | unique
+        | list
+      }}
+    dbbot_post_check_local_ips_resolved: "{{ ansible_all_ipv4_addresses | default([]) }}"

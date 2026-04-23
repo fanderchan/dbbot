@@ -1,0 +1,124 @@
+---
+- name: Assert master-slave topology variables are available
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check_master_ip_resolved | length > 0
+      - dbbot_post_check_replica_ips_resolved | length > 0
+    fail_msg: "Master-slave post-check requires master_ip and at least one slave IP."
+    success_msg: "Master-slave topology variables are ready for post-checks."
+  run_once: true
+
+- name: Check binary log status on master
+  ansible.builtin.shell: |
+    set -o pipefail
+    status_file="$(mktemp)"
+    err_file="$(mktemp)"
+    trap 'rm -f "${status_file}" "${err_file}"' EXIT
+
+    if "{{ mysql_software_dir }}/bin/mysql" --protocol=socket --socket="{{ socket }}" --user="{{ mysql_admin_user }}" --connect-timeout=5 --vertical -e "SHOW BINARY LOG STATUS" >"${status_file}" 2>"${err_file}"; then
+      :
+    elif "{{ mysql_software_dir }}/bin/mysql" --protocol=socket --socket="{{ socket }}" --user="{{ mysql_admin_user }}" --connect-timeout=5 --vertical -e "SHOW MASTER STATUS" >"${status_file}" 2>"${err_file}"; then
+      :
+    else
+      cat "${err_file}" >&2
+      exit 1
+    fi
+
+    if [ ! -s "${status_file}" ]; then
+      echo "binary log status is empty" >&2
+      exit 2
+    fi
+
+    echo "binary_log_status_ok"
+  args:
+    executable: /bin/bash
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
+  register: dbbot_post_check__master_binlog_status
+  changed_when: false
+  until: dbbot_post_check__master_binlog_status.rc == 0
+  retries: "{{ dbbot_post_check_retries | int }}"
+  delay: "{{ dbbot_post_check_delay | int }}"
+  no_log: true
+  when: >-
+    inventory_hostname == dbbot_post_check_master_ip_resolved or
+    dbbot_post_check_master_ip_resolved in (ansible_all_ipv4_addresses | default([]))
+
+- name: Check replication status on replica nodes
+  ansible.builtin.shell: |
+    set -o pipefail
+    expected_source="{{ dbbot_post_check_master_ip_resolved }}"
+    max_lag={{ dbbot_post_check_replication_max_lag_seconds | int }}
+    status_file="$(mktemp)"
+    err_file="$(mktemp)"
+    trap 'rm -f "${status_file}" "${err_file}"' EXIT
+
+    if "{{ mysql_software_dir }}/bin/mysql" --protocol=socket --socket="{{ socket }}" --user="{{ mysql_admin_user }}" --connect-timeout=5 --vertical -e "SHOW REPLICA STATUS" >"${status_file}" 2>"${err_file}"; then
+      :
+    elif "{{ mysql_software_dir }}/bin/mysql" --protocol=socket --socket="{{ socket }}" --user="{{ mysql_admin_user }}" --connect-timeout=5 --vertical -e "SHOW SLAVE STATUS" >"${status_file}" 2>"${err_file}"; then
+      :
+    else
+      cat "${err_file}" >&2
+      exit 1
+    fi
+
+    extract_value() {
+      awk -F': ' -v key_regex="$1" '
+        $1 ~ key_regex {
+          value=$2
+          sub(/^[ \t]+/, "", value)
+          sub(/[ \t]+$/, "", value)
+          print value
+          exit
+        }
+      ' "${status_file}"
+    }
+
+    io_running="$(extract_value "^[[:space:]]*(Replica_IO_Running|Slave_IO_Running)$")"
+    sql_running="$(extract_value "^[[:space:]]*(Replica_SQL_Running|Slave_SQL_Running)$")"
+    source_host="$(extract_value "^[[:space:]]*(Source_Host|Master_Host)$")"
+    seconds_behind="$(extract_value "^[[:space:]]*(Seconds_Behind_Source|Seconds_Behind_Master)$")"
+
+    if [ -z "${source_host}" ]; then
+      echo "replication status is empty or does not contain source host" >&2
+      exit 2
+    fi
+    if [ "${io_running}" != "Yes" ]; then
+      echo "replication IO thread is not running: ${io_running}" >&2
+      exit 3
+    fi
+    if [ "${sql_running}" != "Yes" ]; then
+      echo "replication SQL thread is not running: ${sql_running}" >&2
+      exit 4
+    fi
+    if [ "${source_host}" != "${expected_source}" ]; then
+      echo "replication source mismatch: expected=${expected_source} actual=${source_host}" >&2
+      exit 5
+    fi
+    if [ -z "${seconds_behind}" ] || [ "${seconds_behind}" = "NULL" ]; then
+      echo "replication lag is not available: ${seconds_behind}" >&2
+      exit 6
+    fi
+    if ! [[ "${seconds_behind}" =~ ^[0-9]+$ ]]; then
+      echo "replication lag is not numeric: ${seconds_behind}" >&2
+      exit 7
+    fi
+    if [ "${seconds_behind}" -gt "${max_lag}" ]; then
+      echo "replication lag is too high: lag=${seconds_behind} max=${max_lag}" >&2
+      exit 8
+    fi
+
+    echo "replication_ok source=${source_host} io=${io_running} sql=${sql_running} lag=${seconds_behind}"
+  args:
+    executable: /bin/bash
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
+  register: dbbot_post_check__replica_status
+  changed_when: false
+  until: dbbot_post_check__replica_status.rc == 0
+  retries: "{{ dbbot_post_check_retries | int }}"
+  delay: "{{ dbbot_post_check_delay | int }}"
+  no_log: true
+  when: >-
+    inventory_hostname in dbbot_post_check_replica_ips_resolved or
+    ((dbbot_post_check_replica_ips_resolved | intersect(ansible_all_ipv4_addresses | default([]))) | length > 0)

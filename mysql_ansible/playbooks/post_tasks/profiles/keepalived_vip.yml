@@ -1,0 +1,36 @@
+---
+- name: Check keepalived service is active
+  ansible.builtin.command: systemctl is-active keepalived
+  register: dbbot_post_check__keepalived_service_status
+  changed_when: false
+  failed_when: dbbot_post_check__keepalived_service_status.stdout != "active"
+
+- name: Check keepalived VIP placement
+  ansible.builtin.command: "ip addr show {{ net_work_interface }}"
+  register: dbbot_post_check__keepalived_vip_status
+  changed_when: false
+  retries: "{{ dbbot_post_check_retries | int }}"
+  delay: "{{ dbbot_post_check_delay | int }}"
+  until: vip in dbbot_post_check__keepalived_vip_status.stdout
+  ignore_errors: true
+
+- name: Assert keepalived VIP exists only on master
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          ansible_play_hosts
+          | map('extract', hostvars, 'dbbot_post_check__keepalived_vip_status')
+          | select('defined')
+          | map(attribute='stdout')
+          | select('search', vip)
+          | list
+          | length == 1
+        }}
+      - >-
+        {{
+          hostvars[master_ip].dbbot_post_check__keepalived_vip_status.stdout is search(vip)
+        }}
+    fail_msg: "Keepalived VIP {{ vip }} must exist only on master {{ master_ip }}."
+    success_msg: "Keepalived VIP {{ vip }} exists only on master {{ master_ip }}."
+  run_once: true

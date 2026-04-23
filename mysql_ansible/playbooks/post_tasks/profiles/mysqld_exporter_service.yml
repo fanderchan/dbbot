@@ -1,0 +1,17 @@
+---
+- name: Check mysqld_exporter service is active
+  ansible.builtin.command: "systemctl is-active mysqld{{ mysql_port }}_exporter"
+  register: dbbot_post_check__mysqld_exporter_service
+  changed_when: false
+  failed_when: dbbot_post_check__mysqld_exporter_service.stdout != "active"
+  when: mysqld_exporter_install | bool
+
+- name: Check mysqld_exporter metrics endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ mysqld_exporter_port_resolved | int }}/metrics"
+    status_code: 200
+  register: dbbot_post_check__mysqld_exporter_metrics
+  retries: 5
+  delay: 2
+  until: dbbot_post_check__mysqld_exporter_metrics.status == 200
+  when: mysqld_exporter_install | bool

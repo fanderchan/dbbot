@@ -1,0 +1,62 @@
+---
+- name: Resolve dbbot post-check profiles
+  ansible.builtin.set_fact:
+    dbbot_post_check_profiles_resolved: >-
+      {{
+        dbbot_post_check_profiles
+        | default(dbbot_post_check_default_profile_map[dbbot_entry_playbook_name] | default([]))
+      }}
+  vars:
+    dbbot_post_check_default_profile_map:
+      single_node.yml:
+        - mysql_instance_basic
+      master_slave.yml:
+        - mysql_instance_basic
+        - replication_ms
+      mgr.yml:
+        - mysql_instance_basic
+        - group_replication
+      innodb_cluster.yml:
+        - mysql_instance_basic
+        - innodb_cluster
+      innodb_cluster_router.yml:
+        - router_service
+        - router_ha
+      mha_go.yml:
+        - mysql_instance_basic
+        - replication_ms
+        - mha_go_manager
+      mha.yml:
+        - mysql_instance_basic
+        - replication_ms
+        - mha_classic_manager
+      keepalived_master_slave.yml:
+        - mysql_instance_basic
+        - replication_ms
+        - keepalived_vip
+      node_exporter_install.yml:
+        - node_exporter_service
+      mysqld_exporter_install.yml:
+        - mysqld_exporter_service
+      router_exporter_install.yml:
+        - router_exporter_service
+      unsafe_uninstall.yml:
+        - mysql_instance_uninstalled
+  when: dbbot_post_check_enabled | default(true) | bool
+
+- name: Normalize topology variables for dbbot post-checks
+  ansible.builtin.import_tasks: normalize_topology.yml
+  when:
+    - dbbot_post_check_enabled | default(true) | bool
+    - dbbot_post_check_profiles_resolved | default([]) | length > 0
+
+- name: Run dbbot post-check profile
+  ansible.builtin.include_tasks:
+    file: "profiles/{{ dbbot_post_check_profile }}.yml"
+  loop: "{{ dbbot_post_check_profiles_resolved | default([]) }}"
+  loop_control:
+    loop_var: dbbot_post_check_profile
+    label: "{{ dbbot_post_check_profile }}"
+  when:
+    - dbbot_post_check_enabled | default(true) | bool
+    - dbbot_post_check_profiles_resolved | default([]) | length > 0

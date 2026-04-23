@@ -5,6 +5,7 @@
     - common_config.yml
     - advanced_config.yml
   vars:
+    dbbot_entry_playbook_name: "unsafe_uninstall.yml"
     roles_to_execute:
       - "../roles/unsafe_uninstall"
   pre_tasks:
@@ -20,3 +21,7 @@
       loop: "{{ roles_to_execute }}"
       loop_control:
         loop_var: role_name
+
+  post_tasks:
+    - name: Run dbbot post-uninstall checks
+      ansible.builtin.import_tasks: post_tasks/run_post_checks.yml

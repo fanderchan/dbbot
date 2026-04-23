@@ -71,36 +71,11 @@
       loop: "{{ roles_to_execute }}"
       loop_control:
         loop_var: role_name
-      when: router_enable_ha | bool or item != "../roles/make_mysqlrouter_ha"
+      when: router_enable_ha | bool or role_name != "../roles/make_mysqlrouter_ha"
 
   post_tasks:
-    - name: Wait up to 5s for VIP on each router (no fail here)
-      ansible.builtin.command: ip addr show {{ router_net_work_interface }}
-      register: vip_check
-      changed_when: false
-      retries: 5
-      delay: 1
-      until: router_vip in vip_check.stdout
-      ignore_errors: true
-      when: router_enable_ha | bool
-  
-    - name: Assert VIP exists on any router
-      ansible.builtin.assert:
-        that:
-          - >-
-            {{
-              ansible_play_hosts
-              | select('in', hostvars.keys())
-              | select('match', '.*')
-              | map('extract', hostvars, 'vip_check')
-              | select('defined')
-              | map(attribute='stdout')
-              | select('search', router_vip)
-              | list | length > 0
-            }}
-        fail_msg: "VIP {{ router_vip }} not found on any router after 5 seconds."
-      run_once: true
-      when: router_enable_ha | bool
+    - name: Run dbbot post-deploy checks
+      ansible.builtin.import_tasks: post_tasks/run_post_checks.yml
 
     - name: Display Router deployment summary (HA mode)
       ansible.builtin.debug:

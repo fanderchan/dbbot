@@ -1,0 +1,44 @@
+---
+- name: Check MySQL service is active
+  ansible.builtin.command: "systemctl is-active {{ mysql_service_name }}"
+  register: dbbot_post_check__mysql_service_status
+  changed_when: false
+  failed_when: dbbot_post_check__mysql_service_status.stdout != "active"
+
+- name: Wait for MySQL port to listen
+  ansible.builtin.wait_for:
+    port: "{{ mysql_port | int }}"
+    state: started
+    timeout: "{{ dbbot_post_check_wait_timeout | int }}"
+
+- name: Query MySQL runtime identity
+  ansible.builtin.command:
+    argv:
+      - "{{ mysql_software_dir }}/bin/mysql"
+      - "--protocol=socket"
+      - "--socket={{ socket }}"
+      - "--user={{ mysql_admin_user }}"
+      - "--connect-timeout=5"
+      - "-N"
+      - "-B"
+      - "-e"
+      - "SELECT @@port, @@version"
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
+  register: dbbot_post_check__mysql_runtime_identity
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Assert MySQL runtime identity is valid
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__mysql_runtime_identity.rc == 0
+      - dbbot_post_check__mysql_runtime_identity_fields | length >= 2
+      - (dbbot_post_check__mysql_runtime_identity_fields | first | default('0') | int) == (mysql_port | int)
+    fail_msg: >-
+      MySQL instance post-check failed on {{ inventory_hostname }}.
+      Expected port {{ mysql_port }}, query rc {{ dbbot_post_check__mysql_runtime_identity.rc }}.
+    success_msg: "MySQL instance post-check passed on {{ inventory_hostname }}."
+  vars:
+    dbbot_post_check__mysql_runtime_identity_fields: "{{ dbbot_post_check__mysql_runtime_identity.stdout.split('\t') }}"

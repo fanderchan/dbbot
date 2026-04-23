@@ -1,0 +1,52 @@
+---
+- name: Check MySQL service is no longer active
+  ansible.builtin.command: "systemctl is-active {{ mysql_service_name }}"
+  register: dbbot_post_check__mysql_uninstall_service
+  changed_when: false
+  failed_when: false
+
+- name: Assert MySQL service is not active
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__mysql_uninstall_service.stdout != "active"
+    fail_msg: "MySQL service {{ mysql_service_name }} is still active after uninstall."
+    success_msg: "MySQL service {{ mysql_service_name }} is not active after uninstall."
+
+- name: Check MySQL systemd unit file is absent
+  ansible.builtin.stat:
+    path: "/usr/lib/systemd/system/{{ mysql_service_name }}.service"
+  register: dbbot_post_check__mysql_uninstall_unit
+
+- name: Assert MySQL systemd unit file is absent
+  ansible.builtin.assert:
+    that:
+      - not dbbot_post_check__mysql_uninstall_unit.stat.exists
+    fail_msg: "MySQL systemd unit file still exists after uninstall."
+    success_msg: "MySQL systemd unit file is absent after uninstall."
+
+- name: Check MySQL instance directories are absent
+  ansible.builtin.stat:
+    path: "{{ dbbot_post_check__mysql_uninstall_path }}"
+  loop:
+    - "{{ datadir }}"
+    - "{{ tmpdir }}"
+    - "{{ binlog_dir }}"
+    - "{{ relaylog_dir }}"
+    - "{{ redolog_dir }}"
+  loop_control:
+    loop_var: dbbot_post_check__mysql_uninstall_path
+    label: "{{ dbbot_post_check__mysql_uninstall_path }}"
+  register: dbbot_post_check__mysql_uninstall_dirs
+
+- name: Assert MySQL instance directories are absent
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          dbbot_post_check__mysql_uninstall_dirs.results
+          | selectattr('stat.exists')
+          | list
+          | length == 0
+        }}
+    fail_msg: "One or more MySQL instance directories still exist after uninstall."
+    success_msg: "MySQL instance directories are absent after uninstall."

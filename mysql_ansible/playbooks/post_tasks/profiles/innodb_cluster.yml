@@ -1,0 +1,89 @@
+---
+- name: Assert InnoDB Cluster topology variables are available
+  ansible.builtin.assert:
+    that:
+      - innodb_cluster_primary is defined
+      - innodb_cluster_primary | length > 0
+      - innodb_cluster_members is defined
+      - innodb_cluster_members | length > 0
+    fail_msg: "InnoDB Cluster post-check requires innodb_cluster_primary and innodb_cluster_members."
+    success_msg: "InnoDB Cluster topology variables are ready for post-checks."
+  run_once: true
+
+- name: Locate mysqlsh for InnoDB Cluster post-check
+  ansible.builtin.command: which mysqlsh
+  register: dbbot_post_check__mysqlsh_path
+  changed_when: false
+  failed_when: dbbot_post_check__mysqlsh_path.rc != 0
+  when: ansible_default_ipv4.address == innodb_cluster_primary
+
+- name: Create InnoDB Cluster post-check script
+  ansible.builtin.shell: |
+    cat > /tmp/dbbot_innodb_cluster_post_check.js <<'DBBOT_INNODB_CLUSTER_POST_CHECK'
+    var expectedMembers = {{ innodb_cluster_members | to_json }};
+    var expectedCount = expectedMembers.length;
+    var primaryUri = "{{ mysql_cluster_admin_user }}@{{ innodb_cluster_primary }}:{{ mysql_port }}";
+    var password = "{{ mysql_cluster_admin_password }}";
+    var clusterName = "{{ innodb_cluster_name }}";
+
+    function fail(message) {
+        throw new Error(message);
+    }
+
+    shell.connect(primaryUri, password);
+    var cluster = dba.getCluster(clusterName);
+    var status = cluster.status();
+    var topology = status.defaultReplicaSet.topology;
+    var actualMembers = [];
+    var primaryCount = 0;
+
+    for (var member in topology) {
+        var memberHost = member.split(":")[0];
+        actualMembers.push(memberHost);
+        if (topology[member].status !== "ONLINE") {
+            fail("Cluster member is not ONLINE: " + member + " status=" + topology[member].status);
+        }
+        if (topology[member].memberRole === "PRIMARY" || topology[member].mode === "R/W") {
+            primaryCount++;
+        }
+    }
+
+    if (actualMembers.length !== expectedCount) {
+        fail("Cluster member count mismatch: expected=" + expectedCount + " actual=" + actualMembers.length);
+    }
+
+    expectedMembers.forEach(function(expected) {
+        if (actualMembers.indexOf(expected) === -1) {
+            fail("Expected cluster member is missing: " + expected);
+        }
+    });
+
+    if (primaryCount !== 1) {
+        fail("Cluster primary count mismatch: expected=1 actual=" + primaryCount);
+    }
+
+    print("innodb_cluster_ok members=" + actualMembers.length + " primary=" + primaryCount + "\n");
+    DBBOT_INNODB_CLUSTER_POST_CHECK
+    chmod 0600 /tmp/dbbot_innodb_cluster_post_check.js
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+  when: ansible_default_ipv4.address == innodb_cluster_primary
+
+- name: Check InnoDB Cluster status
+  ansible.builtin.command: "{{ dbbot_post_check__mysqlsh_path.stdout }} --no-wizard --js -f /tmp/dbbot_innodb_cluster_post_check.js"
+  register: dbbot_post_check__innodb_cluster_status
+  changed_when: false
+  until: dbbot_post_check__innodb_cluster_status.rc == 0
+  retries: "{{ dbbot_post_check_retries | int }}"
+  delay: "{{ dbbot_post_check_delay | int }}"
+  no_log: true
+  when: ansible_default_ipv4.address == innodb_cluster_primary
+
+- name: Remove InnoDB Cluster post-check script
+  ansible.builtin.file:
+    path: /tmp/dbbot_innodb_cluster_post_check.js
+    state: absent
+  changed_when: false
+  when: ansible_default_ipv4.address == innodb_cluster_primary

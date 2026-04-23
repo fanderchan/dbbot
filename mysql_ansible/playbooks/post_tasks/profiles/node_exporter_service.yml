@@ -1,0 +1,17 @@
+---
+- name: Check node_exporter service is active
+  ansible.builtin.command: systemctl is-active node_exporter
+  register: dbbot_post_check__node_exporter_service
+  changed_when: false
+  failed_when: dbbot_post_check__node_exporter_service.stdout != "active"
+  when: node_exporter_install | bool
+
+- name: Check node_exporter metrics endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ node_exporter_port | int }}/metrics"
+    status_code: 200
+  register: dbbot_post_check__node_exporter_metrics
+  retries: 5
+  delay: 2
+  until: dbbot_post_check__node_exporter_metrics.status == 200
+  when: node_exporter_install | bool

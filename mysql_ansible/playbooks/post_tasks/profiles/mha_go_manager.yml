@@ -1,0 +1,49 @@
+---
+- name: Check mha-go manager service is active
+  ansible.builtin.command: systemctl is-active mha-manager
+  register: dbbot_post_check__mha_go_service_status
+  changed_when: false
+  failed_when: dbbot_post_check__mha_go_service_status.stdout != "active"
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Check mha-go replication config
+  ansible.builtin.command: >-
+    {{ mha_go_binary_dest }} check-repl
+    --config {{ mha_go_config_dir }}/cluster.yaml
+  register: dbbot_post_check__mha_go_check_repl
+  changed_when: false
+  become_user: "{{ mysql_user }}"
+  no_log: true
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Check mha-go finish flag exists
+  ansible.builtin.stat:
+    path: "{{ datadir }}/mha_go_finish.flag"
+  register: dbbot_post_check__mha_go_finish_flag
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Assert mha-go finish flag exists
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__mha_go_finish_flag.stat.exists
+    fail_msg: "mha-go finish flag is missing on manager node."
+    success_msg: "mha-go manager post-check passed."
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Check mha-go VIP failover script when writer endpoint is enabled
+  ansible.builtin.stat:
+    path: /usr/local/bin/mha_ip_failover.sh
+  register: dbbot_post_check__mha_go_vip_script
+  when:
+    - manager_ip in ansible_all_ipv4_addresses
+    - mha_go_writer_endpoint_enabled | bool
+
+- name: Assert mha-go VIP failover script exists when writer endpoint is enabled
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__mha_go_vip_script.stat.exists
+    fail_msg: "mha-go writer endpoint is enabled but /usr/local/bin/mha_ip_failover.sh is missing."
+    success_msg: "mha-go writer endpoint script exists."
+  when:
+    - manager_ip in ansible_all_ipv4_addresses
+    - mha_go_writer_endpoint_enabled | bool
