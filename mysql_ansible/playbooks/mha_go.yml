@@ -14,9 +14,6 @@
     dbbot_entry_playbook_name: "mha_go.yml"
     roles_to_execute:
       - "../roles/pre_check_and_set"
-      - "../roles/mysql_server"
-      - "../roles/make_replication"
-      - "../roles/make_ssh_passwordless"
       - "../roles/make_mha_go"
     mtls_with_mysql_group_replication: 0
   pre_tasks:
@@ -28,15 +25,6 @@
 
     - name: Import tasks to validate network interfaces for VIP-related roles
       ansible.builtin.import_tasks: pre_tasks/validate_network_interfaces_for_vip_roles.yml
-
-    - name: Import tasks to ensure tar exists on control host
-      ansible.builtin.import_tasks: pre_tasks/ensure_control_host_tar.yml
-
-    - name: Import tasks to prepare required packages
-      ansible.builtin.import_tasks: pre_tasks/prepare_role_packages.yml
-
-    - name: Import tasks to check if packages exist
-      ansible.builtin.import_tasks: pre_tasks/check_if_packages_exist.yml
 
     - name: Import validate mha_go tasks
       ansible.builtin.import_tasks: pre_tasks/validate_mha_go.yml

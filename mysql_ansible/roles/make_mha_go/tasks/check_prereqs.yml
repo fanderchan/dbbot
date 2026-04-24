@@ -1,4 +1,4 @@
-# Verify that master_slave.yml and make_ssh_passwordless have already run successfully.
+# Verify that master_slave.yml has already run successfully.
 
 - name: Check master_slave_finish.flag exists (MySQL installed by dbbot)
   ansible.builtin.stat:
@@ -7,37 +7,28 @@
 
 - name: Fail if master_slave_finish.flag is absent
   ansible.builtin.fail:
-    msg: "make_mha_go: MySQL not installed by dbbot on {{ inventory_hostname }} — run master_slave.yml first"
+    msg: "make_mha_go: MySQL not installed by dbbot on {{ inventory_hostname }} - run master_slave.yml first"
   when: not make_mha_go__ms_flag.stat.exists
 
-- name: Check ssh_finish.flag exists on manager node (SSH passwordless configured)
-  ansible.builtin.stat:
-    path: /tmp/ssh_finish.flag
-  register: make_mha_go__ssh_flag
-  when: manager_ip in ansible_all_ipv4_addresses
-
-- name: Fail if ssh_finish.flag is absent on manager
-  ansible.builtin.fail:
-    msg: "make_mha_go: SSH passwordless not configured — run make_ssh_passwordless first"
-  when:
-    - manager_ip in ansible_all_ipv4_addresses
-    - not make_mha_go__ssh_flag.stat.exists
-
-- name: Verify GTID mode is ON on all nodes
+- name: Verify GTID mode and consistency are ON on all nodes
   ansible.builtin.shell: |
     set -o pipefail
-    {{ mysql_software_dir }}/bin/mysql
-    -S {{ socket }}
-    -u{{ mysql_admin_user }} -p{{ mysql_admin_127_password }}
-    -e "SELECT @@gtid_mode"
-    2>/dev/null | grep -i "^ON$"
+    {{ mysql_software_dir }}/bin/mysql \
+      --protocol=socket \
+      --socket="{{ socket }}" \
+      --user="{{ mysql_admin_user }}" \
+      --batch \
+      --skip-column-names \
+      --execute="SELECT IF(@@GLOBAL.gtid_mode = 'ON' AND @@GLOBAL.enforce_gtid_consistency = 'ON', 'OK', 'BAD')"
   args:
     executable: /bin/bash
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_127_password }}"
   register: make_mha_go__gtid_check
   changed_when: false
-  failed_when: make_mha_go__gtid_check.rc != 0
+  failed_when: false
 
-- name: Fail if GTID mode is not ON
+- name: Fail if GTID prerequisites are not enabled
   ansible.builtin.fail:
-    msg: "make_mha_go: gtid_mode is not ON on {{ inventory_hostname }} — mha-go requires GTID replication"
-  when: make_mha_go__gtid_check.rc != 0
+    msg: "make_mha_go: gtid_mode and enforce_gtid_consistency must both be ON on {{ inventory_hostname }}"
+  when: make_mha_go__gtid_check.rc != 0 or (make_mha_go__gtid_check.stdout | trim) != "OK"

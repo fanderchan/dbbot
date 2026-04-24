@@ -34,10 +34,10 @@
   delegate_to: localhost
   become: false
 
-- name: Validate manager_ip is one of the slave nodes (not the primary)
+- name: Validate manager_ip is one of the configured MySQL nodes
   ansible.builtin.fail:
-    msg: "mha_go.yml: `manager_ip` ({{ manager_ip }}) must be in `slave_ips` — do not run the manager on the primary"
-  when: manager_ip not in slave_ips
+    msg: "mha_go.yml: `manager_ip` ({{ manager_ip }}) must be listed in master_ip or slave_ips"
+  when: manager_ip not in ([master_ip] + slave_ips)
   run_once: true
   delegate_to: localhost
   become: false
@@ -74,7 +74,7 @@
 
 - name: Validate vip_netmask is valid when writer endpoint is enabled
   ansible.builtin.fail:
-    msg: "mha_go.yml: `vip_netmask` must be 0–32 when mha_go_writer_endpoint_enabled=true"
+    msg: "mha_go.yml: `vip_netmask` must be 0-32 when mha_go_writer_endpoint_enabled=true"
   when:
     - mha_go_writer_endpoint_enabled | bool
     - vip_netmask is not defined or (vip_netmask | int < 0) or (vip_netmask | int > 32)

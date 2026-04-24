@@ -3,11 +3,11 @@
 # Invoked by `mha manager` on failover/switchover via writer_endpoint.command.
 #
 # Environment variables injected by mha-go at call time:
-#   MHA_CLUSTER            — cluster name
-#   MHA_NEW_PRIMARY_HOST   — IP/hostname of the new primary
-#   MHA_NEW_PRIMARY_PORT   — port of the new primary
-#   MHA_OLD_PRIMARY_HOST   — IP/hostname of the old primary (may be empty on pure failover)
-#   MHA_OLD_PRIMARY_PORT   — port of the old primary
+#   MHA_CLUSTER            - cluster name
+#   MHA_NEW_PRIMARY_HOST   - IP/hostname of the new primary
+#   MHA_NEW_PRIMARY_PORT   - port of the new primary
+#   MHA_OLD_PRIMARY_HOST   - IP/hostname of the old primary (may be empty on pure failover)
+#   MHA_OLD_PRIMARY_PORT   - port of the old primary
 
 set -euo pipefail
 
@@ -27,16 +27,16 @@ if [[ -z "${NEW_HOST}" ]]; then
   exit 1
 fi
 
-# Step 1 — remove VIP from old primary (best-effort; node may be unreachable)
+# Step 1 - remove VIP from old primary (best-effort; node may be unreachable)
 if [[ -n "${OLD_HOST}" && "${OLD_HOST}" != "${NEW_HOST}" ]]; then
   log "Removing VIP ${VIP}/${MASK} from old primary ${OLD_HOST} (iface=${IFACE})"
   ssh ${SSH_OPTS} ${SSH_USER}@${OLD_HOST} \
     "sudo /usr/sbin/ip addr del ${VIP}/${MASK} dev ${IFACE}" 2>/dev/null \
     && log "VIP removed from ${OLD_HOST}" \
-    || log "WARNING: could not remove VIP from ${OLD_HOST} (node may be down — continuing)"
+    || log "WARNING: could not remove VIP from ${OLD_HOST} (node may be down - continuing)"
 fi
 
-# Step 2 — add VIP to new primary and send gratuitous ARP
+# Step 2 - add VIP to new primary and send gratuitous ARP
 log "Adding VIP ${VIP}/${MASK} to new primary ${NEW_HOST} (iface=${IFACE})"
 ssh ${SSH_OPTS} ${SSH_USER}@${NEW_HOST} \
   "sudo /usr/sbin/ip addr add ${VIP}/${MASK} dev ${IFACE}"

@@ -23,6 +23,7 @@
     owner: "{{ mysql_user }}"
     group: "{{ mysql_group }}"
     mode: '0640'
+  register: make_mha_go__config_render
 
 - name: Verify cluster config passes check-repl
   ansible.builtin.command: >-

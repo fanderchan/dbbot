@@ -7,11 +7,20 @@ slave_ips:
   - 192.0.2.133
 sub_nets: "192.0.2.%"
 
-# manager defaults to last slave — change if you want a different node
-manager_ip: "{{ slave_ips[-1] }}"
+# manager defaults to the primary/control node. Change if you want a different
+# MySQL node to run `mha manager`.
+manager_ip: "{{ master_ip }}"
 
 # Cluster name shown in `mha check-repl` output and log lines
 mha_go_cluster_name: app1
+
+# dbbot master_slave.yml is pure async by default. Use preferred/required only
+# after MySQL semi-sync plugins are installed and enabled.
+mha_go_semi_sync_policy: disabled
+mha_go_semi_sync_wait_for_replica_count: 0
+mha_go_semi_sync_timeout: 5s
+mha_go_salvage_policy: salvage-if-possible
+mha_go_salvage_timeout: 30s
 
 # --- Writer endpoint ---
 # Uncomment and fill to enable VIP failover script.

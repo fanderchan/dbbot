@@ -7,6 +7,7 @@
     owner: root
     group: root
     mode: '0644'
+  register: make_mha_go__service_unit
 
 - name: Reload systemd daemon
   ansible.builtin.systemd:
@@ -15,7 +16,16 @@
 - name: Enable and start mha-manager service
   ansible.builtin.systemd:
     name: mha-manager
-    state: started
+    state: >-
+      {{
+        'restarted'
+        if (
+          (make_mha_go__binary_copy is defined and make_mha_go__binary_copy.changed)
+          or (make_mha_go__config_render is defined and make_mha_go__config_render.changed)
+          or (make_mha_go__service_unit is defined and make_mha_go__service_unit.changed)
+        )
+        else 'started'
+      }}
     enabled: "{{ mha_go_service_enabled | bool }}"
 
 - name: Gather service facts

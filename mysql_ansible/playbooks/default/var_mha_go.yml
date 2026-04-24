@@ -7,8 +7,9 @@ slave_ips:
 sub_nets: "192.0.2.%"
 
 # manager_ip: node that runs `mha manager`.
-# Convention: last slave. Override in vars/var_mha_go.yml if needed.
-manager_ip: 192.0.2.133
+# Default to the primary/control node, matching the current mha-go manual
+# deployment guide. Override in vars/var_mha_go.yml if needed.
+manager_ip: "{{ master_ip }}"
 
 # --- mha-go specific defaults ---
 
@@ -24,6 +25,13 @@ mha_go_binary_dest: /usr/local/bin/mha
 
 # Enable systemd service for the manager process
 mha_go_service_enabled: true
+
+# Defaults for pure dbbot master_slave.yml deployments.
+mha_go_semi_sync_policy: disabled
+mha_go_semi_sync_wait_for_replica_count: 0
+mha_go_semi_sync_timeout: 5s
+mha_go_salvage_policy: salvage-if-possible
+mha_go_salvage_timeout: 30s
 
 # --- Writer endpoint (VIP failover script) ---
 # Set to true and fill vip / vip_netmask / net_work_interface to enable

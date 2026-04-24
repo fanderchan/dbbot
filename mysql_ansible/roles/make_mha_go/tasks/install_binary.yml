@@ -15,6 +15,7 @@
     owner: root
     group: root
     mode: '0755'
+  register: make_mha_go__binary_copy
 
 - name: Verify mha binary runs correctly
   ansible.builtin.command: "{{ mha_go_binary_dest }} version"

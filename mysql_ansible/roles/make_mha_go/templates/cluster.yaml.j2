@@ -3,7 +3,7 @@
 name: {{ mha_go_cluster_name }}
 
 topology:
-  kind: async-single-primary
+  kind: mysql-replication-single-primary
   single_writer: true
   allow_cascading_replicas: false
 
@@ -26,12 +26,12 @@ controller:
 replication:
   mode: gtid
   semi_sync:
-    policy: preferred
-    wait_for_replica_count: 1
-    timeout: 5s
+    policy: {{ mha_go_semi_sync_policy | default('disabled') }}
+    wait_for_replica_count: {{ mha_go_semi_sync_wait_for_replica_count | default(0) }}
+    timeout: {{ mha_go_semi_sync_timeout | default('5s') }}
   salvage:
-    policy: salvage-if-possible
-    timeout: 30s
+    policy: {{ mha_go_salvage_policy | default('salvage-if-possible') }}
+    timeout: {{ mha_go_salvage_timeout | default('30s') }}
 
 {% if mha_go_writer_endpoint_enabled | bool %}
 writer_endpoint:
@@ -56,6 +56,8 @@ nodes:
     sql:
       user: {{ mysql_mha_user }}
       password_ref: plain:{{ mysql_mha_password }}
+      replication_user: {{ mysql_rple_user }}
+      replication_password_ref: plain:{{ mysql_rple_password }}
 
 {% for slave_ip in slave_ips %}
   - id: db{{ loop.index + 1 }}
@@ -67,5 +69,7 @@ nodes:
     sql:
       user: {{ mysql_mha_user }}
       password_ref: plain:{{ mysql_mha_password }}
+      replication_user: {{ mysql_rple_user }}
+      replication_password_ref: plain:{{ mysql_rple_password }}
 
 {% endfor %}
