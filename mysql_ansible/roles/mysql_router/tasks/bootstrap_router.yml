@@ -44,14 +44,20 @@
 
 - name: Read router_id from existing config file
   ansible.builtin.shell: |
+    set -o pipefail
     grep -E '^router_id=' {{ router_data_dir }}/mysqlrouter.conf | cut -d'=' -f2
+  args:
+    executable: /bin/bash
   register: router_rest_api__router_id
   changed_when: false
   failed_when: false
 
 - name: Read metadata_cluster name from existing config file
   ansible.builtin.shell: |
+    set -o pipefail
     grep -E '^metadata_cluster=' {{ router_data_dir }}/mysqlrouter.conf | cut -d'=' -f2
+  args:
+    executable: /bin/bash
   register: router_rest_api__metadata_cluster
   changed_when: false
   failed_when: false

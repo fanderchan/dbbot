@@ -18,11 +18,15 @@
     state: started
     enabled: "{{ mha_go_service_enabled | bool }}"
 
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
 - name: Verify mha-manager service is active
-  ansible.builtin.command: systemctl is-active mha-manager
-  register: make_mha_go__svc_status
-  changed_when: false
-  failed_when: make_mha_go__svc_status.stdout != 'active'
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.services.get('mha-manager.service', {}).state | default('') == 'running'
+    fail_msg: "mha-manager service is not running."
+    success_msg: "mha-manager service is running."
 
 - name: Touch mha_go_finish.flag
   ansible.builtin.file:

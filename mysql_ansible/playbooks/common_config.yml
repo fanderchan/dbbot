@@ -16,6 +16,9 @@ db_type: mysql
 
 # Directory of MySQL installation package
 mysql_packages_dir: ../downloads/
+mysql_package_download_timeout: 300
+mysqlshell_package_download_timeout: 300
+router_package_download_timeout: 300
 
 ## linux mysql run user name
 mysql_user: mysql

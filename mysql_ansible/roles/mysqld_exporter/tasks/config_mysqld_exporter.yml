@@ -11,11 +11,11 @@
   changed_when: false
   failed_when:
     - mysqld_exporter_mysql_basedir.rc != 0
-    - mysqld_exporter_mysql_basedir.stdout == ""
+    - mysqld_exporter_mysql_basedir.stdout | length == 0
 
 - name: Create MySQL exporter database user
   ansible.builtin.shell: >
-    {{ mysqld_exporter_mysql_basedir.stdout }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password}} -S {{ socket }} < /tmp/create_mysql_exporter_db_user.sql
+    {{ mysqld_exporter_mysql_basedir.stdout }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} < /tmp/create_mysql_exporter_db_user.sql
   changed_when: true
   when: fcs_role_mysqld_exporter_create_monitor_user
 

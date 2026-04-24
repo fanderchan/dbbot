@@ -16,40 +16,55 @@
     - dependents
   block:
     - name: Check whether jemalloc is already installed
-      ansible.builtin.command: rpm -q jemalloc
-      register: mysql_server__jemalloc_installed
-      changed_when: false
-      failed_when: false
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Set jemalloc installed flag
+      ansible.builtin.set_fact:
+        mysql_server__jemalloc_installed: "{{ 'jemalloc' in ansible_facts.packages }}"
 
     - name: Check whether jemalloc is available from configured yum repositories
-      ansible.builtin.command: yum list available jemalloc
+      ansible.builtin.yum:
+        list: jemalloc
       register: mysql_server__jemalloc_repo_check
       changed_when: false
-      failed_when: false
-      when: mysql_server__jemalloc_installed.rc != 0
+      when: not (mysql_server__jemalloc_installed | bool)
+
+    - name: Set jemalloc repository availability flag
+      ansible.builtin.set_fact:
+        mysql_server__jemalloc_repo_available: >-
+          {{
+            (
+              mysql_server__jemalloc_repo_check.results | default([])
+              | selectattr('yumstate', 'equalto', 'available')
+              | list
+              | length
+            ) > 0
+          }}
+      when: not (mysql_server__jemalloc_installed | bool)
 
     - name: Install jemalloc using yum
       ansible.builtin.yum:
         name: jemalloc
         state: present
       when:
-        - mysql_server__jemalloc_installed.rc != 0
-        - mysql_server__jemalloc_repo_check.rc == 0
+        - not (mysql_server__jemalloc_installed | bool)
+        - mysql_server__jemalloc_repo_available | bool
 
     - name: Set jemalloc rpm file name based on OS
       ansible.builtin.set_fact:
         mysql_server__jemalloc_rpm_file: "{{ 'jemalloc-3.6.0-1.el8.x86_64.rpm' if os_type in ['Rocky9', 'openEuler24', 'openEuler22', 'openEuler20', 'BigCloud21', 'CentOS8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10'] else 'jemalloc-3.6.0-1.el7.x86_64.rpm' }}"
       when:
-        - mysql_server__jemalloc_installed.rc != 0
-        - mysql_server__jemalloc_repo_check.rc != 0
+        - not (mysql_server__jemalloc_installed | bool)
+        - not (mysql_server__jemalloc_repo_available | bool)
         - fcs_mysql_allow_bundled_jemalloc_fallback | bool
 
     - name: Explain bundled jemalloc fallback
       ansible.builtin.debug:
         msg: "jemalloc is unavailable from configured yum repositories; falling back to bundled {{ mysql_server__jemalloc_rpm_file }}."
       when:
-        - mysql_server__jemalloc_installed.rc != 0
-        - mysql_server__jemalloc_repo_check.rc != 0
+        - not (mysql_server__jemalloc_installed | bool)
+        - not (mysql_server__jemalloc_repo_available | bool)
         - fcs_mysql_allow_bundled_jemalloc_fallback | bool
 
     - name: Copy jemalloc rpm to target server
@@ -58,8 +73,8 @@
         dest: "/tmp/{{ mysql_server__jemalloc_rpm_file }}"
         mode: '0755'
       when:
-        - mysql_server__jemalloc_installed.rc != 0
-        - mysql_server__jemalloc_repo_check.rc != 0
+        - not (mysql_server__jemalloc_installed | bool)
+        - not (mysql_server__jemalloc_repo_available | bool)
         - fcs_mysql_allow_bundled_jemalloc_fallback | bool
 
     - name: Install jemalloc from local file
@@ -68,8 +83,8 @@
         state: present
         disable_gpg_check: true
       when:
-        - mysql_server__jemalloc_installed.rc != 0
-        - mysql_server__jemalloc_repo_check.rc != 0
+        - not (mysql_server__jemalloc_installed | bool)
+        - not (mysql_server__jemalloc_repo_available | bool)
         - fcs_mysql_allow_bundled_jemalloc_fallback | bool
 
     - name: Fail when jemalloc is requested but unavailable from yum repositories
@@ -79,6 +94,6 @@
           dbbot no longer falls back to the bundled legacy RPM unless
           fcs_mysql_allow_bundled_jemalloc_fallback=true is explicitly set.
       when:
-        - mysql_server__jemalloc_installed.rc != 0
-        - mysql_server__jemalloc_repo_check.rc != 0
+        - not (mysql_server__jemalloc_installed | bool)
+        - not (mysql_server__jemalloc_repo_available | bool)
         - not (fcs_mysql_allow_bundled_jemalloc_fallback | bool)

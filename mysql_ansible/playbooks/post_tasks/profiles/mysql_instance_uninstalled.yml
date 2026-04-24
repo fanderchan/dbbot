@@ -24,7 +24,7 @@
     fail_msg: "MySQL systemd unit file still exists after uninstall."
     success_msg: "MySQL systemd unit file is absent after uninstall."
 
-- name: Check MySQL instance directories are absent
+- name: Check MySQL data, log, and runtime directories are absent
   ansible.builtin.stat:
     path: "{{ dbbot_post_check__mysql_uninstall_path }}"
   loop:
@@ -38,7 +38,7 @@
     label: "{{ dbbot_post_check__mysql_uninstall_path }}"
   register: dbbot_post_check__mysql_uninstall_dirs
 
-- name: Assert MySQL instance directories are absent
+- name: Assert MySQL data, log, and runtime directories are absent
   ansible.builtin.assert:
     that:
       - >-
@@ -48,5 +48,5 @@
           | list
           | length == 0
         }}
-    fail_msg: "One or more MySQL instance directories still exist after uninstall."
-    success_msg: "MySQL instance directories are absent after uninstall."
+    fail_msg: "One or more MySQL data, log, or runtime directories still exist after uninstall."
+    success_msg: "MySQL data, log, and runtime directories are absent after uninstall."

@@ -2,11 +2,23 @@
 
 router_version: "{{ mysql_version }}"
 
-# Router Linux glibc tag
-router_linux_glibc_tag: "{{ 'glibc2.28' if router_version.startswith('9.7') else 'glibc2.17' }}"
+# Router Linux glibc tag. Set glibc2.17 or glibc2.28 to override auto.
+router_linux_glibc_tag: auto
+router_linux_glibc_tag_resolved: >-
+  {%- if router_linux_glibc_tag != 'auto' -%}
+  {{ router_linux_glibc_tag }}
+  {%- elif router_version.startswith('9.7') -%}
+  glibc2.28
+  {%- elif router_version.startswith('8.4') -%}
+  glibc2.17
+  {%- elif (os_type | default('')) in ['CentOS7', 'CentOS8', 'BigCloud7', 'RedHat7', 'RedHat8'] -%}
+  glibc2.17
+  {%- else -%}
+  glibc2.28
+  {%- endif -%}
 
 # Router package name pattern
-router_package: "mysql-router-{{ router_version }}-linux-{{ router_linux_glibc_tag }}-x86_64.tar.xz"
+router_package: "mysql-router-{{ router_version }}-linux-{{ router_linux_glibc_tag_resolved }}-x86_64.tar.xz"
 
 # Package download directory
 router_packages_dir: "{{ mysql_packages_dir | default('../downloads/') }}"

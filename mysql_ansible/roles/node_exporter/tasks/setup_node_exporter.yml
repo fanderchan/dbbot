@@ -2,6 +2,7 @@
   ansible.builtin.copy:
     src: "{{ mysql_packages_dir }}/{{ node_exporter_package }}"
     dest: "/tmp/{{ node_exporter_package }}"
+    mode: '0644'
   when: not node_exporter_stat.stat.exists
 
 - name: Extract node_exporter binary on target server

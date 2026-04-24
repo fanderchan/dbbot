@@ -1,5 +1,9 @@
 - name: Check mysqlrouter_exporter port is free
-  ansible.builtin.shell: "ss -lnt | awk 'NR>1 && $4 ~ /:{{ mysqlrouter_exporter_port }}$/ {print $4}'"
+  ansible.builtin.shell: |
+    set -o pipefail
+    ss -lnt | awk 'NR>1 && $4 ~ /:{{ mysqlrouter_exporter_port }}$/ {print $4}'
+  args:
+    executable: /bin/bash
   register: mysqlrouter_exporter__port_check
   changed_when: false
-  failed_when: mysqlrouter_exporter__port_check.stdout != ""
+  failed_when: mysqlrouter_exporter__port_check.stdout | length > 0

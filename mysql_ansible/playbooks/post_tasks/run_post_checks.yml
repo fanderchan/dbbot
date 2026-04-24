@@ -42,6 +42,8 @@
         - router_exporter_service
       unsafe_uninstall.yml:
         - mysql_instance_uninstalled
+      router_unsafe_uninstall.yml:
+        - router_uninstalled
   when: dbbot_post_check_enabled | default(true) | bool
 
 - name: Normalize topology variables for dbbot post-checks

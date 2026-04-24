@@ -14,7 +14,10 @@
   ansible.builtin.lineinfile:
     path: /etc/cron.allow
     line: "{{ mysql_user }}"
-    create: yes
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
     state: present
   become: true
 

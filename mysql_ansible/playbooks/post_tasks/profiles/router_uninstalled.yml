@@ -1,0 +1,80 @@
+---
+- name: Check MySQL Router service is no longer active
+  ansible.builtin.command: "systemctl is-active {{ router_service_name | default('mysqlrouter') }}"
+  register: dbbot_post_check__router_uninstall_service
+  changed_when: false
+  failed_when: false
+
+- name: Assert MySQL Router service is not active
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__router_uninstall_service.stdout != "active"
+    fail_msg: "MySQL Router service {{ router_service_name | default('mysqlrouter') }} is still active after uninstall."
+    success_msg: "MySQL Router service {{ router_service_name | default('mysqlrouter') }} is not active after uninstall."
+
+- name: Check MySQL Router systemd unit files are absent
+  ansible.builtin.stat:
+    path: "{{ dbbot_post_check__router_uninstall_unit_path }}"
+  loop:
+    - "/etc/systemd/system/{{ router_service_name | default('mysqlrouter') }}.service"
+    - "/usr/lib/systemd/system/{{ router_service_name | default('mysqlrouter') }}.service"
+  loop_control:
+    loop_var: dbbot_post_check__router_uninstall_unit_path
+    label: "{{ dbbot_post_check__router_uninstall_unit_path }}"
+  register: dbbot_post_check__router_uninstall_units
+
+- name: Assert MySQL Router systemd unit files are absent
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          dbbot_post_check__router_uninstall_units.results
+          | selectattr('stat.exists')
+          | list
+          | length == 0
+        }}
+    fail_msg: "One or more MySQL Router systemd unit files still exist after uninstall."
+    success_msg: "MySQL Router systemd unit files are absent after uninstall."
+
+- name: Check MySQL Router directories are absent
+  ansible.builtin.stat:
+    path: "{{ dbbot_post_check__router_uninstall_path }}"
+  loop:
+    - "{{ router_base_dir | default('/usr/local/mysqlrouter') }}"
+    - "{{ router_config_dir | default('/etc/mysqlrouter') }}"
+    - "{{ router_data_dir | default('/var/lib/mysqlrouter') }}"
+    - "{{ router_log_dir | default('/var/log/mysqlrouter') }}"
+    - "{{ router_run_dir | default('/var/run/mysqlrouter') }}"
+    - /usr/local/bin/mysqlrouter
+  loop_control:
+    loop_var: dbbot_post_check__router_uninstall_path
+    label: "{{ dbbot_post_check__router_uninstall_path }}"
+  register: dbbot_post_check__router_uninstall_dirs
+
+- name: Assert MySQL Router directories are absent
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          dbbot_post_check__router_uninstall_dirs.results
+          | selectattr('stat.exists')
+          | list
+          | length == 0
+        }}
+    fail_msg: "One or more MySQL Router directories or symlinks still exist after uninstall."
+    success_msg: "MySQL Router directories and symlink are absent after uninstall."
+
+- name: Check keepalived service is no longer active when Router HA removal is enabled
+  ansible.builtin.command: systemctl is-active keepalived
+  register: dbbot_post_check__router_uninstall_keepalived_service
+  changed_when: false
+  failed_when: false
+  when: router_uninstall_remove_keepalived | default(false) | bool
+
+- name: Assert keepalived service is not active when Router HA removal is enabled
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__router_uninstall_keepalived_service.stdout != "active"
+    fail_msg: "keepalived is still active after Router HA uninstall."
+    success_msg: "keepalived is not active after Router HA uninstall."
+  when: router_uninstall_remove_keepalived | default(false) | bool

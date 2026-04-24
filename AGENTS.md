@@ -1,12 +1,8 @@
 # dbbot 开发指引
 
-## 适用范围
-- 本文件定义 `dbbot` 根仓级的助手协作规范。
-- 适用范围覆盖：
-  - `mysql_ansible/`
-  - `clickhouse_ansible/`
-  - `monitoring_prometheus_ansible/`
-  - `portable-ansible/`
+## 说明
+- 本文件定义 `dbbot` 仓库的协作规范，主要面向 AI 编码助手（Claude Code / Cursor / Codex 等），也适用于人类贡献者。
+- 适用范围覆盖本仓所有子目录，包括 `mysql_ansible/`、`clickhouse_ansible/`、`monitoring_prometheus_ansible/`、`portable-ansible/`。
 - 当同仓内不存在更近层级的 `AGENTS.md` 时，默认以本文件为基线。
 
 ## 仓库结构
@@ -69,6 +65,8 @@
 ## 入口约定
 - 只有 `playbooks/` 下顶层入口 playbook 允许直接执行。
 - `playbooks/tasks/`、`playbooks/pre_tasks/`、`roles/*/tasks/` 下文件默认视为内部复用片段，不单独作为入口。
+- 下列"公开入口"清单只收录拓扑、备份恢复、监控部署、卸载等核心运维入口；辅助工具安装入口（如 `install_mysqlshell.yml`、`install_xtrabackup.yml`、`install_sysbench.yml`）不纳入清单，但仍允许直接执行。
+- 新增核心入口时需同步更新本清单；新增辅助工具入口不必登记。
 
 ### MySQL 公开入口
 - `single_node.yml`
@@ -85,6 +83,7 @@
 - `router_exporter_install.yml`
 - `exporter_install.yml`（兼容旧入口，等价于 `mysqld_exporter_install.yml`）
 - `unsafe_uninstall.yml`
+- `router_unsafe_uninstall.yml`
 
 ### ClickHouse 公开入口
 - `deploy_cluster.yml`
@@ -101,10 +100,19 @@
 - `monitoring_prometheus_deployment.yml`
 
 ## 开发规则
-- 优先采用可幂等、可回放的 Ansible 方案；非必要不写一次性 shell 逻辑。
+- 代码产物语言：
+  - 所有代码、代码内注释、日志输出、commit message、Ansible task `name`、`fail` / `debug` 的 `msg`、模板 `.j2` 注释、shell / Go / Python 源码注释，**必须使用英文**。
+  - 不受此限制：本文件（`AGENTS.md`）、文档站 `content/zh-cn/` 目录、issue / PR 讨论、与用户的对话。
+  - 目的：便于国际贡献者 review、grep 定位、跨时区排错。
+- 优先采用可幂等、可回放的 Ansible 方案。只有当现有 `ansible.builtin.*` 或社区 collection 模块确实无法完成时才写 `shell:` / `command:`；一旦写了，必须同时提供 `changed_when` 和合理的 `failed_when`。
 - 统一使用 Ansible FQCN 模块（`ansible.builtin.*`）。
 - 变量名使用 `lower_snake_case`。
-- 拓扑、账号、端口、路径优先放在 inventory 或 `vars/*.yml`，避免写死在 task/template 中。
+- Role 命名约定（存量不追溯，新增遵守）：
+  - `install_<software>`：仅安装单个软件包 / 二进制（例：`install_xtrabackup`）
+  - `setup_<component>`：安装并配置单个组件（例：`setup_mysqlshell`）
+  - `make_<topology>`：编排多节点、多组件拓扑（例：`make_mgr`、`make_innodb_cluster`）
+  - 其他裸名词 role（`mysql_server`、`backup_script` 等）属历史命名，保留但不扩展
+- 拓扑、账号、端口、路径优先放在 inventory 或 `vars/*.yml`，避免写死在 task / template 中。
 - 涉及高风险动作时，优先保留：
   - inventory 守卫
   - inventory purpose 守卫
@@ -117,15 +125,18 @@
 ## 变更要求
 - 不要静默修改生产敏感默认值：
   - 端口
-  - 默认密码
-  - 分片/副本逻辑
-  - 备份/恢复对象范围
+  - 默认密码、默认用户名 / 组
+  - 数据目录、socket 路径、systemd unit 名
+  - 分片 / 副本逻辑
+  - 备份 / 恢复对象范围
 - 行为变化必须同步更新：
   - 对应 `vars/*.yml`
   - 示例 inventory
   - 相关文档
-- 若公开文档位于站点仓：
-  - 同步检查 `/vitepress/content`
+- 公开文档位于独立的 Hugo 站点仓（本机常见路径 `/usr/local/dbbot_web`）：
+  - 中文文档：`content/zh-cn/docs/`
+  - 英文文档：`content/en/docs/`
+  - 中英双语必须同步更新；英文是国际贡献者的唯一入口，不能缺失
 
 ## Release Policy
 
@@ -184,8 +195,10 @@
 - `cd /usr/local/dbbot/monitoring_prometheus_ansible/playbooks`
 - `python3 /usr/local/dbbot/portable-ansible/ansible-playbook -i ../inventory/hosts.ini monitoring_prometheus_deployment.yml --syntax-check`
 
+- 若改动了 Ansible 代码，建议本地再跑一次 lint：
+  - `sh /usr/local/dbbot/mysql_ansible/lint_all_yml_files.sh`（或对应子项目同名脚本）
 - 若改动了 Hugo 文档站内容，还应执行：
-  - `cd /vitepress && npm run build`
+  - `cd /usr/local/dbbot_web && npm run build`
 
 ## 场景性约束
 

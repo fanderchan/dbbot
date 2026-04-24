@@ -6,14 +6,21 @@
   failed_when: dbbot_post_check__router_keepalived_status.stdout != "active"
   when: router_enable_ha | bool
 
-- name: Check Router VIP placement
+- name: Check Router VIP is reachable from each router
+  ansible.builtin.command: "ping -c 1 -W {{ router_health_tcp_timeout | default(2) | int }} {{ router_vip }}"
+  register: dbbot_post_check__router_vip_ping
+  changed_when: false
+  failed_when: dbbot_post_check__router_vip_ping.rc != 0
+  retries: "{{ dbbot_post_check_retries | int }}"
+  delay: "{{ dbbot_post_check_delay | int }}"
+  until: dbbot_post_check__router_vip_ping.rc == 0
+  when: router_enable_ha | bool
+
+- name: Check Router VIP local placement
   ansible.builtin.command: "ip addr show {{ router_net_work_interface }}"
   register: dbbot_post_check__router_vip_status
   changed_when: false
-  retries: "{{ dbbot_post_check_retries | int }}"
-  delay: "{{ dbbot_post_check_delay | int }}"
-  until: router_vip in dbbot_post_check__router_vip_status.stdout
-  ignore_errors: true
+  failed_when: dbbot_post_check__router_vip_status.rc != 0
   when: router_enable_ha | bool
 
 - name: Assert Router VIP exists on exactly one router

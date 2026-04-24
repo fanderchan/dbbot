@@ -1,0 +1,38 @@
+---
+- name: Unsafe uninstall MySQL Router
+  hosts: dbbot_router
+  become: true
+  any_errors_fatal: true
+  max_fail_percentage: 1
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_innodb_cluster_router.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_innodb_cluster_router.yml
+  vars:
+    dbbot_entry_playbook_name: "router_unsafe_uninstall.yml"
+    roles_to_execute:
+      - "../roles/uninstall_mysql_router"
+    router_uninstall_remove_keepalived: "{{ router_enable_ha | default(false) }}"
+    router_uninstall_remove_keepalived_package: false
+    router_uninstall_remove_user: false
+  pre_tasks:
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Import Router uninstall confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation_router_uninstall.yml
+
+  tasks:
+    - name: Include role
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+      loop: "{{ roles_to_execute }}"
+      loop_control:
+        loop_var: role_name
+
+  post_tasks:
+    - name: Run dbbot post-uninstall checks
+      ansible.builtin.import_tasks: post_tasks/run_post_checks.yml

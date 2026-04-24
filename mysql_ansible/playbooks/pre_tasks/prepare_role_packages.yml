@@ -38,7 +38,7 @@
         local_tar_archive_path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
         local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
         local_tar_archive_url: "{{ prepare_mysql_package_url }}"
-        local_tar_archive_timeout: 30
+        local_tar_archive_timeout: "{{ mysql_package_download_timeout | default(300) }}"
         local_tar_archive_headers:
           User-Agent: "Wget/1.21.1"
 
@@ -60,7 +60,7 @@
         local_tar_archive_path: "{{ prepare_mysqlshell_dir }}/{{ prepare_mysqlshell_package }}"
         local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
         local_tar_archive_url: "https://cdn.mysql.com/Downloads/MySQL-Shell/{{ prepare_mysqlshell_package }}"
-        local_tar_archive_timeout: 300
+        local_tar_archive_timeout: "{{ mysqlshell_package_download_timeout | default(300) }}"
 
 - name: Prepare MySQL Router package on control host
   when: "'../roles/mysql_router' in roles_to_execute"
@@ -68,7 +68,21 @@
   delegate_to: localhost
   run_once: true
   vars:
-    prepare_router_package: "{{ router_package | default('mysql-router-' + (router_version | default(mysql_version)) + '-linux-glibc2.17-x86_64.tar.xz') }}"
+    prepare_router_version: "{{ router_version | default(mysql_version) }}"
+    prepare_router_linux_glibc_tag_setting: "{{ router_linux_glibc_tag | default('auto') }}"
+    prepare_router_linux_glibc_tag: >-
+      {%- if prepare_router_linux_glibc_tag_setting != 'auto' -%}
+      {{ prepare_router_linux_glibc_tag_setting }}
+      {%- elif prepare_router_version.startswith('9.7') -%}
+      glibc2.28
+      {%- elif prepare_router_version.startswith('8.4') -%}
+      glibc2.17
+      {%- elif (os_type | default('')) in ['CentOS7', 'CentOS8', 'BigCloud7', 'RedHat7', 'RedHat8'] -%}
+      glibc2.17
+      {%- else -%}
+      glibc2.28
+      {%- endif -%}
+    prepare_router_package: "{{ router_package | default('mysql-router-' + prepare_router_version + '-linux-' + prepare_router_linux_glibc_tag + '-x86_64.tar.xz') }}"
     prepare_router_dir: "{{ router_packages_dir | default(mysql_packages_dir) }}"
   block:
     - name: Ensure MySQL Router package archive is ready (local)
@@ -78,4 +92,4 @@
         local_tar_archive_path: "{{ prepare_router_dir }}/{{ prepare_router_package }}"
         local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
         local_tar_archive_url: "https://cdn.mysql.com/Downloads/MySQL-Router/{{ prepare_router_package }}"
-        local_tar_archive_timeout: 300
+        local_tar_archive_timeout: "{{ router_package_download_timeout | default(300) }}"

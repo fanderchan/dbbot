@@ -2,7 +2,7 @@
 # ============================================================
 # Common settings (usually only need to modify these)
 # ============================================================
-router_enable_ha: true
+router_enable_ha: false
 router_bootstrap_server: 192.0.2.131
 
 # ============================================================

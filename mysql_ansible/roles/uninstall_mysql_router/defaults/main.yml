@@ -1,0 +1,15 @@
+---
+router_service_name: mysqlrouter
+router_user: mysqlrouter
+router_group: mysqlrouter
+router_base_dir: /usr/local/mysqlrouter
+router_config_dir: /etc/mysqlrouter
+router_data_dir: /var/lib/mysqlrouter
+router_log_dir: /var/log/mysqlrouter
+router_run_dir: /var/run/mysqlrouter
+router_health_check_script: /usr/local/bin/check_mysqlrouter.sh
+router_health_log_file: /var/log/keepalived/check_mysqlrouter.log
+router_keepalived_notify_script: /usr/local/bin/router_keepalived_notify.sh
+router_uninstall_remove_keepalived: false
+router_uninstall_remove_keepalived_package: false
+router_uninstall_remove_user: false

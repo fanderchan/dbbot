@@ -39,7 +39,7 @@
       No SELinux Python binding package was found for interpreter
       {{ ansible_python_interpreter | default('unknown') }} on {{ os_type }}.
       Tried: {{ pre_check_and_set__selinux_python_binding_candidates | join(', ') }}
-  when: pre_check_and_set__selinux_python_binding_package == ''
+  when: pre_check_and_set__selinux_python_binding_package | length == 0
 
 - name: Check yum and install SELinux Python binding
   ansible.builtin.yum:

@@ -98,7 +98,7 @@
           - "  mysqlsh {{ mysql_cluster_admin_user }}@{{ innodb_cluster_primary }}:{{ mysql_port }}"
           - ""
           - "Check Status:"
-          - "  mysqlsh --js -e \"dba.getCluster().status()\""
+          - "  mysqlsh --js --uri {{ mysql_cluster_admin_user }}@{{ innodb_cluster_primary }}:{{ mysql_port }} -e \"dba.getCluster().status()\""
           - ""
           - "Next Step:"
           - "  Deploy MySQL Router for application connection"

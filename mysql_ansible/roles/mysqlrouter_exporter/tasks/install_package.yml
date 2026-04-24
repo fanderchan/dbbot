@@ -2,6 +2,7 @@
   ansible.builtin.copy:
     src: "{{ mysql_packages_dir }}/{{ mysqlrouter_exporter_package }}"
     dest: "/tmp/{{ mysqlrouter_exporter_package }}"
+    mode: '0644'
 
 - name: Remove temporary extraction directory if it exists
   ansible.builtin.file:

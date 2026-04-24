@@ -1,0 +1,92 @@
+---
+- name: Check if user confirmed
+  ansible.builtin.fail:
+    msg: "Unsafe Router uninstall not confirmed, exiting."
+  when: confirmation.user_input != 'confirm'
+
+- name: Ensure Router directories to be deleted are safe
+  ansible.builtin.assert:
+    that:
+      - item != ''
+      - item not in ['/', '/boot', '/dev', '/etc', '/lib', '/proc', '/root', '/sys', '/usr', '/var', '/home', '/tmp']
+    fail_msg: "Unsafe directory detected: {{ item }}. Aborting."
+    success_msg: "Directory {{ item }} is safe to delete."
+  loop:
+    - "{{ router_base_dir }}"
+    - "{{ router_config_dir }}"
+    - "{{ router_data_dir }}"
+    - "{{ router_log_dir }}"
+    - "{{ router_run_dir }}"
+  loop_control:
+    loop_var: item
+
+- name: Stop and disable MySQL Router service
+  ansible.builtin.systemd:
+    name: "{{ router_service_name }}"
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Stop and disable keepalived for Router HA
+  ansible.builtin.systemd:
+    name: keepalived
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: router_uninstall_remove_keepalived | bool
+
+- name: Remove Router systemd unit files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/etc/systemd/system/{{ router_service_name }}.service"
+    - "/usr/lib/systemd/system/{{ router_service_name }}.service"
+
+- name: Remove Router files and directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ router_base_dir }}"
+    - "{{ router_config_dir }}"
+    - "{{ router_data_dir }}"
+    - "{{ router_log_dir }}"
+    - "{{ router_run_dir }}"
+    - /usr/local/bin/mysqlrouter
+
+- name: Remove Router keepalived files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/keepalived/keepalived.conf
+    - "{{ router_health_check_script }}"
+    - "{{ router_keepalived_notify_script }}"
+    - "{{ router_health_log_file }}"
+  when: router_uninstall_remove_keepalived | bool
+
+- name: Remove keepalived package
+  ansible.builtin.yum:
+    name: keepalived
+    state: absent
+  when:
+    - router_uninstall_remove_keepalived | bool
+    - router_uninstall_remove_keepalived_package | bool
+
+- name: Remove Router Linux user
+  ansible.builtin.user:
+    name: "{{ router_user }}"
+    state: absent
+    remove: true
+  when: router_uninstall_remove_user | bool
+
+- name: Remove Router Linux group
+  ansible.builtin.group:
+    name: "{{ router_group }}"
+    state: absent
+  when: router_uninstall_remove_user | bool
+
+- name: Reload systemd configuration
+  ansible.builtin.systemd:
+    daemon_reload: true

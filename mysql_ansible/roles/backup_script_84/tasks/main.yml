@@ -1,8 +1,18 @@
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
 - name: Check MySQL service is running
-  ansible.builtin.shell: "systemctl is-active {{ mysql_service_name }}"
-  register: backup_script_84__service_status
-  changed_when: false
-  failed_when: backup_script_84__service_status.stdout.strip() != 'active'
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          (
+            ansible_facts.services.get(mysql_service_name ~ '.service',
+            ansible_facts.services.get(mysql_service_name, {})).state | default('')
+          ) == 'running'
+        }}
+    fail_msg: "MySQL service {{ mysql_service_name }} is not running."
+    success_msg: "MySQL service {{ mysql_service_name }} is running."
 
 - name: Check backup base directory existence
   ansible.builtin.stat:
@@ -46,7 +56,7 @@
     "install plugin clone soname 'mysql_clone.so';"
   register: backup_script_84__clone_install
   ignore_errors: true
-  when: backup_script_84__clone_status.stdout | trim == ""
+  when: backup_script_84__clone_status.stdout | trim | length == 0
 
 - name: Re-check clone plugin status
   ansible.builtin.shell: >
@@ -58,7 +68,7 @@
 - name: Fail when clone plugin is not available
   ansible.builtin.fail:
     msg: "Clone plugin is not available or failed to install. This backup playbook only supports MySQL 8.4 with clone plugin."
-  when: backup_script_84__clone_status_after.stdout | trim == ""
+  when: backup_script_84__clone_status_after.stdout | trim | length == 0
 
 - name: Check MySQL writable state for backup user creation
   ansible.builtin.shell: >
@@ -124,7 +134,10 @@
   ansible.builtin.lineinfile:
     path: /etc/cron.allow
     line: "{{ mysql_user }}"
-    create: yes
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
     state: present
   become: true
 

@@ -24,12 +24,15 @@
     - not make_mha_go__ssh_flag.stat.exists
 
 - name: Verify GTID mode is ON on all nodes
-  ansible.builtin.shell: >-
+  ansible.builtin.shell: |
+    set -o pipefail
     {{ mysql_software_dir }}/bin/mysql
     -S {{ socket }}
     -u{{ mysql_admin_user }} -p{{ mysql_admin_127_password }}
     -e "SELECT @@gtid_mode"
     2>/dev/null | grep -i "^ON$"
+  args:
+    executable: /bin/bash
   register: make_mha_go__gtid_check
   changed_when: false
   failed_when: make_mha_go__gtid_check.rc != 0
