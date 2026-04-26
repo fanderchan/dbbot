@@ -45,6 +45,17 @@
       redolog_dir for the target instance. With the default layout, that
       removes both the instance data and log directories. It does not remove
       the MySQL software base directory or binaries, the Linux user, or my.cnf.
+      {% if '../roles/uninstall_mha' in roles_to_execute | default([]) %}
+      It also stops classic MHA, removes the configured VIP when present, and
+      removes classic MHA runtime files such as /etc/masterha and
+      /var/log/masterha.
+      {% endif %}
+      {% if '../roles/uninstall_mha_go' in roles_to_execute | default([]) %}
+      It also stops and disables mha-go, removes the configured VIP when
+      present, and removes mha-go manager files such as /etc/mha,
+      /var/log/mha, /etc/systemd/system/mha-manager.service, and
+      /usr/local/bin/mha.
+      {% endif %}
       Validate the exact impact against your configuration in a test
       environment before considering any production use.
 

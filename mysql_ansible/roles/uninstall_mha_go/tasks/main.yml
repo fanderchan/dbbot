@@ -1,0 +1,76 @@
+---
+- name: Check mha-go service unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/mha-manager.service
+  register: uninstall_mha_go__service_unit
+
+- name: Stop and disable mha-go manager service
+  ansible.builtin.systemd:
+    name: mha-manager
+    state: stopped
+    enabled: false
+  when: uninstall_mha_go__service_unit.stat.exists
+  failed_when: false
+
+- name: Remove mha-go service unit
+  ansible.builtin.file:
+    path: /etc/systemd/system/mha-manager.service
+    state: absent
+  register: uninstall_mha_go__removed_service_unit
+
+- name: Reload systemd after mha-go service removal
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: uninstall_mha_go__service_unit.stat.exists
+
+- name: Check mha-go VIP on configured interface
+  ansible.builtin.command: "ip addr show {{ net_work_interface }}"
+  register: uninstall_mha_go__vip_status
+  changed_when: false
+  failed_when: false
+  when:
+    - vip is defined
+    - net_work_interface is defined
+
+- name: Remove mha-go VIP when present
+  ansible.builtin.command: "ip addr del {{ vip }}/{{ vip_netmask | default('32') }} dev {{ net_work_interface }}"
+  when:
+    - vip is defined
+    - net_work_interface is defined
+    - uninstall_mha_go__vip_status.stdout is defined
+    - uninstall_mha_go__vip_status.stdout is search(vip)
+  changed_when: true
+  failed_when: false
+
+- name: Remove mha-go manager files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ mha_go_binary_dest }}"
+    - "{{ mha_go_config_dir }}"
+    - "{{ mha_go_log_dir }}"
+    - /usr/local/bin/mha_ip_failover.sh
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Remove mha-go finish flag
+  ansible.builtin.file:
+    path: "{{ datadir }}/mha_go_finish.flag"
+    state: absent
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Remove mha-go sudoers comment
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    regexp: "^# added by dbbot make_mha_go$"
+    state: absent
+    validate: /usr/sbin/visudo -cf %s
+  when: mha_go_writer_endpoint_enabled | default(false) | bool
+
+- name: Remove mha-go sudoers rule
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    regexp: "^{{ mysql_user }}\\s+ALL=\\(ALL\\)\\s+NOPASSWD: /usr/sbin/ip,/sbin/arping$"
+    state: absent
+    validate: /usr/sbin/visudo -cf %s
+  when: mha_go_writer_endpoint_enabled | default(false) | bool

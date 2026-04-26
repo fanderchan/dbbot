@@ -12,17 +12,29 @@
     fail_msg: "MySQL service {{ mysql_service_name }} is still active after uninstall."
     success_msg: "MySQL service {{ mysql_service_name }} is not active after uninstall."
 
-- name: Check MySQL systemd unit file is absent
+- name: Check MySQL systemd unit files are absent
   ansible.builtin.stat:
-    path: "/usr/lib/systemd/system/{{ mysql_service_name }}.service"
+    path: "{{ dbbot_post_check__mysql_uninstall_unit_path }}"
+  loop:
+    - "/usr/lib/systemd/system/{{ mysql_service_name }}.service"
+    - "/etc/systemd/system/{{ mysql_service_name }}.service"
+  loop_control:
+    loop_var: dbbot_post_check__mysql_uninstall_unit_path
+    label: "{{ dbbot_post_check__mysql_uninstall_unit_path }}"
   register: dbbot_post_check__mysql_uninstall_unit
 
-- name: Assert MySQL systemd unit file is absent
+- name: Assert MySQL systemd unit files are absent
   ansible.builtin.assert:
     that:
-      - not dbbot_post_check__mysql_uninstall_unit.stat.exists
-    fail_msg: "MySQL systemd unit file still exists after uninstall."
-    success_msg: "MySQL systemd unit file is absent after uninstall."
+      - >-
+        {{
+          dbbot_post_check__mysql_uninstall_unit.results
+          | selectattr('stat.exists')
+          | list
+          | length == 0
+        }}
+    fail_msg: "One or more MySQL systemd unit files still exist after uninstall."
+    success_msg: "MySQL systemd unit files are absent after uninstall."
 
 - name: Check MySQL data, log, and runtime directories are absent
   ansible.builtin.stat:

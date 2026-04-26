@@ -14,6 +14,11 @@ OS_NAME="$(uname -s)"
 # ansible-base 2.10.x supports Python 3.6-3.9 on the controller.
 # distutils was removed in Python 3.12, so 3.10/3.11 are the practical ceiling.
 ANSIBLE_MAX_PYTHON_MINOR=11
+PYTHON3_CMD=""
+
+echoError() { echo -e "\033[31m$*\033[0m"; }
+echoWarning() { echo -e "\033[33m$*\033[0m"; }
+echoSuccess() { echo -e "\033[32m$*\033[0m"; }
 
 # Find the first python3 interpreter whose minor version is <= ANSIBLE_MAX_PYTHON_MINOR.
 # On macOS this guards against Homebrew Python 3.12+ shadowing the system Python.
@@ -47,15 +52,28 @@ find_compatible_python3() {
     return 1
 }
 
-if ! PYTHON3_CMD="$(find_compatible_python3)"; then
-    echoError "No compatible Python 3 interpreter found (need Python 3.x where x <= ${ANSIBLE_MAX_PYTHON_MINOR})."
-    echoError "ansible-base 2.10.x does not support Python 3.12+."
-    exit 1
-fi
+confirm_python3_install() {
+    local answer=""
 
-echoError() { echo -e "\033[31m$*\033[0m"; }
-echoWarning() { echo -e "\033[33m$*\033[0m"; }
-echoSuccess() { echo -e "\033[32m$*\033[0m"; }
+    echoWarning "No compatible Python 3 interpreter was found on this Linux control host."
+    echoWarning "dbbot can install python3 with the system package manager before configuring portable Ansible."
+
+    if [[ ! -t 0 ]]; then
+        echoWarning "No interactive terminal detected; continuing with python3 installation."
+        return 0
+    fi
+
+    read -r -p "Install python3 now? [Y/n] " answer
+    case "${answer}" in
+        ""|y|Y|yes|YES)
+            return 0
+            ;;
+        *)
+            echoError "python3 installation was not confirmed; aborting."
+            return 1
+            ;;
+    esac
+}
 
 upsert_rc_line() {
     local rc_file="$1"
@@ -190,7 +208,17 @@ setup_linux_control_host() {
         exit 1
     fi
 
-    "${package_manager}" install -y python3
+    if ! PYTHON3_CMD="$(find_compatible_python3)"; then
+        if ! confirm_python3_install; then
+            exit 1
+        fi
+        "${package_manager}" install -y python3
+        if ! PYTHON3_CMD="$(find_compatible_python3)"; then
+            echoError "No compatible Python 3 interpreter found after installing python3."
+            echoError "ansible-base 2.10.x requires Python 3.x where x <= ${ANSIBLE_MAX_PYTHON_MINOR}."
+            exit 1
+        fi
+    fi
 
     if ! python3_has_selinux_binding; then
         if ! install_first_available_package python3-libselinux libselinux-python3; then
@@ -217,6 +245,12 @@ setup_linux_control_host() {
 }
 
 setup_macos_control_host() {
+    if ! PYTHON3_CMD="$(find_compatible_python3)"; then
+        echoError "No compatible Python 3 interpreter found (need Python 3.x where x <= ${ANSIBLE_MAX_PYTHON_MINOR})."
+        echoError "ansible-base 2.10.x does not support Python 3.12+."
+        exit 1
+    fi
+
     if ! command -v tar >/dev/null 2>&1; then
         echoError "tar was not found; install the macOS Command Line Tools, then rerun dbbotctl env setup."
         exit 1

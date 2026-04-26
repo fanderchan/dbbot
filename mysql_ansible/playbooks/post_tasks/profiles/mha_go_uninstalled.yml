@@ -1,0 +1,81 @@
+---
+- name: Check mha-go manager service is inactive
+  ansible.builtin.command: systemctl is-active mha-manager
+  register: dbbot_post_check__mha_go_uninstall_service_active
+  changed_when: false
+  failed_when: false
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Check mha-go manager service is disabled
+  ansible.builtin.command: systemctl is-enabled mha-manager
+  register: dbbot_post_check__mha_go_uninstall_service_enabled
+  changed_when: false
+  failed_when: false
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Assert mha-go manager service is stopped and disabled
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__mha_go_uninstall_service_active.stdout != "active"
+      - dbbot_post_check__mha_go_uninstall_service_enabled.stdout != "enabled"
+    fail_msg: "mha-go manager service is still active or enabled after uninstall."
+    success_msg: "mha-go manager service is stopped and disabled after uninstall."
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Check mha-go VIP after uninstall
+  ansible.builtin.command: "ip addr show {{ net_work_interface }}"
+  register: dbbot_post_check__mha_go_uninstall_vip
+  changed_when: false
+  failed_when: false
+  when:
+    - vip is defined
+    - net_work_interface is defined
+
+- name: Assert mha-go VIP is absent after uninstall
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          ansible_play_hosts
+          | map('extract', hostvars, 'dbbot_post_check__mha_go_uninstall_vip')
+          | select('defined')
+          | map(attribute='stdout')
+          | select('search', vip)
+          | list
+          | length == 0
+        }}
+    fail_msg: "mha-go VIP {{ vip }} still exists after uninstall."
+    success_msg: "mha-go VIP {{ vip }} is absent after uninstall."
+  run_once: true
+  when:
+    - vip is defined
+    - net_work_interface is defined
+
+- name: Check mha-go manager files are absent
+  ansible.builtin.stat:
+    path: "{{ dbbot_post_check__mha_go_uninstall_path }}"
+  loop:
+    - /etc/systemd/system/mha-manager.service
+    - "{{ mha_go_binary_dest }}"
+    - "{{ mha_go_config_dir }}"
+    - "{{ mha_go_log_dir }}"
+    - /usr/local/bin/mha_ip_failover.sh
+  loop_control:
+    loop_var: dbbot_post_check__mha_go_uninstall_path
+    label: "{{ dbbot_post_check__mha_go_uninstall_path }}"
+  register: dbbot_post_check__mha_go_uninstall_files
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Assert mha-go manager files are absent
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          dbbot_post_check__mha_go_uninstall_files.results
+          | selectattr('stat.exists')
+          | list
+          | length == 0
+        }}
+    fail_msg: "One or more mha-go manager files still exist after uninstall."
+    success_msg: "mha-go manager files are absent after uninstall."
+  when: manager_ip in ansible_all_ipv4_addresses

@@ -75,6 +75,8 @@
 - `innodb_cluster.yml`
 - `innodb_cluster_router.yml`
 - `mha.yml`
+- `mha_unsafe_uninstall.yml`
+- `mha_go_unsafe_uninstall.yml`
 - `backup_script.yml`
 - `backup_script_8.4.yml`
 - `restore_pitr_8.4.yml`
@@ -137,6 +139,7 @@
   - 中文文档：`content/zh-cn/docs/`
   - 英文文档：`content/en/docs/`
   - 中英双语必须同步更新；英文是国际贡献者的唯一入口，不能缺失
+- MySQL 文档示例版本优先使用对应系列的最新可用小版本；文档示例版本不得反向改变 dbbot 的默认运行变量。例如 `mysql_version` 默认值保持由源码定义，当前为 `9.7.0`。
 
 ## Release Policy
 

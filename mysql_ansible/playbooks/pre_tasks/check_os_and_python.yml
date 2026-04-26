@@ -12,6 +12,18 @@
       - os_type in ['Rocky9', 'BigCloud21', 'BigCloud7', 'BigCloud8', 'Anolis OS8', 'openEuler24', 'openEuler20', 'CentOS7', 'CentOS8', 'openEuler22', 'RedHat7', 'RedHat8', 'Kylin Linux Advanced ServerV10']
     fail_msg: "Unsupported OS type: {{ os_type }}"
 
+- name: Reject MySQL 9.7 on RHEL 7 family operating systems
+  ansible.builtin.fail:
+    msg: >-
+      MySQL {{ mysql_version }} packages use glibc2.28 and are not supported
+      on {{ os_type }}. Use MySQL 8.4.x on RHEL 7 family hosts, or upgrade
+      the operating system before deploying MySQL 9.7.
+  when:
+    - db_type | default('mysql') == 'mysql'
+    - mysql_version is defined
+    - mysql_version.startswith('9.7')
+    - os_type in ['CentOS7', 'RedHat7', 'BigCloud7']
+
 - name: Check for Python 3
   ansible.builtin.command: /usr/bin/python3 --version
   register: pre_task__python3_result

@@ -42,6 +42,12 @@
         - router_exporter_service
       unsafe_uninstall.yml:
         - mysql_instance_uninstalled
+      mha_unsafe_uninstall.yml:
+        - mha_classic_uninstalled
+        - mysql_instance_uninstalled
+      mha_go_unsafe_uninstall.yml:
+        - mha_go_uninstalled
+        - mysql_instance_uninstalled
       router_unsafe_uninstall.yml:
         - router_uninstalled
   when: dbbot_post_check_enabled | default(true) | bool

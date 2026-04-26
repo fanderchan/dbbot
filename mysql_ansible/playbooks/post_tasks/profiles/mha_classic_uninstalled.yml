@@ -1,0 +1,69 @@
+---
+- name: Check classic MHA manager process is absent
+  ansible.builtin.command: pgrep -f 'masterha_manager.*--conf=/etc/masterha/app.cnf'
+  register: dbbot_post_check__mha_classic_uninstall_process
+  changed_when: false
+  failed_when: false
+
+- name: Assert classic MHA manager process is absent
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__mha_classic_uninstall_process.rc != 0
+    fail_msg: "Classic MHA manager process is still running after uninstall."
+    success_msg: "Classic MHA manager process is absent after uninstall."
+
+- name: Check classic MHA VIP after uninstall
+  ansible.builtin.command: "ip addr show {{ net_work_interface }}"
+  register: dbbot_post_check__mha_classic_uninstall_vip
+  changed_when: false
+  failed_when: false
+  when:
+    - vip is defined
+    - net_work_interface is defined
+
+- name: Assert classic MHA VIP is absent after uninstall
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          ansible_play_hosts
+          | map('extract', hostvars, 'dbbot_post_check__mha_classic_uninstall_vip')
+          | select('defined')
+          | map(attribute='stdout')
+          | select('search', vip)
+          | list
+          | length == 0
+        }}
+    fail_msg: "Classic MHA VIP {{ vip }} still exists after uninstall."
+    success_msg: "Classic MHA VIP {{ vip }} is absent after uninstall."
+  run_once: true
+  when:
+    - vip is defined
+    - net_work_interface is defined
+
+- name: Check classic MHA runtime files are absent
+  ansible.builtin.stat:
+    path: "{{ dbbot_post_check__mha_classic_uninstall_path }}"
+  loop:
+    - /etc/masterha
+    - /var/log/masterha
+    - /usr/local/start_mha.sh
+    - /usr/local/bin/master_ip_failover
+    - /usr/local/bin/master_ip_online_change
+  loop_control:
+    loop_var: dbbot_post_check__mha_classic_uninstall_path
+    label: "{{ dbbot_post_check__mha_classic_uninstall_path }}"
+  register: dbbot_post_check__mha_classic_uninstall_files
+
+- name: Assert classic MHA runtime files are absent
+  ansible.builtin.assert:
+    that:
+      - >-
+        {{
+          dbbot_post_check__mha_classic_uninstall_files.results
+          | selectattr('stat.exists')
+          | list
+          | length == 0
+        }}
+    fail_msg: "One or more classic MHA runtime files still exist after uninstall."
+    success_msg: "Classic MHA runtime files are absent after uninstall."

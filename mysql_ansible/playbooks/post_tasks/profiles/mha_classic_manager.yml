@@ -21,10 +21,7 @@
   ansible.builtin.command: "ip addr show {{ net_work_interface }}"
   register: dbbot_post_check__mha_classic_vip_status
   changed_when: false
-  retries: "{{ dbbot_post_check_retries | int }}"
-  delay: "{{ dbbot_post_check_delay | int }}"
-  until: vip in dbbot_post_check__mha_classic_vip_status.stdout
-  ignore_errors: true
+  failed_when: false
 
 - name: Assert classic MHA VIP exists only on master
   ansible.builtin.assert:

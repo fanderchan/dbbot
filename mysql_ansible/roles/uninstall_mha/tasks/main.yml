@@ -1,0 +1,69 @@
+---
+- name: Check classic MHA manager process
+  ansible.builtin.command: pgrep -f 'masterha_manager.*--conf=/etc/masterha/app.cnf'
+  register: uninstall_mha__manager_process
+  changed_when: false
+  failed_when: false
+
+- name: Stop classic MHA manager process
+  ansible.builtin.command: pkill -f 'masterha_manager.*--conf=/etc/masterha/app.cnf'
+  when: uninstall_mha__manager_process.rc == 0
+  changed_when: true
+  failed_when: false
+
+- name: Check classic MHA VIP on configured interface
+  ansible.builtin.command: "ip addr show {{ net_work_interface }}"
+  register: uninstall_mha__vip_status
+  changed_when: false
+  failed_when: false
+  when:
+    - vip is defined
+    - net_work_interface is defined
+
+- name: Remove classic MHA VIP when present
+  ansible.builtin.command: "ip addr del {{ vip }}/{{ vip_netmask | default('32') }} dev {{ net_work_interface }}"
+  when:
+    - vip is defined
+    - net_work_interface is defined
+    - uninstall_mha__vip_status.stdout is defined
+    - uninstall_mha__vip_status.stdout is search(vip)
+  changed_when: true
+  failed_when: false
+
+- name: Remove classic MHA runtime files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/masterha
+    - /var/log/masterha
+    - /usr/local/start_mha.sh
+    - /usr/local/bin/master_ip_failover
+    - /usr/local/bin/master_ip_online_change
+    - /tmp/bind_vip.sh
+    - /tmp/create_mha_user.sql
+    - /tmp/mha4mysql-manager-0.58-0.el7.centos.noarch.rpm
+    - /tmp/mha4mysql-node-0.58-0.el7.centos.noarch.rpm
+    - /tmp/dependencies
+
+- name: Remove classic MHA sudoers comment
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    regexp: "^#add by dbbot MHA install playbook$"
+    state: absent
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Remove classic MHA sudoers rule
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    regexp: "^{{ mysql_user }}\\s+ALL=\\(ALL\\)\\s+NOPASSWD: /usr/sbin/ip,/sbin/arping,/usr/bin/scp$"
+    state: absent
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Remove classic MHA RPM packages when requested
+  ansible.builtin.yum:
+    name:
+      - mha4mysql-manager
+      - mha4mysql-node
+    state: absent
+  when: mha_uninstall_remove_packages | default(false) | bool

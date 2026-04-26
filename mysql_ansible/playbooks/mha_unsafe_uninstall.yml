@@ -1,0 +1,33 @@
+- name: Unsafe uninstall classic MHA and MySQL instance
+  hosts: dbbot_mysql
+  become: true
+  vars_files:
+    - default/common_config.yml
+    - default/advanced_config.yml
+    - default/var_mha.yml
+    - common_config.yml
+    - advanced_config.yml
+    - vars/var_mha.yml
+  vars:
+    dbbot_entry_playbook_name: "mha_unsafe_uninstall.yml"
+    roles_to_execute:
+      - "../roles/uninstall_mha"
+      - "../roles/unsafe_uninstall"
+  pre_tasks:
+    - name: Import tasks to check os_type and python
+      ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+
+    - name: Import confirmation tasks
+      ansible.builtin.import_tasks: pre_tasks/confirmation_uninstall.yml
+
+  tasks:
+    - name: Include role
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+      loop: "{{ roles_to_execute }}"
+      loop_control:
+        loop_var: role_name
+
+  post_tasks:
+    - name: Run dbbot post-uninstall checks
+      ansible.builtin.import_tasks: post_tasks/run_post_checks.yml

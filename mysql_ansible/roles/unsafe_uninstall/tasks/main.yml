@@ -19,15 +19,22 @@
   loop_control:
     loop_var: item
 
+- name: Gather service facts before MySQL stop
+  ansible.builtin.service_facts:
+
 - name: Stop mysql-service
   ansible.builtin.systemd:
     name: "{{ mysql_service_name }}"
     state: stopped
+  when: (mysql_service_name ~ '.service') in ansible_facts.services
 
 - name: Delete MySQL startup script
   ansible.builtin.file:
-    path: "/usr/lib/systemd/system/{{ mysql_service_name }}.service"
+    path: "{{ item }}"
     state: absent
+  loop:
+    - "/usr/lib/systemd/system/{{ mysql_service_name }}.service"
+    - "/etc/systemd/system/{{ mysql_service_name }}.service"
 
 - name: Reload systemd configuration
   ansible.builtin.systemd:
