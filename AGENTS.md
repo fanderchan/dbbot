@@ -26,6 +26,7 @@
 - `mysql_ansible/playbooks/innodb_cluster.yml`
 - `mysql_ansible/playbooks/mha.yml`
 - `mysql_ansible/inventory/hosts.ini`
+- `mysql_ansible/inventory/test/hosts.ini`
 
 ### ClickHouse
 - `clickhouse_ansible/playbooks/ansible.cfg`
@@ -220,6 +221,7 @@
   - MGR
   - InnoDB Cluster
   - 备份与恢复
+- `mysql_ansible/inventory/test/hosts.ini` 是 dbbot 官方三节点 MySQL 测试机清单，包含 `192.168.161.11`、`192.168.161.12`、`192.168.161.13`。Agent 做官方端到端测试、发版回归或复现用户指定测试环境时，应优先读取并使用这个 inventory；只有在用户明确指定其他环境时才改用别的 inventory。
 - `libexec/dbbotctl/exporterregistrar` 是随源码仓一并发布的 Linux amd64 静态工具二进制，不要将其当作“孤立误产物”删除。
 - 若涉及 `mysql_ansible/exporterregistrar/` 源码变更，应同步更新：
   - `libexec/dbbotctl/exporterregistrar`
