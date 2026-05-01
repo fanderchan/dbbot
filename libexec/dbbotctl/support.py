@@ -45,7 +45,11 @@ PACKAGE_FIELDS = [
     "checksum",
     "download_url",
     "related_package_1",
+    "related_package_1_checksum_type",
+    "related_package_1_checksum",
     "related_package_2",
+    "related_package_2_checksum_type",
+    "related_package_2_checksum",
     "status",
     "notes",
 ]
@@ -128,7 +132,8 @@ PACKAGE_TABLE_HEADERS = [
     "Status",
 ]
 PACKAGE_COMPACT_BASE_HEADERS = ["Version", "OS", "Arch ID", "Primary Package", "Checksum"]
-STACK_TABLE_HEADERS = ["Stack ID", "Stack", "Arch ID", "Versions", "CPU Arch", "Notes"]
+STACK_COMPACT_HEADERS = ["Stack ID", "Stack", "Arch ID", "Versions"]
+STACK_FULL_HEADERS = ["Stack ID", "Stack", "Arch ID", "Versions", "CPU Arch", "Notes"]
 ARCH_TABLE_HEADERS = ["Stack ID", "Stack", "Arch ID", "Architecture", "Status", "Nodes", "Default OS", "Entrypoint"]
 SHOW_STACK_HEADERS = ["Stack ID", "Stack", "Module", "Status", "Default", "Version Rule", "Docs", "Notes"]
 SHOW_ARCH_HEADERS = ["Arch ID", "Architecture", "Status", "Nodes", "Versions", "Default OS", "Entrypoint"]
@@ -152,6 +157,7 @@ CHECK_TABLE_HEADERS = ["Check", "Stacks", "Architectures", "Packages"]
 
 SUPPORT_EXAMPLES = """Examples:
   dbbotctl support list
+  dbbotctl support list --full
   dbbotctl support list -G
   dbbotctl support list --stack mysql --arch innodb
   dbbotctl support show mysql
@@ -171,7 +177,11 @@ PUBLIC_PACKAGE_FIELDS = [
     "arch_id",
     "primary_package",
     "related_package_1",
+    "related_package_1_checksum_type",
+    "related_package_1_checksum",
     "related_package_2",
+    "related_package_2_checksum_type",
+    "related_package_2_checksum",
     "download_url",
     "checksum_type",
     "checksum",
@@ -412,6 +422,70 @@ def version_summary(versions: Sequence[str]) -> str:
     return ", ".join(versions)
 
 
+def split_version_rule(rule: str) -> List[str]:
+    return [part.strip() for part in rule.split(";") if part.strip()]
+
+
+def version_range_matches(selector: str, version_filter: str, *, exact: bool = False) -> bool:
+    if ".." not in selector:
+        return selector_matches_version(selector, version_filter, exact=exact)
+
+    lower, upper = [part.strip() for part in selector.split("..", 1)]
+    if compare_versions(version_filter, lower) >= 0 and compare_versions(version_filter, upper) <= 0:
+        return True
+    if not exact and contains_ci(selector, version_filter):
+        return True
+    return False
+
+
+def version_rule_matches_filter(selector: str, version_filter: Optional[str], *, exact: bool = False) -> bool:
+    if version_filter is None:
+        return True
+
+    version_filter = version_filter.strip()
+    if not version_filter:
+        return True
+
+    for part in re.split(r"\s+or\s+", selector):
+        part = part.strip()
+        if part and version_range_matches(part, version_filter, exact=exact):
+            return True
+    return False
+
+
+def versions_from_stack_rule(
+    stack: Dict[str, str],
+    arch_id: str,
+    version_filter: Optional[str] = None,
+    cpu_arch_filter: Optional[str] = None,
+    *,
+    version_exact: bool = False,
+    cpu_arch_exact: bool = False,
+) -> str:
+    if not filter_value_matches(DEFAULT_CPU_ARCH, cpu_arch_filter, exact=cpu_arch_exact):
+        return "-"
+
+    if stack["stack_id"] == "mysql":
+        allowed_prefixes = MYSQL_ARCH_VERSION_PREFIXES.get(arch_id)
+        rules = split_version_rule(stack["version_rule"])
+        if allowed_prefixes:
+            rules = [rule for rule in rules if selector_prefix(rule) in allowed_prefixes]
+        rules = [
+            rule
+            for rule in rules
+            if version_rule_matches_filter(rule, version_filter, exact=version_exact)
+        ]
+        return version_summary(rules)
+
+    if stack["stack_id"] == "greatsql":
+        rule = stack["version_rule"]
+        if version_rule_matches_filter(rule, version_filter, exact=version_exact):
+            return rule
+        return "-"
+
+    return "-"
+
+
 def versions_for_arch(
     stack_id: str,
     arch_id: str,
@@ -438,6 +512,44 @@ def versions_for_arch(
     return version_summary(versions)
 
 
+def display_versions_for_arch(
+    stack: Dict[str, str],
+    arch_id: str,
+    packages: Sequence[Dict[str, str]],
+    version_filter: Optional[str] = None,
+    cpu_arch_filter: Optional[str] = None,
+    *,
+    version_exact: bool = False,
+    cpu_arch_exact: bool = False,
+) -> str:
+    versions = versions_from_stack_rule(
+        stack,
+        arch_id,
+        version_filter,
+        cpu_arch_filter,
+        version_exact=version_exact,
+        cpu_arch_exact=cpu_arch_exact,
+    )
+    if versions != "-":
+        return versions
+    return versions_for_arch(
+        stack["stack_id"],
+        arch_id,
+        packages,
+        version_filter,
+        cpu_arch_filter,
+        version_exact=version_exact,
+        cpu_arch_exact=cpu_arch_exact,
+    )
+
+
+def related_package_fields() -> List[Tuple[str, str, str]]:
+    return [
+        ("related_package_1", "related_package_1_checksum_type", "related_package_1_checksum"),
+        ("related_package_2", "related_package_2_checksum_type", "related_package_2_checksum"),
+    ]
+
+
 def find_stack(stack_ref: str, stacks: Sequence[Dict[str, str]]) -> Dict[str, str]:
     needle = normalize_token(stack_ref)
     for stack in stacks:
@@ -448,15 +560,44 @@ def find_stack(stack_ref: str, stacks: Sequence[Dict[str, str]]) -> Dict[str, st
 
 def package_related_list(row: Dict[str, str], *, render_version: Optional[str] = None) -> List[str]:
     related = []
-    for field in ("related_package_1", "related_package_2"):
-        value = row[field]
+    for package_field, _checksum_type_field, _checksum_field in related_package_fields():
+        value = row[package_field]
         if value != "-":
             related.append(render_package_value(row, value, render_version))
     return related
 
 
-def package_related(row: Dict[str, str], *, render_version: Optional[str] = None) -> str:
-    related = package_related_list(row, render_version=render_version)
+def related_package_entries(row: Dict[str, str], *, render_version: Optional[str] = None) -> List[Dict[str, str]]:
+    related = []
+    for package_field, checksum_type_field, checksum_field in related_package_fields():
+        value = row[package_field]
+        if value == "-":
+            continue
+        related.append(
+            {
+                "package": render_package_value(row, value, render_version),
+                "checksum_type": row[checksum_type_field],
+                "checksum": row[checksum_field],
+            }
+        )
+    return related
+
+
+def package_related(
+    row: Dict[str, str],
+    *,
+    render_version: Optional[str] = None,
+    include_checksums: bool = False,
+) -> str:
+    if include_checksums:
+        related = []
+        for entry in related_package_entries(row, render_version=render_version):
+            package = entry["package"]
+            if entry["checksum_type"] != "none":
+                package = f"{package} ({entry['checksum_type']}:{entry['checksum']})"
+            related.append(package)
+    else:
+        related = package_related_list(row, render_version=render_version)
     return ", ".join(related) if related else "-"
 
 
@@ -485,7 +626,9 @@ def package_checksum(row: Dict[str, str], *, full: bool = True) -> str:
 def render_version_for_row(row: Dict[str, str], requested_version: Optional[str]) -> Optional[str]:
     if requested_version is None:
         return None
-    if "{version}" not in row["primary_package"] and all("{version}" not in row[field] for field in ("related_package_1", "related_package_2")):
+    if "{version}" not in row["primary_package"] and all(
+        "{version}" not in row[field] for field, _checksum_type_field, _checksum_field in related_package_fields()
+    ):
         return None
     component_count = concrete_version_component_count(requested_version)
     if row["stack_id"] == "clickhouse":
@@ -554,7 +697,11 @@ def package_base_dict(row: Dict[str, str], *, requested_version: Optional[str] =
         "arch_id": row["arch_id"],
         "primary_package": package_name(row, render_version=render_version),
         "related_package_1": render_package_value(row, row["related_package_1"], render_version),
+        "related_package_1_checksum_type": row["related_package_1_checksum_type"],
+        "related_package_1_checksum": row["related_package_1_checksum"],
         "related_package_2": render_package_value(row, row["related_package_2"], render_version),
+        "related_package_2_checksum_type": row["related_package_2_checksum_type"],
+        "related_package_2_checksum": row["related_package_2_checksum"],
         "related_packages": package_related_list(row, render_version=render_version),
         "download_url": package_download_url(row, render_version=render_version),
     }
@@ -603,13 +750,13 @@ def package_entries_for_verification(
         }
     ]
     if include_related:
-        for idx, package in enumerate(package_related_list(row, render_version=render_version), 1):
+        for idx, related in enumerate(related_package_entries(row, render_version=render_version), 1):
             entries.append(
                 {
                     "role": f"related_{idx}",
-                    "package": package,
-                    "checksum_type": "none",
-                    "checksum": "-",
+                    "package": related["package"],
+                    "checksum_type": related["checksum_type"],
+                    "checksum": related["checksum"],
                 }
             )
 
@@ -806,6 +953,7 @@ def command_list(
 
     stack_by_id = {row["stack_id"]: row for row in stacks}
     rows = []
+    full = bool(getattr(args, "full", False)) or is_vertical(args)
     for arch in architectures:
         stack = stack_by_id.get(arch["stack_id"])
         if stack is None:
@@ -824,8 +972,8 @@ def command_list(
         ):
             continue
 
-        versions = versions_for_arch(
-            stack["stack_id"],
+        versions = display_versions_for_arch(
+            stack,
             arch["arch_id"],
             packages,
             args.version,
@@ -835,21 +983,16 @@ def command_list(
         )
         if versions == "-":
             continue
-        rows.append(
-            [
-                stack["stack_id"],
-                stack["display_name"],
-                arch["arch_id"],
-                versions,
-                DEFAULT_CPU_ARCH,
-                arch["notes"],
-            ]
-        )
+        row = [stack["stack_id"], stack["display_name"], arch["arch_id"], versions]
+        if full:
+            row.extend([DEFAULT_CPU_ARCH, arch["notes"]])
+        rows.append(row)
 
     if not rows:
         print("no matching support records found")
         return 1
-    print_table_or_vertical(STACK_TABLE_HEADERS, rows, vertical=is_vertical(args))
+    headers = STACK_FULL_HEADERS if full else STACK_COMPACT_HEADERS
+    print_table_or_vertical(headers, rows, vertical=is_vertical(args))
     return 0
 
 
@@ -926,7 +1069,7 @@ def package_display_rows(
                 package_name(row, full=True, render_version=render_version),
                 package_checksum(row, full=full_checksum),
                 package_download_url(row, render_version=render_version),
-                package_related(row, render_version=render_version),
+                package_related(row, render_version=render_version, include_checksums=full_checksum),
                 status_label(row["status"]),
             ]
         else:
@@ -1050,7 +1193,7 @@ def command_show(
             [
                 arch_display_row(
                     row,
-                    versions=versions_for_arch(stack_id, row["arch_id"], packages),
+                    versions=display_versions_for_arch(stack, row["arch_id"], packages),
                 )
                 for row in arch_rows
             ],
@@ -1074,6 +1217,17 @@ def validate(
     stack_ids = set()
     arch_keys = set()
     package_keys = set()
+
+    def validate_checksum(location: str, checksum_type: str, checksum: str, label: str) -> None:
+        if checksum_type not in CHECKSUM_TYPES:
+            errors.append(f"{location}: unsupported {label}_checksum_type: {checksum_type}")
+            return
+        if checksum_type in CHECKSUM_LENGTHS:
+            checksum_len = CHECKSUM_LENGTHS[checksum_type]
+            if not re.fullmatch(rf"[0-9a-fA-F]{{{checksum_len}}}", checksum):
+                errors.append(f"{location}: invalid {checksum_type} checksum for {label}: {checksum}")
+        elif checksum_type == "none" and checksum != "-":
+            errors.append(f"{location}: {label} checksum must be - when checksum_type=none")
 
     for row in stacks:
         location = f"{row['_file']}:{row['_line']}"
@@ -1122,18 +1276,17 @@ def validate(
             errors.append(f"{location}: undefined architecture: {row['stack_id']}/{row['arch_id']}")
         if row["status"] not in RECORD_STATUS_LABELS:
             errors.append(f"{location}: unsupported package status: {row['status']}")
-        if row["checksum_type"] not in CHECKSUM_TYPES:
-            errors.append(f"{location}: unsupported checksum_type: {row['checksum_type']}")
         if row["primary_package"] in {"", "-"}:
             errors.append(f"{location}: primary_package must not be empty")
         if row["download_url"] != "-" and not row["download_url"].startswith("https://"):
             errors.append(f"{location}: download_url must be - or an https URL: {row['download_url']}")
-        if row["checksum_type"] in CHECKSUM_LENGTHS:
-            checksum_len = CHECKSUM_LENGTHS[row["checksum_type"]]
-            if not re.fullmatch(rf"[0-9a-fA-F]{{{checksum_len}}}", row["checksum"]):
-                errors.append(f"{location}: invalid {row['checksum_type']} checksum: {row['checksum']}")
-        elif row["checksum_type"] == "none" and row["checksum"] != "-":
-            errors.append(f"{location}: checksum must be - when checksum_type=none")
+        validate_checksum(location, row["checksum_type"], row["checksum"], "primary_package")
+        for package_field, checksum_type_field, checksum_field in related_package_fields():
+            if row[package_field] == "-":
+                if row[checksum_type_field] != "none" or row[checksum_field] != "-":
+                    errors.append(f"{location}: {package_field} checksum must be none/- when package is -")
+                continue
+            validate_checksum(location, row[checksum_type_field], row[checksum_field], package_field)
 
     return errors
 
@@ -1183,6 +1336,7 @@ def build_parser() -> argparse.ArgumentParser:
     list_parser.add_argument("--version", help="Filter by version or version rule")
     list_parser.add_argument("--cpu-arch", help="Filter by CPU architecture, currently x86_64")
     list_parser.add_argument("--exact", nargs="?", const="all", help=LIST_EXACT_HELP)
+    list_parser.add_argument("--full", action="store_true", help="Show CPU architecture and notes")
 
     subparsers.add_parser("matrix", parents=[vertical_parent], help="List stack and deployment architecture matrix")
 

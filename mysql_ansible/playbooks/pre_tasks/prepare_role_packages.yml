@@ -51,6 +51,13 @@
     prepare_mysqlshell_linux_glibc_tag: "{{ 'glibc2.28' if prepare_mysqlshell_version.startswith('9.7') else 'glibc2.17' }}"
     prepare_mysqlshell_package: "{{ mysqlshell_package | default('mysql-shell-' + prepare_mysqlshell_version + '-linux-' + prepare_mysqlshell_linux_glibc_tag + '-x86-64bit.tar.gz') }}"
     prepare_mysqlshell_dir: "{{ mysqlshell_packages_dir | default(mysql_packages_dir) }}"
+    prepare_mysqlshell_package_checksum_spec: >-
+      {{
+        mysqlshell_package_checksum_type ~ ':' ~ mysqlshell_package_checksum
+        if (mysqlshell_package_checksum_type | default('none')) != 'none'
+        and (mysqlshell_package_checksum | default('-')) != '-'
+        else ''
+      }}
   block:
     - name: Ensure MySQL Shell package archive is ready (local)
       ansible.builtin.import_tasks: ../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
@@ -59,6 +66,7 @@
         local_tar_archive_path: "{{ prepare_mysqlshell_dir }}/{{ prepare_mysqlshell_package }}"
         local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
         local_tar_archive_url: "https://cdn.mysql.com/Downloads/MySQL-Shell/{{ prepare_mysqlshell_package }}"
+        local_tar_archive_checksum_spec: "{{ prepare_mysqlshell_package_checksum_spec }}"
         local_tar_archive_timeout: "{{ mysqlshell_package_download_timeout | default(300) }}"
 
 - name: Prepare MySQL Router package on control host
@@ -83,6 +91,13 @@
       {%- endif -%}
     prepare_router_package: "{{ router_package | default('mysql-router-' + prepare_router_version + '-linux-' + prepare_router_linux_glibc_tag + '-x86_64.tar.xz') }}"
     prepare_router_dir: "{{ router_packages_dir | default(mysql_packages_dir) }}"
+    prepare_router_package_checksum_spec: >-
+      {{
+        router_package_checksum_type ~ ':' ~ router_package_checksum
+        if (router_package_checksum_type | default('none')) != 'none'
+        and (router_package_checksum | default('-')) != '-'
+        else ''
+      }}
   block:
     - name: Ensure MySQL Router package archive is ready (local)
       ansible.builtin.import_tasks: ../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
@@ -91,4 +106,5 @@
         local_tar_archive_path: "{{ prepare_router_dir }}/{{ prepare_router_package }}"
         local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
         local_tar_archive_url: "https://cdn.mysql.com/Downloads/MySQL-Router/{{ prepare_router_package }}"
+        local_tar_archive_checksum_spec: "{{ prepare_router_package_checksum_spec }}"
         local_tar_archive_timeout: "{{ router_package_download_timeout | default(300) }}"

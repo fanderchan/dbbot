@@ -121,6 +121,8 @@
 - name: Set MySQL Shell package name from dbbot support matrix (local)
   ansible.builtin.set_fact:
     mysqlshell_package: "{{ dbbot_support_package_record.related_packages[0] }}"
+    mysqlshell_package_checksum_type: "{{ dbbot_support_package_record.related_package_1_checksum_type | default('none') }}"
+    mysqlshell_package_checksum: "{{ dbbot_support_package_record.related_package_1_checksum | default('-') }}"
   when:
     - dbbot_support_package_required | bool
     - "'../roles/setup_mysqlshell' in (roles_to_execute | default([]))"
@@ -146,6 +148,8 @@
 - name: Set MySQL Router package name from dbbot support matrix (local)
   ansible.builtin.set_fact:
     router_package: "{{ dbbot_support_package_record.related_packages[1] }}"
+    router_package_checksum_type: "{{ dbbot_support_package_record.related_package_2_checksum_type | default('none') }}"
+    router_package_checksum: "{{ dbbot_support_package_record.related_package_2_checksum | default('-') }}"
   when:
     - dbbot_support_package_required | bool
     - "'../roles/mysql_router' in (roles_to_execute | default([]))"

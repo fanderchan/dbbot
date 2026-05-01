@@ -34,4 +34,8 @@
           - mysql_package_checksum_type == 'md5'
           - mysql_package_checksum == 'b9f4fe3f6d1754212f3ed2f201b16245'
           - mysqlshell_package == 'mysql-shell-9.7.0-linux-glibc2.28-x86-64bit.tar.gz'
+          - mysqlshell_package_checksum_type == 'md5'
+          - mysqlshell_package_checksum == 'cf8f80d298cb67ae9c4f4b0d38a7f8af'
           - router_package == 'mysql-router-9.7.0-linux-glibc2.28-x86_64.tar.xz'
+          - router_package_checksum_type == 'md5'
+          - router_package_checksum == 'c4f147ad8fd2d9bbf6ee36eabcf7e96e'
