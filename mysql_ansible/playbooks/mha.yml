@@ -23,6 +23,8 @@
       ansible.builtin.import_tasks: pre_tasks/validate_common_config_setting.yml
     - name: Import tasks to check os_type and python
       ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
+    - name: Import validate mha tasks
+      ansible.builtin.import_tasks: pre_tasks/validate_mha.yml
     - name: Import tasks to resolve dbbot support package metadata
       ansible.builtin.import_tasks: pre_tasks/resolve_support_package.yml
     - name: Import tasks to validate network interfaces for VIP-related roles
@@ -33,8 +35,6 @@
       ansible.builtin.import_tasks: pre_tasks/prepare_role_packages.yml
     - name: Import tasks to check if packages exist
       ansible.builtin.import_tasks: pre_tasks/check_if_packages_exist.yml
-    - name: Import validate mha tasks
-      ansible.builtin.import_tasks: pre_tasks/validate_mha.yml
     - name: Import confirmation tasks
       ansible.builtin.import_tasks: pre_tasks/confirmation.yml
   tasks:

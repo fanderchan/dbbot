@@ -93,6 +93,7 @@ RHEL7_FAMILY_OS = {"centos7", "redhat7", "bigcloud7"}
 MYSQL_ARCH_VERSION_PREFIXES = {
     "mysql_mgr": {"8.0", "8.4", "9.7"},
     "mysql_innodb_cluster": {"8.4", "9.7"},
+    "mysql_mha": {"5.7"},
     "mysql_mha_go": {"8.4", "9.7"},
 }
 
@@ -130,7 +131,7 @@ PACKAGE_COMPACT_BASE_HEADERS = ["Version", "OS", "Arch ID", "Primary Package", "
 STACK_TABLE_HEADERS = ["Stack ID", "Stack", "Arch ID", "Versions", "CPU Arch", "Notes"]
 ARCH_TABLE_HEADERS = ["Stack ID", "Stack", "Arch ID", "Architecture", "Status", "Nodes", "Default OS", "Entrypoint"]
 SHOW_STACK_HEADERS = ["Stack ID", "Stack", "Module", "Status", "Default", "Version Rule", "Docs", "Notes"]
-SHOW_ARCH_HEADERS = ["Arch ID", "Architecture", "Status", "Nodes", "Default OS", "Entrypoint"]
+SHOW_ARCH_HEADERS = ["Arch ID", "Architecture", "Status", "Nodes", "Versions", "Default OS", "Entrypoint"]
 VERIFY_PACKAGE_HEADERS = [
     "Package Path",
     "Package Role",
@@ -775,15 +776,17 @@ def arch_display_row(
     *,
     stack_display_name: Optional[str] = None,
     include_stack: bool = False,
+    versions: Optional[str] = None,
 ) -> List[str]:
     values = [
         row["arch_id"],
         row["display_name"],
         status_label(row["status"]),
         row["min_nodes"],
-        row["default_os"],
-        row["entrypoint"],
     ]
+    if versions is not None:
+        values.append(versions)
+    values.extend([row["default_os"], row["entrypoint"]])
     if include_stack:
         return [row["stack_id"], stack_display_name or row["stack_id"]] + values
     return values
@@ -1044,7 +1047,13 @@ def command_show(
         print("\nArchitectures:")
         print_table_or_vertical(
             SHOW_ARCH_HEADERS,
-            [arch_display_row(row) for row in arch_rows],
+            [
+                arch_display_row(
+                    row,
+                    versions=versions_for_arch(stack_id, row["arch_id"], packages),
+                )
+                for row in arch_rows
+            ],
             vertical=vertical,
         )
 

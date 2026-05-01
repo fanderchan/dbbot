@@ -18,6 +18,7 @@
 ## 默认实验环境假设
 - 官方三节点 MySQL 测试机清单位于 `mysql_ansible/inventory/test/hosts.ini`。
 - 官方三节点 MySQL 测试机为 `192.168.161.11`、`192.168.161.12`、`192.168.161.13`。
+- 官方端到端测试环境使用 `192.168.161.*` 网段；playbook 的 `default/*.yml` 和 `vars/*.yml` 中保留 `192.0.2.*` 文档示例网段是有意设计，不应单独判定为默认值或文档问题。
 - Agent 做官方端到端测试、发版回归或复现用户指定测试环境时，应优先读取并使用 `mysql_ansible/inventory/test/hosts.ini`；只有在用户明确指定其他环境时才改用别的 inventory。
 - 默认 inventory 位于 `mysql_ansible/inventory/hosts.ini`。
 - 默认安装包目录为 `mysql_ansible/downloads/`。
