@@ -22,8 +22,9 @@ jobs:
         shell: bash
         env:
           RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_PACKAGE_DIR: ${{ runner.temp }}/dbbot-release
         run: |
-          asset_path="$(bash .github/scripts/build-release-package.sh "$RELEASE_TAG" dist)"
+          asset_path="$(bash .github/scripts/build-release-package.sh "$RELEASE_TAG" "$RELEASE_PACKAGE_DIR")"
           echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
 
       - name: Render managed release body
@@ -31,7 +32,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-          RELEASE_BODY_PATH: dist/release-body.md
+          RELEASE_BODY_PATH: ${{ runner.temp }}/dbbot-release/release-body.md
         with:
           script: |
             const fs = require("fs");

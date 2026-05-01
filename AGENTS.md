@@ -95,6 +95,13 @@
   - 回滚或重建方式
 
 ## 发版规则
+- 本地 release 包统一缓存到：
+  - `/mnt/hgfs/packages/db_packages/dbbot_packages`
+- 根仓 `dist/` 不作为发版产物目录；不要把 release tarball 放在项目目录里，避免体积膨胀和误提交。
+- 推送 release tag 前，必须先在本机生成一份同名 release 包留存：
+  - `bash .github/scripts/build-release-package.sh <tag> /mnt/hgfs/packages/db_packages/dbbot_packages`
+- `.github/scripts/build-release-package.sh` 未显式传入输出目录时，默认输出到 `/mnt/hgfs/packages/db_packages/dbbot_packages`。
+- GitHub release workflow 在 runner 临时目录生成 `dbbot-<tag>.tar.gz`，随后上传到对应 GitHub Release；runner 里的临时包不等于本机留存包。
 - 每个 release tag 或 pre-release tag 在推送前必须存在：
   - `.github/release-notes/<tag>.md`
 - 所有 release note 必须仅使用英文。

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -ne 2 ]; then
-  echo "usage: $0 <tag> <output-dir>" >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: $0 <tag> [output-dir]" >&2
   exit 1
 fi
 
 tag="$1"
-output_dir="$2"
+output_dir="${2:-${DBBOT_RELEASE_PACKAGE_DIR:-/mnt/hgfs/packages/db_packages/dbbot_packages}}"
 package_name="dbbot-${tag}.tar.gz"
 package_root="dbbot"
 package_path="${output_dir}/${package_name}"
