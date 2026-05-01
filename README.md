@@ -24,7 +24,7 @@
 - `clickhouse_ansible`：ClickHouse 集群部署、备份、恢复与下游分析接入相关剧本。
 - `monitoring_prometheus_ansible`：Prometheus、Grafana、Alertmanager 与 exporter 相关剧本。
 - `portable-ansible`：绿色版 Ansible 运行时，方便在目标环境中直接执行剧本。
-- `bin/dbbotctl`：根仓级生命周期 CLI，用于环境自检、绿色版 Ansible 初始化、release 升级与回滚。
+- `bin/dbbotctl`：根仓级生命周期 CLI，用于环境自检、支持矩阵查询、绿色版 Ansible 初始化、release 升级与回滚。
 
 ## 项目定位
 

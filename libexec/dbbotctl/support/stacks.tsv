@@ -1,0 +1,5 @@
+# stack_id	display_name	module	status	default_version	version_rule	docs	notes
+mysql	MySQL	mysql_ansible	supported	9.7.0	5.7.x>=5.7.26;8.0.x>=8.0.21;8.4.x>=8.4.0;9.7.x>=9.7.0	README.md	Oracle MySQL binary deployment, replication, MGR, InnoDB Cluster, MHA, MHA-Go, backup, and restore workflows.
+percona	Percona Server	mysql_ansible	supported	8.0.29-21	5.7.x and 8.0.x templates; packaged default is 8.0.29-21	README.md	Percona package auto-download is not configured; place the package in mysql_ansible/downloads.
+greatsql	GreatSQL	mysql_ansible	supported	8.0.32-27	8.0.32-24..8.0.32-27	README.md	GreatSQL package URLs are generated from product.greatdb.com when auto-download is enabled.
+clickhouse	ClickHouse	clickhouse_ansible	supported	23.6.1	23.6.1 or explicit 4-part 23.6.1.x	README.md	Three-part ClickHouse versions are resolved to a matching four-part stable tgz version from local packages or upstream metadata.

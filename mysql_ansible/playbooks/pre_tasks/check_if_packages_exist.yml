@@ -1,7 +1,31 @@
+- name: Verify {{ mysql_package }} using dbbot support matrix (local)
+  ansible.builtin.command:
+    argv:
+      - "{{ playbook_dir }}/../../bin/dbbotctl"
+      - support
+      - verify-package
+      - --stack
+      - "{{ dbbot_support_stack_id | default(db_type) }}"
+      - --version
+      - "{{ mysql_version }}"
+      - --os
+      - "{{ os_type }}"
+      - --arch
+      - "{{ dbbot_support_arch_id | default('all') }}"
+      - --packages-dir
+      - "{{ mysql_packages_dir }}"
+  register: mysql_package_support_verify
+  changed_when: false
+  when: dbbot_support_package_resolved | default(false) | bool
+  run_once: true
+  delegate_to: localhost
+  become: false
+
 - name: Check if {{ mysql_package }} exists in {{ mysql_packages_dir }} (local)
   ansible.builtin.stat:
     path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
   register: mysql_package_stat
+  when: not (dbbot_support_package_resolved | default(false) | bool)
   run_once: true
   delegate_to: localhost
   become: false
@@ -9,7 +33,9 @@
 - name: Fail when {{ mysql_package }} is missing from {{ mysql_packages_dir }} (local)
   ansible.builtin.fail:
     msg: "MySQL package not found at {{ mysql_packages_dir }}/{{ mysql_package }}."
-  when: not mysql_package_stat.stat.exists
+  when:
+    - not (dbbot_support_package_resolved | default(false) | bool)
+    - not mysql_package_stat.stat.exists
   run_once: true
   delegate_to: localhost
   become: false

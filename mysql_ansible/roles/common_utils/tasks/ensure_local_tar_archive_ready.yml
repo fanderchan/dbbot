@@ -41,6 +41,10 @@
         (local_tar_archive_auto_download | bool)
         and ((local_tar_archive_url | default('') | trim) != '')
       }}
+    local_tar_archive__has_checksum: >-
+      {{
+        (local_tar_archive_checksum_spec | default('') | trim) != ''
+      }}
   become: false
   delegate_to: 127.0.0.1
   run_once: true
@@ -75,8 +79,9 @@
     timeout: "{{ local_tar_archive_timeout | default(300) }}"
     headers: "{{ local_tar_archive_headers | default(omit) }}"
     validate_certs: "{{ local_tar_archive_validate_certs | default(omit) }}"
+    checksum: "{{ local_tar_archive_checksum_spec | default(omit, true) }}"
   when:
-    - local_tar_archive__needs_refresh | bool
+    - local_tar_archive__needs_refresh | bool or local_tar_archive__has_checksum | bool
     - local_tar_archive__can_download | bool
   become: false
   delegate_to: 127.0.0.1
@@ -89,7 +94,7 @@
   register: local_tar_archive__final_test
   changed_when: false
   failed_when: local_tar_archive__final_test.rc != 0
-  when: local_tar_archive__needs_refresh | bool
+  when: local_tar_archive__needs_refresh | bool or local_tar_archive__has_checksum | bool
   become: false
   delegate_to: 127.0.0.1
   run_once: true

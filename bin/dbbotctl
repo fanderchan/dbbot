@@ -20,6 +20,7 @@ Usage:
 Commands:
   version            Show installed dbbot version and runtime paths
   doctor             Check local prerequisites for dbbot lifecycle operations
+  support            Show supported database versions and package rules
   env setup          Run portable ansible bootstrap on the control host
   exporter register  Register node/mysql/router exporters in Prometheus
   monitoring register
@@ -32,6 +33,8 @@ Commands:
 Examples:
   dbbotctl version
   dbbotctl doctor
+  dbbotctl support --help
+  dbbotctl support packages --stack mysql --version 9.7.0 --os BigCloud21
   dbbotctl env setup
   dbbotctl exporter register -t node -H 192.0.2.131 -s 192.0.2.161 -p '<your_ssh_password>'
   dbbotctl release history
@@ -59,6 +62,11 @@ main() {
       shift
       source "${DBBOTCTL_LIBEXEC_DIR}/commands/doctor.sh"
       dbbot_cmd_doctor "$@"
+      ;;
+    support)
+      shift
+      source "${DBBOTCTL_LIBEXEC_DIR}/commands/support.sh"
+      dbbot_cmd_support "$@"
       ;;
     env)
       shift

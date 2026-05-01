@@ -1,0 +1,155 @@
+---
+- name: Determine whether dbbot support package metadata is required (local)
+  ansible.builtin.set_fact:
+    dbbot_support_package_required: >-
+      {{
+        '../roles/mysql_server' in (roles_to_execute | default([]))
+        or '../roles/setup_mysqlshell' in (roles_to_execute | default([]))
+        or '../roles/mysql_router' in (roles_to_execute | default([]))
+      }}
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Select dbbot support package query scope (local)
+  ansible.builtin.set_fact:
+    dbbot_support_stack_id: "{{ db_type }}"
+    dbbot_support_arch_id: >-
+      {%- set playbook = dbbot_entry_playbook_name | default('') -%}
+      {%- if playbook == 'single_node.yml' -%}
+      {{ db_type }}_single_node
+      {%- elif playbook in ['master_slave.yml', 'keepalived_master_slave.yml'] -%}
+      {{ db_type }}_master_slave
+      {%- elif playbook == 'mgr.yml' and db_type in ['mysql', 'greatsql'] -%}
+      {{ db_type }}_mgr
+      {%- elif playbook == 'innodb_cluster.yml' and db_type == 'mysql' -%}
+      mysql_innodb_cluster
+      {%- elif playbook == 'innodb_cluster_router.yml' and db_type == 'mysql' -%}
+      mysql_innodb_cluster
+      {%- elif playbook == 'mha.yml' and db_type == 'mysql' -%}
+      mysql_mha
+      {%- else -%}
+      all
+      {%- endif -%}
+  when: dbbot_support_package_required | bool
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Resolve package metadata from dbbot support matrix (local)
+  ansible.builtin.command:
+    argv:
+      - "{{ playbook_dir }}/../../bin/dbbotctl"
+      - support
+      - packages
+      - --stack
+      - "{{ dbbot_support_stack_id }}"
+      - --version
+      - "{{ mysql_version }}"
+      - --os
+      - "{{ os_type }}"
+      - --arch
+      - "{{ dbbot_support_arch_id }}"
+      - --exact
+      - all
+      - --full
+      - --format
+      - json
+  register: dbbot_support_package_query
+  changed_when: false
+  when: dbbot_support_package_required | bool
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Parse dbbot support package metadata (local)
+  ansible.builtin.set_fact:
+    dbbot_support_package_records: "{{ dbbot_support_package_query.stdout | from_json }}"
+  when: dbbot_support_package_required | bool
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Fail when dbbot support package rule is not unique (local)
+  ansible.builtin.fail:
+    msg: >-
+      dbbot support package query must return exactly one rule for
+      stack={{ dbbot_support_stack_id }}, version={{ mysql_version }},
+      os={{ os_type }}, arch={{ dbbot_support_arch_id }}.
+      Returned {{ dbbot_support_package_records | length }} rule(s).
+  when:
+    - dbbot_support_package_required | bool
+    - (dbbot_support_package_records | length) != 1
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Store dbbot support package rule (local)
+  ansible.builtin.set_fact:
+    dbbot_support_package_record: "{{ dbbot_support_package_records[0] }}"
+  when: dbbot_support_package_required | bool
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Set primary package metadata from dbbot support matrix (local)
+  ansible.builtin.set_fact:
+    dbbot_support_package_resolved: true
+    mysql_package: "{{ dbbot_support_package_record.primary_package }}"
+    mysql_package_download_url: "{{ dbbot_support_package_record.download_url }}"
+    mysql_package_checksum_type: "{{ dbbot_support_package_record.checksum_type }}"
+    mysql_package_checksum: "{{ dbbot_support_package_record.checksum }}"
+  when: dbbot_support_package_required | bool
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Fail when MySQL Shell package metadata is missing from dbbot support (local)
+  ansible.builtin.fail:
+    msg: >-
+      dbbot support did not return a MySQL Shell related package for
+      stack={{ dbbot_support_stack_id }}, version={{ mysql_version }},
+      os={{ os_type }}, arch={{ dbbot_support_arch_id }}.
+  when:
+    - dbbot_support_package_required | bool
+    - "'../roles/setup_mysqlshell' in (roles_to_execute | default([]))"
+    - ((dbbot_support_package_record | default({})).related_packages | default([]) | length) < 1
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Set MySQL Shell package name from dbbot support matrix (local)
+  ansible.builtin.set_fact:
+    mysqlshell_package: "{{ dbbot_support_package_record.related_packages[0] }}"
+  when:
+    - dbbot_support_package_required | bool
+    - "'../roles/setup_mysqlshell' in (roles_to_execute | default([]))"
+    - ((dbbot_support_package_record | default({})).related_packages | default([]) | length) >= 1
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Fail when MySQL Router package metadata is missing from dbbot support (local)
+  ansible.builtin.fail:
+    msg: >-
+      dbbot support did not return a MySQL Router related package for
+      stack={{ dbbot_support_stack_id }}, version={{ mysql_version }},
+      os={{ os_type }}, arch={{ dbbot_support_arch_id }}.
+  when:
+    - dbbot_support_package_required | bool
+    - "'../roles/mysql_router' in (roles_to_execute | default([]))"
+    - ((dbbot_support_package_record | default({})).related_packages | default([]) | length) < 2
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Set MySQL Router package name from dbbot support matrix (local)
+  ansible.builtin.set_fact:
+    router_package: "{{ dbbot_support_package_record.related_packages[1] }}"
+  when:
+    - dbbot_support_package_required | bool
+    - "'../roles/mysql_router' in (roles_to_execute | default([]))"
+    - ((dbbot_support_package_record | default({})).related_packages | default([]) | length) >= 2
+  run_once: true
+  delegate_to: localhost
+  become: false

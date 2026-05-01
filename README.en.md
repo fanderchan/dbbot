@@ -24,6 +24,7 @@
 - `clickhouse_ansible`: Playbooks for ClickHouse cluster deployment, backup, recovery, and downstream analytics scenarios.
 - `monitoring_prometheus_ansible`: Playbooks for Prometheus, Grafana, Alertmanager, and exporters.
 - `portable-ansible`: A portable Ansible runtime for executing the playbooks in controlled environments.
+- `bin/dbbotctl`: The repository-level lifecycle CLI for local checks, support matrix queries, portable Ansible setup, upgrades, and rollbacks.
 
 ## Project Direction
 

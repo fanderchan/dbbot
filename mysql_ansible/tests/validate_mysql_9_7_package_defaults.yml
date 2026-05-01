@@ -5,9 +5,14 @@
   vars:
     mysql_version: "9.7.0"
     db_type: mysql
-    os_type: Rocky8
+    os_type: Rocky9
     mysql_packages_dir: ../downloads/
+    dbbot_entry_playbook_name: innodb_cluster_router.yml
     metadata_cluster_name: testcluster
+    roles_to_execute:
+      - ../roles/mysql_server
+      - ../roles/setup_mysqlshell
+      - ../roles/mysql_router
   tasks:
     - name: Load MySQL package defaults
       ansible.builtin.include_vars: ../playbooks/default/advanced_config.yml
@@ -18,11 +23,15 @@
     - name: Load MySQL Router defaults
       ansible.builtin.include_vars: ../roles/mysql_router/defaults/main.yml
 
-    - name: Assert MySQL 9.7 package names
+    - name: Resolve package metadata from dbbot support
+      ansible.builtin.import_tasks: ../playbooks/pre_tasks/resolve_support_package.yml
+
+    - name: Assert MySQL 9.7 package metadata
       ansible.builtin.assert:
         that:
-          - mysql_linux_glibc_tag == 'glibc2.28'
-          - mysql_linux_archive_suffix == '-minimal.tar.xz'
           - mysql_package == 'mysql-9.7.0-linux-glibc2.28-x86_64-minimal.tar.xz'
+          - mysql_package_download_url == 'https://dev.mysql.com/get/Downloads/MySQL-9.7/mysql-9.7.0-linux-glibc2.28-x86_64-minimal.tar.xz'
+          - mysql_package_checksum_type == 'md5'
+          - mysql_package_checksum == 'b9f4fe3f6d1754212f3ed2f201b16245'
           - mysqlshell_package == 'mysql-shell-9.7.0-linux-glibc2.28-x86-64bit.tar.gz'
           - router_package == 'mysql-router-9.7.0-linux-glibc2.28-x86_64.tar.xz'

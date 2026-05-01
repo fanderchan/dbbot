@@ -20,15 +20,13 @@
   delegate_to: localhost
   run_once: true
   vars:
-    prepare_mysql_package_url: >-
+    prepare_mysql_package_url: "{{ mysql_package_download_url | default('') }}"
+    prepare_mysql_package_checksum_spec: >-
       {{
-        'https://dev.mysql.com/get/Downloads/MySQL-' ~ mysql_version[0:3] ~ '/' ~ mysql_package
-        if db_type == 'mysql'
-        else (
-          'https://product.greatdb.com/' ~ 'GreatSQL-' ~ mysql_version ~ ('-Rapid' if mysql_version == '8.0.32-25' else '') ~ '/' ~ mysql_package
-          if db_type == 'greatsql'
-          else ''
-        )
+        mysql_package_checksum_type ~ ':' ~ mysql_package_checksum
+        if (mysql_package_checksum_type | default('none')) != 'none'
+        and (mysql_package_checksum | default('-')) != '-'
+        else ''
       }}
   block:
     - name: Ensure MySQL Server package archive is ready (local)
@@ -38,6 +36,7 @@
         local_tar_archive_path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
         local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
         local_tar_archive_url: "{{ prepare_mysql_package_url }}"
+        local_tar_archive_checksum_spec: "{{ prepare_mysql_package_checksum_spec }}"
         local_tar_archive_timeout: "{{ mysql_package_download_timeout | default(300) }}"
         local_tar_archive_headers:
           User-Agent: "Wget/1.21.1"

@@ -18,27 +18,8 @@ generallog_dir: "{{ mysql_data_dir_base }}/{{ mysql_port }}/log"
 socket: "{{ socket_dir }}/mysql.sock"
 mysqlx_socket: "{{ mysqlx_socket_dir }}/mysqlx.sock"
 
-## do not modify
-mysql_linux_glibc_tag: >-
-  {%- if mysql_version.startswith('5.') -%}
-  glibc2.12
-  {%- elif mysql_version.startswith('9.7') -%}
-  glibc2.28
-  {%- elif (os_type | default('')) in ['Rocky9'] -%}
-  glibc2.28
-  {%- else -%}
-  glibc2.17
-  {%- endif -%}
-mysql_linux_archive_suffix: >-
-  {%- if mysql_version.startswith('5.') -%}
-  .tar.gz
-  {%- elif mysql_version.startswith('9.7') -%}
-  -minimal.tar.xz
-  {%- elif (os_type | default('')) in ['Rocky9'] -%}
-  .tar.xz
-  {%- else -%}
-  -minimal.tar.xz
-  {%- endif -%}
-mysql_package: "{% if db_type == 'mysql' %}{{ 'mysql-' + mysql_version + '-linux-' + mysql_linux_glibc_tag + '-x86_64' + mysql_linux_archive_suffix }}{% elif db_type == 'percona' %}{{ percona_package }}{% elif db_type == 'greatsql' %}{{ greatsql_package }}{% endif %}"
-greatsql_package: "GreatSQL-{{ mysql_version }}-Linux-glibc2.17-x86_64-minimal.tar.xz"  # dont modifiy
-percona_package: Percona-Server-8.0.29-21-Linux.x86_64.glibc2.17.tar.gz
+## Package metadata is resolved from `dbbotctl support` after os_type is detected.
+mysql_package: ""
+mysql_package_download_url: ""
+mysql_package_checksum_type: "none"
+mysql_package_checksum: "-"
