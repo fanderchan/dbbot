@@ -26,9 +26,7 @@
 - name: Check if manager_ip is valid
   ansible.builtin.fail:
     msg: "{{ ansible_play_name }}: `manager_ip` must be in `slave_ips` and not equal to `master_ip`"
-  when:
-    - manager_ip not in slave_ips
-    - manager_ip == master_ip
+  when: manager_ip not in slave_ips or manager_ip == master_ip
 
 - name: Check if vip_netmask is valid
   ansible.builtin.fail:
