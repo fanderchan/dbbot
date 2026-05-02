@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """dbbotctl support matrix reader."""
 
-from __future__ import annotations
-
 import argparse
 import hashlib
 import json
