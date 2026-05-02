@@ -69,6 +69,7 @@ RECORD_STATUS_LABELS = {
 CHECKSUM_TYPES = {"sha512", "sha256", "md5", "none"}
 CHECKSUM_LENGTHS = {"sha512": 128, "sha256": 64, "md5": 32}
 INSTALLABLE_PACKAGE_STATUSES = {"supported", "verified"}
+AGGREGATE_OS_RULES = {"all", "all-supported-os", "non-Rocky9", "not-rhel7-family"}
 
 MYSQL_SUPPORTED_OS = {
     "rocky9",
@@ -171,6 +172,7 @@ PUBLIC_PACKAGE_FIELDS = [
     "stack_id",
     "version",
     "os_type",
+    "support_rule_os_type",
     "cpu_arch",
     "arch_id",
     "primary_package",
@@ -684,13 +686,43 @@ def os_group_matches(stack_id: str, row_os: str, requested_os: Optional[str], *,
     return False
 
 
-def package_base_dict(row: Dict[str, str], *, requested_version: Optional[str] = None) -> Dict[str, object]:
+def package_effective_os(row: Dict[str, str], requested_os: Optional[str] = None) -> str:
+    rule_os = row["os_type"]
+    if requested_os is None or rule_os not in AGGREGATE_OS_RULES:
+        return rule_os
+
+    requested = normalize_token(requested_os)
+    if requested in stack_supported_os(row["stack_id"]) and os_group_matches(
+        row["stack_id"],
+        rule_os,
+        requested_os,
+        exact=True,
+    ):
+        return requested_os
+    return rule_os
+
+
+def package_os_display(row: Dict[str, str], requested_os: Optional[str] = None) -> str:
+    effective_os = package_effective_os(row, requested_os)
+    rule_os = row["os_type"]
+    if effective_os != rule_os:
+        return f"{effective_os} (via {rule_os})"
+    return rule_os
+
+
+def package_base_dict(
+    row: Dict[str, str],
+    *,
+    requested_version: Optional[str] = None,
+    requested_os: Optional[str] = None,
+) -> Dict[str, object]:
     render_version = render_version_for_row(row, requested_version)
     version = render_version or row["version"]
     return {
         "stack_id": row["stack_id"],
         "version": version,
-        "os_type": row["os_type"],
+        "os_type": package_effective_os(row, requested_os),
+        "support_rule_os_type": row["os_type"],
         "cpu_arch": DEFAULT_CPU_ARCH,
         "arch_id": row["arch_id"],
         "primary_package": package_name(row, render_version=render_version),
@@ -705,8 +737,13 @@ def package_base_dict(row: Dict[str, str], *, requested_version: Optional[str] =
     }
 
 
-def package_public_dict(row: Dict[str, str], *, requested_version: Optional[str] = None) -> Dict[str, object]:
-    data = package_base_dict(row, requested_version=requested_version)
+def package_public_dict(
+    row: Dict[str, str],
+    *,
+    requested_version: Optional[str] = None,
+    requested_os: Optional[str] = None,
+) -> Dict[str, object]:
+    data = package_base_dict(row, requested_version=requested_version, requested_os=requested_os)
     data.update(
         {
             "checksum_type": row["checksum_type"],
@@ -1052,16 +1089,17 @@ def package_display_rows(
     full_checksum: bool = True,
     include_stack: bool = True,
     requested_version: Optional[str] = None,
+    requested_os: Optional[str] = None,
 ) -> List[List[str]]:
     table_rows = []
     for row in rows:
         render_version = render_version_for_row(row, requested_version)
-        data = package_base_dict(row, requested_version=requested_version)
+        data = package_base_dict(row, requested_version=requested_version, requested_os=requested_os)
         if full:
             table_row = [
                 str(data["stack_id"]),
                 str(data["version"]),
-                str(data["os_type"]),
+                package_os_display(row, requested_os),
                 str(data["cpu_arch"]),
                 str(data["arch_id"]),
                 package_name(row, full=True, render_version=render_version),
@@ -1077,7 +1115,7 @@ def package_display_rows(
             table_row.extend(
                 [
                     str(data["version"]),
-                    str(data["os_type"]),
+                    package_os_display(row, requested_os),
                     str(data["arch_id"]),
                     package_name(row, full=False, render_version=render_version),
                     package_checksum(row, full=False),
@@ -1102,6 +1140,7 @@ def print_packages(
     full: bool = False,
     include_stack: bool = True,
     requested_version: Optional[str] = None,
+    requested_os: Optional[str] = None,
 ) -> None:
     table_rows = package_display_rows(
         rows,
@@ -1109,6 +1148,7 @@ def print_packages(
         full_checksum=vertical or full,
         include_stack=include_stack,
         requested_version=requested_version,
+        requested_os=requested_os,
     )
     if vertical:
         print_vertical(PACKAGE_TABLE_HEADERS, table_rows)
@@ -1130,7 +1170,14 @@ def command_packages(packages: List[Dict[str, str]], args: argparse.Namespace) -
     if args.output_format == "json":
         print(
             json.dumps(
-                [package_public_dict(row, requested_version=args.version) for row in rows],
+                [
+                    package_public_dict(
+                        row,
+                        requested_version=args.version,
+                        requested_os=args.os_type,
+                    )
+                    for row in rows
+                ],
                 ensure_ascii=False,
                 sort_keys=True,
             )
@@ -1142,6 +1189,7 @@ def command_packages(packages: List[Dict[str, str]], args: argparse.Namespace) -
             full=getattr(args, "full", False),
             include_stack=not bool(args.stack),
             requested_version=args.version,
+            requested_os=args.os_type,
         )
     return 0
 
