@@ -1,0 +1,50 @@
+- name: Validate custom MySQL package override
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    mysql_version: "9.7.0"
+    db_type: mysql
+    os_type: Rocky9
+    mysql_packages_dir: ../downloads/
+    dbbot_entry_playbook_name: innodb_cluster_router.yml
+    metadata_cluster_name: testcluster
+    roles_to_execute:
+      - ../roles/mysql_server
+      - ../roles/setup_mysqlshell
+      - ../roles/mysql_router
+  tasks:
+    - name: Load MySQL package defaults
+      ansible.builtin.include_vars: ../playbooks/default/advanced_config.yml
+
+    - name: Load MySQL Shell defaults
+      ansible.builtin.include_vars: ../roles/setup_mysqlshell/defaults/main.yml
+
+    - name: Load MySQL Router defaults
+      ansible.builtin.include_vars: ../roles/mysql_router/defaults/main.yml
+
+    - name: Set custom MySQL package override
+      ansible.builtin.set_fact:
+        fcs_allow_custom_mysql_package: true
+        mysql_custom_package: mysql-9.7.0-csa-linux-glibc2.28-x86_64.tar.xz
+        mysql_custom_package_download_url: ""
+        mysql_custom_package_checksum_type: "none"
+        mysql_custom_package_checksum: "-"
+
+    - name: Resolve package metadata from dbbot support
+      ansible.builtin.import_tasks: ../playbooks/pre_tasks/resolve_support_package.yml
+
+    - name: Assert custom MySQL Server package metadata
+      ansible.builtin.assert:
+        that:
+          - dbbot_support_package_resolved | bool
+          - dbbot_mysql_package_using_custom | bool
+          - not (dbbot_mysql_package_verify_with_support_matrix | bool)
+          - mysql_package == 'mysql-9.7.0-csa-linux-glibc2.28-x86_64.tar.xz'
+          - mysql_package_download_url == ''
+          - mysql_package_checksum_type == 'none'
+          - mysql_package_checksum == '-'
+          - mysqlshell_package == 'mysql-shell-9.7.0-linux-glibc2.28-x86-64bit.tar.gz'
+          - mysqlshell_package_checksum_type == 'md5'
+          - router_package == 'mysql-router-9.7.0-linux-glibc2.28-x86_64.tar.xz'
+          - router_package_checksum_type == 'md5'

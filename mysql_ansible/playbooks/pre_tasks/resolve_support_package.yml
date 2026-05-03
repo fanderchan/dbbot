@@ -95,11 +95,65 @@
 - name: Set primary package metadata from dbbot support matrix (local)
   ansible.builtin.set_fact:
     dbbot_support_package_resolved: true
+    dbbot_mysql_package_using_custom: false
+    dbbot_mysql_package_verify_with_support_matrix: true
     mysql_package: "{{ dbbot_support_package_record.primary_package }}"
     mysql_package_download_url: "{{ dbbot_support_package_record.download_url }}"
     mysql_package_checksum_type: "{{ dbbot_support_package_record.checksum_type }}"
     mysql_package_checksum: "{{ dbbot_support_package_record.checksum }}"
   when: dbbot_support_package_required | bool
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Fail when custom MySQL package name is invalid (local)
+  ansible.builtin.fail:
+    msg: >-
+      mysql_custom_package must be a local archive file name ending in .tar.gz
+      or .tar.xz, without directory separators, when
+      fcs_allow_custom_mysql_package=true.
+  when:
+    - dbbot_support_package_required | bool
+    - "'../roles/mysql_server' in (roles_to_execute | default([]))"
+    - fcs_allow_custom_mysql_package | default(false) | bool
+    - >-
+      (mysql_custom_package | default('') | trim) == ''
+      or '/' in (mysql_custom_package | default(''))
+      or (mysql_custom_package | default('')).startswith('.')
+      or not (
+        (mysql_custom_package | default('')).endswith('.tar.gz')
+        or (mysql_custom_package | default('')).endswith('.tar.xz')
+      )
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Fail when custom MySQL package checksum type is invalid (local)
+  ansible.builtin.fail:
+    msg: >-
+      mysql_custom_package_checksum_type must be one of none, md5, sha256,
+      or sha512.
+  when:
+    - dbbot_support_package_required | bool
+    - "'../roles/mysql_server' in (roles_to_execute | default([]))"
+    - fcs_allow_custom_mysql_package | default(false) | bool
+    - (mysql_custom_package_checksum_type | default('none')) not in ['none', 'md5', 'sha256', 'sha512']
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Use custom MySQL Server package metadata (local)
+  ansible.builtin.set_fact:
+    dbbot_mysql_package_using_custom: true
+    dbbot_mysql_package_verify_with_support_matrix: false
+    mysql_package: "{{ mysql_custom_package | trim }}"
+    mysql_package_download_url: "{{ mysql_custom_package_download_url | default('') }}"
+    mysql_package_checksum_type: "{{ mysql_custom_package_checksum_type | default('none') }}"
+    mysql_package_checksum: "{{ mysql_custom_package_checksum | default('-') }}"
+  when:
+    - dbbot_support_package_required | bool
+    - "'../roles/mysql_server' in (roles_to_execute | default([]))"
+    - fcs_allow_custom_mysql_package | default(false) | bool
   run_once: true
   delegate_to: localhost
   become: false

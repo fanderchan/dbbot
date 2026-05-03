@@ -131,6 +131,7 @@
     - fcs_skip_db_mount_verification
     - fcs_skip_check_ntpd_or_chrony_running
     - fcs_auto_download_packages
+    - fcs_allow_custom_mysql_package
     - fcs_allow_dbbot_default_passwd
     - fcs_create_mysql_fast_login
     - fcs_backup_script_create_backup_user
