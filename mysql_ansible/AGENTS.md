@@ -18,8 +18,10 @@
 ## 默认实验环境假设
 - 官方三节点 MySQL 测试机清单位于 `mysql_ansible/inventory/test/hosts.ini`。
 - 官方三节点 MySQL 测试机为 `192.168.161.11`、`192.168.161.12`、`192.168.161.13`。
-- 官方端到端测试环境使用 `192.168.161.*` 网段；playbook 的 `default/*.yml` 和 `vars/*.yml` 中保留 `192.0.2.*` 文档示例网段是有意设计，不应单独判定为默认值或文档问题。
-- openEuler、Anolis OS 8 等最小化控制节点默认可能没有 `tar`。这只影响人工解压 dbbot release 包的步骤，不应作为 dbbot MySQL playbook 缺陷记录；如需在这类控制节点上继续测试，可先人工安装 `tar` 后再解压 release 包。
+- 官方端到端测试环境使用 `192.168.161.*` 网段；判定官方三节点测试环境时，以 `mysql_ansible/inventory/test/hosts.ini` 和本节清单为准。
+- `playbook` 的 `default/*.yml` 和 `vars/*.yml` 中保留 `192.0.2.*` 文档示例网段是有意设计，不应与 `inventory/test/hosts.ini` 的 `192.168.161.*` 做一致性对比，也不得单独判定为默认值、文档或代码问题。
+- 只有当 `mysql_ansible/inventory/test/hosts.ini` 与本节官方三节点清单不一致，或公开文档明确要求用 `192.0.2.*` 执行官方测试环境部署时，才应记录为问题。
+- Rocky 9、openEuler、Anolis OS 8 等最小化控制节点默认可能没有 `tar`。这只影响人工解压 dbbot release 包的步骤，不应作为 dbbot MySQL playbook 缺陷记录；如需在这类控制节点上继续测试，可先人工安装 `tar` 后再解压 release 包。
 - Agent 做官方端到端测试、发版回归或复现用户指定测试环境时，应优先读取并使用 `mysql_ansible/inventory/test/hosts.ini`；只有在用户明确指定其他环境时才改用别的 inventory。
 - 默认 inventory 位于 `mysql_ansible/inventory/hosts.ini`。
 - 默认安装包目录为 `mysql_ansible/downloads/`。
