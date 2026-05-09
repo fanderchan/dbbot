@@ -3,7 +3,11 @@
     src: ../templates/create_mha_user.sql.j2
     dest: /tmp/create_mha_user.sql
     mode: '0600'
+  no_log: true
 
 - name: Create mha user in mysql(master)
-  ansible.builtin.shell: "{{ mysql_software_dir }}/bin/mysql -h127.0.0.1 -P{{ mysql_port }} -u{{ mysql_admin_user }} -p{{ mysql_admin_127_password }} < /tmp/create_mha_user.sql"
+  ansible.builtin.shell: "{{ mysql_software_dir }}/bin/mysql -h127.0.0.1 -P{{ mysql_port }} -u{{ mysql_admin_user }} < /tmp/create_mha_user.sql"
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_127_password }}"
   changed_when: true
+  no_log: true

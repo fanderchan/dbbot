@@ -7,7 +7,8 @@
   ansible.builtin.template:
     src: ../templates/mysql_config_editor_script.exp.j2
     dest: /tmp/mysql_config_editor_script.exp
-    mode: '0755'
+    mode: '0700'
+  no_log: true
 
 - name: Execute expect script to set MySQL login-path
   ansible.builtin.command:
@@ -16,6 +17,7 @@
     chdir: /tmp
   become_user: "{{ mysql_user }}"
   changed_when: false
+  no_log: true
 
 - name: Set up alias in .bashrc named —— {{ fcs_create_mysql_fast_login_name }}
   ansible.builtin.lineinfile:

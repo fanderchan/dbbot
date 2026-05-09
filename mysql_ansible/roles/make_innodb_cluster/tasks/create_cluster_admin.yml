@@ -5,7 +5,7 @@
 
 - name: Create cluster admin user via MySQL
   ansible.builtin.shell: |
-    {{ mysql_software_dir }}/bin/mysql -S {{ socket }} -u{{ mysql_admin_user }} -p'{{ mysql_admin_127_password }}' -e "
+    {{ mysql_software_dir }}/bin/mysql -S {{ socket }} -u{{ mysql_admin_user }} -e "
     CREATE USER IF NOT EXISTS '{{ mysql_cluster_admin_user }}'@'{{ innodb_cluster_admin_user_sub_net | default("1%") }}' IDENTIFIED BY '{{ mysql_cluster_admin_password }}';
     
     -- Global privileges on *.* (all with GRANT OPTION)
@@ -22,12 +22,14 @@
     
     FLUSH PRIVILEGES;
     "
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_127_password }}"
   no_log: true
   changed_when: true
 
 - name: Create cluster admin user for localhost
   ansible.builtin.shell: |
-    {{ mysql_software_dir }}/bin/mysql -S {{ socket }} -u{{ mysql_admin_user }} -p'{{ mysql_admin_127_password }}' -e "
+    {{ mysql_software_dir }}/bin/mysql -S {{ socket }} -u{{ mysql_admin_user }} -e "
     CREATE USER IF NOT EXISTS '{{ mysql_cluster_admin_user }}'@'localhost' IDENTIFIED BY '{{ mysql_cluster_admin_password }}';
     
     -- Global privileges on *.* (all with GRANT OPTION)
@@ -44,5 +46,7 @@
     
     FLUSH PRIVILEGES;
     "
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_127_password }}"
   no_log: true
   changed_when: true

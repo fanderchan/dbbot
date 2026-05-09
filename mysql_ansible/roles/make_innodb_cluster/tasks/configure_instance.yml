@@ -6,6 +6,7 @@
     src: configure_instance.js.j2
     dest: /tmp/configure_instance.js
     mode: '0600'
+  no_log: true
 
 - name: Configure instance for InnoDB Cluster
   ansible.builtin.command: >

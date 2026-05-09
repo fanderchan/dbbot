@@ -5,5 +5,6 @@
     owner: "{{ mysqlrouter_exporter_run_user }}"
     group: "{{ mysqlrouter_exporter_run_group }}"
     mode: '0600'
+  no_log: true
   notify:
     - Restart mysqlrouter_exporter

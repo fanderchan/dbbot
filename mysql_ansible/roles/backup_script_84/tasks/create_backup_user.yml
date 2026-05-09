@@ -3,11 +3,15 @@
     src: ../templates/create_backup_user.sql.j2
     dest: /tmp/create_backup_user_84.sql
     mode: '0600'
+  no_log: true
 
 - name: Create backup user
   ansible.builtin.shell: >
-    {{ mysql_software_dir }}/bin/mysql -h127.0.0.1 -P{{ mysql_port }} -u{{ mysql_admin_user }} -p'{{ mysql_admin_127_password }}' < /tmp/create_backup_user_84.sql
+    {{ mysql_software_dir }}/bin/mysql -h127.0.0.1 -P{{ mysql_port }} -u{{ mysql_admin_user }} < /tmp/create_backup_user_84.sql
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_127_password }}"
   changed_when: true
+  no_log: true
 
 - name: Remove temp file /tmp/create_backup_user_84.sql
   ansible.builtin.file:

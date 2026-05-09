@@ -27,6 +27,7 @@
   register: make_mha_go__gtid_check
   changed_when: false
   failed_when: false
+  no_log: true
 
 - name: Fail if GTID prerequisites are not enabled
   ansible.builtin.fail:

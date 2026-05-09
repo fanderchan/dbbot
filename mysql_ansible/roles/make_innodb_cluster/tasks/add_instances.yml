@@ -7,6 +7,7 @@
     dest: /tmp/add_instances.js
     mode: '0600'
   run_once: true
+  no_log: true
 
 - name: Add instances to cluster
   ansible.builtin.command: >

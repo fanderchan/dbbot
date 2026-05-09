@@ -7,6 +7,7 @@
     src: setup_router_account.js.j2
     dest: /tmp/setup_router_account.js
     mode: '0600'
+  no_log: true
 
 - name: Run setup router account script
   ansible.builtin.command: >
@@ -23,4 +24,3 @@
   ansible.builtin.file:
     path: /tmp/setup_router_account.js
     state: absent
-

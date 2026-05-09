@@ -24,6 +24,7 @@
     group: "{{ mysql_group }}"
     mode: '0640'
   register: make_mha_go__config_render
+  no_log: true
 
 - name: Verify cluster config passes check-repl
   ansible.builtin.command: >-
@@ -32,6 +33,7 @@
   register: make_mha_go__check_repl
   changed_when: false
   become_user: "{{ mysql_user }}"
+  no_log: true
 
 - name: Show check-repl output
   ansible.builtin.debug:

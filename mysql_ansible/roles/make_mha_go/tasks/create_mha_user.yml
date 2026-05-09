@@ -8,6 +8,7 @@
     owner: root
     group: root
     mode: '0600'
+  no_log: true
 
 - name: Execute create_mha_user.sql on primary
   ansible.builtin.shell: >-
@@ -20,6 +21,7 @@
   environment:
     MYSQL_PWD: "{{ mysql_admin_127_password }}"
   changed_when: true
+  no_log: true
 
 - name: Remove temporary SQL file
   ansible.builtin.file:

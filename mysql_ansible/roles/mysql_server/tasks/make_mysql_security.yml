@@ -2,12 +2,14 @@
   ansible.builtin.template:
     src: ../templates/secure.sql.j2
     dest: /tmp/make_mysql_secure.sql
-    mode: '0644'
+    mode: '0600'
+  no_log: true
 
 - name: Make mysql secure
   ansible.builtin.shell: >
     {{ mysql_software_dir }}/bin/mysql -hlocalhost -uroot -S {{ socket }} < /tmp/make_mysql_secure.sql
   changed_when: true
+  no_log: true
 
 - name: Remove temp file /tmp/make_mysql_secure.sql
   ansible.builtin.file:

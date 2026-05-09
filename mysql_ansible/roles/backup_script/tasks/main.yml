@@ -6,9 +6,10 @@
   ansible.builtin.template:
     src: "templates/backup.sh.j2"
     dest: "{{ mysql_data_dir_base }}/backup{{ mysql_port }}.sh"
-    mode: '0755'
+    mode: '0700'
     owner: "{{ mysql_user }}"
     group: "{{ mysql_group }}"
+  no_log: true
 
 - name: Ensure mysql_user is allowed to use crontab
   ansible.builtin.lineinfile:

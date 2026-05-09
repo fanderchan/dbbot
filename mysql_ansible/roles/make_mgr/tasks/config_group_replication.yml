@@ -3,11 +3,15 @@
     src: ../templates/config_group_replication.sql.j2
     dest: /tmp/config_group_replication.sql
     mode: '0600'
+  no_log: true
 
 - name: Config mysql group replication
   ansible.builtin.shell: >
-    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} < /tmp/config_group_replication.sql
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -S {{ socket }} < /tmp/config_group_replication.sql
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
   changed_when: true
+  no_log: true
 
 - name: Remove temp file /tmp/config_group_replication.sql
   ansible.builtin.file:

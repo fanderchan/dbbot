@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install Ansible lint tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ansible-base==2.10.17 ansible-lint==5.4.0
+
+      - name: Verify portable Ansible runtime
+        run: python3 portable-ansible/ansible-playbook --version
+
+      - name: Check support matrix data
+        run: ./bin/dbbotctl support check
+
+      - name: Run MySQL syntax checks
+        working-directory: mysql_ansible/playbooks
+        run: |
+          python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.ini single_node.yml --syntax-check
+          python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.ini master_slave.yml --syntax-check
+          python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.ini mgr.yml --syntax-check
+          python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.ini innodb_cluster.yml --syntax-check
+          python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.ini mha_go.yml --syntax-check
+
+      - name: Run ClickHouse syntax checks
+        working-directory: clickhouse_ansible/playbooks
+        run: |
+          python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.deploy.ini deploy_cluster.yml --syntax-check
+          python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.restore.ini restore_cluster.yml --syntax-check
+          python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.restore.ini validate_restore_consistency.yml --syntax-check
+          python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.deploy.ini uninstall_cluster.yml --syntax-check
+
+      - name: Run monitoring syntax check
+        working-directory: monitoring_prometheus_ansible/playbooks
+        run: python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.ini monitoring_prometheus_deployment.yml --syntax-check
+
+      - name: Run MySQL lint
+        run: sh mysql_ansible/lint_all_yml_files.sh
+
+      - name: Run MySQL lightweight regression tests
+        run: |
+          sh mysql_ansible/tests/test_custom_mysql_packages_dir.sh
+          sh mysql_ansible/tests/test_validate_default_password_guard_hint.sh
+          sh mysql_ansible/tests/test_mysql_9_7_support.sh
+          python3 portable-ansible/ansible-playbook -i localhost, mysql_ansible/tests/validate_custom_mysql_package_override.yml
+
+  release-package-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build release package smoke artifact
+        run: |
+          package_path="$(bash .github/scripts/build-release-package.sh v0.0.0-ci "${RUNNER_TEMP}/dbbot-release")"
+          test -f "${package_path}"
+          tar -tzf "${package_path}" >/dev/null

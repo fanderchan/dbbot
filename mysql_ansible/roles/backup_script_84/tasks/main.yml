@@ -38,32 +38,44 @@
 
 - name: Check MySQL server version is 8.4.x
   ansible.builtin.shell: >
-    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} -Nse "select version();"
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -S {{ socket }} -Nse "select version();"
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
   register: backup_script_84__version
   changed_when: false
   failed_when: backup_script_84__version.stdout is not match('^8\\.4\\.')
+  no_log: true
 
 - name: Check clone plugin status
   ansible.builtin.shell: >
-    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} -Nse
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -S {{ socket }} -Nse
     "select plugin_status from information_schema.plugins where plugin_name='clone';"
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
   register: backup_script_84__clone_status
   changed_when: false
+  no_log: true
 
 - name: Install clone plugin if missing
   ansible.builtin.shell: >
-    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} -e
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -S {{ socket }} -e
     "install plugin clone soname 'mysql_clone.so';"
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
   register: backup_script_84__clone_install
   ignore_errors: true
   when: backup_script_84__clone_status.stdout | trim | length == 0
+  no_log: true
 
 - name: Re-check clone plugin status
   ansible.builtin.shell: >
-    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} -Nse
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -S {{ socket }} -Nse
     "select plugin_status from information_schema.plugins where plugin_name='clone';"
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
   register: backup_script_84__clone_status_after
   changed_when: false
+  no_log: true
 
 - name: Fail when clone plugin is not available
   ansible.builtin.fail:
@@ -72,11 +84,14 @@
 
 - name: Check MySQL writable state for backup user creation
   ansible.builtin.shell: >
-    {{ mysql_software_dir }}/bin/mysql -h127.0.0.1 -P{{ mysql_port }} -u{{ mysql_admin_user }} -p'{{ mysql_admin_127_password }}'
+    {{ mysql_software_dir }}/bin/mysql -h127.0.0.1 -P{{ mysql_port }} -u{{ mysql_admin_user }}
     -Nse "select if(@@super_read_only=1 or @@read_only=1, '0', '1');"
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_127_password }}"
   register: backup_script_84__writable
   changed_when: false
   failed_when: backup_script_84__writable.rc != 0
+  no_log: true
 
 - name: Set backup user creation flag
   ansible.builtin.set_fact:
@@ -113,6 +128,7 @@
     mode: '0700'
     owner: "{{ mysql_user }}"
     group: "{{ mysql_group }}"
+  no_log: true
 
 - name: Deploy backup schedule script
   ansible.builtin.template:

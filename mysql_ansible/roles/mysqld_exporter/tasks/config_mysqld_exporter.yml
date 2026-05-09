@@ -3,6 +3,7 @@
     src: ../templates/create_mysql_exporter_db_user.sql.j2
     dest: /tmp/create_mysql_exporter_db_user.sql
     mode: '0600'
+  no_log: true
   when: fcs_role_mysqld_exporter_create_monitor_user
 
 - name: Resolve MySQL basedir from instance my.cnf
@@ -15,8 +16,11 @@
 
 - name: Create MySQL exporter database user
   ansible.builtin.shell: >
-    {{ mysqld_exporter_mysql_basedir.stdout }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} < /tmp/create_mysql_exporter_db_user.sql
+    {{ mysqld_exporter_mysql_basedir.stdout }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -S {{ socket }} < /tmp/create_mysql_exporter_db_user.sql
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
   changed_when: true
+  no_log: true
   when: fcs_role_mysqld_exporter_create_monitor_user
 
 - name: Delete SQL script from target server
@@ -32,17 +36,21 @@
     mode: '0600'
     owner: "{{ mysqld_exporter_run_user }}"
     group: "{{ mysqld_exporter_run_user_group }}"
+  no_log: true
   notify:
     - Restart mysqld_exporter
 
 - name: Detect MGR members when mysqld_exporter_topology is auto
   ansible.builtin.shell: >
     {{ mysqld_exporter_mysql_basedir.stdout }}/bin/mysql --batch --skip-column-names
-    -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }}
+    -hlocalhost -u{{ mysql_admin_user }} -S {{ socket }}
     -e "SELECT COUNT(*) FROM performance_schema.replication_group_members"
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
   register: mysqld_exporter_mgr_member_count
   changed_when: false
   failed_when: false
+  no_log: true
   when: (mysqld_exporter_topology | default('auto')) == 'auto'
 
 - name: Resolve effective mysqld_exporter topology

@@ -3,11 +3,15 @@
     src: ../templates/master_slaves.sql.j2
     dest: /tmp/master_slaves.sql
     mode: '0600'
+  no_log: true
 
 - name: Create replication user on master / Change master to and start slave on slave
   ansible.builtin.shell: >
-    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -p{{ mysql_admin_password }} -S {{ socket }} < /tmp/master_slaves.sql
+    {{ mysql_software_dir }}/bin/mysql -hlocalhost -u{{ mysql_admin_user }} -S {{ socket }} < /tmp/master_slaves.sql
+  environment:
+    MYSQL_PWD: "{{ mysql_admin_password }}"
   changed_when: true
+  no_log: true
 
 - name: Clear temp file /tmp/master_slaves.sql
   ansible.builtin.file:

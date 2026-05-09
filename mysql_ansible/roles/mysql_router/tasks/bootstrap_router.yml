@@ -13,6 +13,7 @@
     src: bootstrap_router.exp.j2
     dest: /tmp/bootstrap_router.exp
     mode: '0700'
+  no_log: true
   when: not mysql_router__bootstrapped.stat.exists
 
 - name: Check if expect is installed
@@ -33,7 +34,7 @@
 - name: Bootstrap MySQL Router using expect script
   ansible.builtin.command: /tmp/bootstrap_router.exp
   when: not mysql_router__bootstrapped.stat.exists
-  no_log: false
+  no_log: true
   register: mysql_router__bootstrap_result
   changed_when: mysql_router__bootstrap_result.rc == 0
 
