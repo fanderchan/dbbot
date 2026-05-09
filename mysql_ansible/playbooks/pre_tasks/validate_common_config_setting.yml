@@ -33,10 +33,6 @@
         value: "{{ mysql_monitor_password }}"
         default_value: "Dbbot_{{ mysql_monitor_user }}@8888"
         enabled: true
-      - key: mysql_kha_password
-        value: "{{ mysql_kha_password }}"
-        default_value: "Dbbot_{{ mysql_kha_user }}@8888"
-        enabled: true
       - key: mysql_cluster_admin_password
         value: "{{ mysql_cluster_admin_password }}"
         default_value: "Dbbot_{{ mysql_cluster_admin_user }}@8888"

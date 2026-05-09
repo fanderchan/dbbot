@@ -30,10 +30,6 @@
         - mysql_instance_basic
         - replication_ms
         - mha_classic_manager
-      keepalived_master_slave.yml:
-        - mysql_instance_basic
-        - replication_ms
-        - keepalived_vip
       node_exporter_install.yml:
         - node_exporter_service
       mysqld_exporter_install.yml:

@@ -56,8 +56,6 @@ mysql_mgr_user: repl
 mysql_mgr_password: "Dbbot_{{ mysql_mgr_user }}@8888"
 mysql_monitor_user: monitor      # mysqld_exporter use it
 mysql_monitor_password: "Dbbot_{{ mysql_monitor_user }}@8888"
-mysql_kha_user: kha
-mysql_kha_password: "Dbbot_{{ mysql_kha_user }}@8888"
 
 ## InnoDB Cluster accounts
 # Cluster admin account (for mysqlsh operations)

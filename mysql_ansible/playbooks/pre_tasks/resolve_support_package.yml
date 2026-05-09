@@ -18,7 +18,7 @@
       {%- set playbook = dbbot_entry_playbook_name | default('') -%}
       {%- if playbook == 'single_node.yml' -%}
       {{ db_type }}_single_node
-      {%- elif playbook in ['master_slave.yml', 'keepalived_master_slave.yml'] -%}
+      {%- elif playbook == 'master_slave.yml' -%}
       {{ db_type }}_master_slave
       {%- elif playbook == 'mgr.yml' and db_type in ['mysql', 'greatsql'] -%}
       {{ db_type }}_mgr

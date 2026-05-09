@@ -18,11 +18,6 @@
           and (mha_go_writer_endpoint_enabled | default(false) | bool)
         ) else [])
         + ([{
-          'feature_name': 'master-slave keepalived VIP',
-          'variable_name': 'net_work_interface',
-          'interface_name': (net_work_interface | default(''))
-        }] if '../roles/make_keepalived' in (roles_to_execute | default([])) else [])
-        + ([{
           'feature_name': 'MySQL Router HA VIP',
           'variable_name': 'router_net_work_interface',
           'interface_name': (router_net_work_interface | default(''))

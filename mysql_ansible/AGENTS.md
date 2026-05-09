@@ -29,7 +29,6 @@
 ## 公开入口
 - `single_node.yml`
 - `master_slave.yml`
-- `keepalived_master_slave.yml`
 - `mgr.yml`
 - `innodb_cluster.yml`
 - `innodb_cluster_router.yml`
