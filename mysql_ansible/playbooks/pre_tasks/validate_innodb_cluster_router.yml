@@ -47,24 +47,3 @@
     router_ports.ro_x.port == router_ports.rw_split.port or
     router_ports.ro_x.port == router_ports.http.port or
     router_ports.rw_split.port == router_ports.http.port
-
-- name: Display Router configuration summary
-  ansible.builtin.debug:
-    msg: "{{ (
-            [
-              '======================================================',
-              'MySQL Router Configuration Summary',
-              '======================================================',
-              'Bootstrap Server: ' ~ router_bootstrap_server ~ ':' ~ (mysql_port | string),
-              '',
-              'Enabled Ports:'
-            ]
-            + (['  - RW (Read-Write):     ' ~ (router_ports.rw.port | string)] if router_ports.rw.enabled else [])
-            + (['  - RO (Read-Only):      ' ~ (router_ports.ro.port | string)] if router_ports.ro.enabled else [])
-            + (['  - RW X Protocol:       ' ~ (router_ports.rw_x.port | string)] if router_ports.rw_x.enabled else [])
-            + (['  - RO X Protocol:       ' ~ (router_ports.ro_x.port | string)] if router_ports.ro_x.enabled else [])
-            + (['  - RW Split:            ' ~ (router_ports.rw_split.port | string)] if router_ports.rw_split.enabled else [])
-            + (['  - REST API:            ' ~ (router_ports.http.port | string)] if router_ports.http.enabled else [])
-            + ['======================================================']
-          ) }}"
-  run_once: true

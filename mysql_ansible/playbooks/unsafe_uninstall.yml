@@ -1,6 +1,8 @@
 - name: Unsafe uninstall MySQL instance
   hosts: dbbot_mysql
   become: true
+  any_errors_fatal: true
+  max_fail_percentage: 1
   vars_files:
     - common_config.yml
     - advanced_config.yml

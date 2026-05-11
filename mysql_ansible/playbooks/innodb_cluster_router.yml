@@ -56,6 +56,45 @@
     - name: Import tasks to validate network interfaces for VIP-related roles
       ansible.builtin.import_tasks: pre_tasks/validate_network_interfaces_for_vip_roles.yml
 
+    - name: Display Router configuration summary
+      ansible.builtin.debug:
+        msg: "{{ (
+                [
+                  '======================================================',
+                  'MySQL Router Configuration Summary',
+                  '======================================================',
+                  'Bootstrap Server: ' ~ router_bootstrap_server ~ ':' ~ (mysql_port | string),
+                  '',
+                  'Enabled Ports:'
+                ]
+                + (['  - RW (Read-Write):     ' ~ (router_ports.rw.port | string)] if router_ports.rw.enabled else [])
+                + (['  - RO (Read-Only):      ' ~ (router_ports.ro.port | string)] if router_ports.ro.enabled else [])
+                + (['  - RW X Protocol:       ' ~ (router_ports.rw_x.port | string)] if router_ports.rw_x.enabled else [])
+                + (['  - RO X Protocol:       ' ~ (router_ports.ro_x.port | string)] if router_ports.ro_x.enabled else [])
+                + (['  - RW Split:            ' ~ (router_ports.rw_split.port | string)] if router_ports.rw_split.enabled else [])
+                + (['  - REST API:            ' ~ (router_ports.http.port | string)] if router_ports.http.enabled else [])
+                + ['======================================================']
+              ) }}"
+      run_once: true
+
+    - name: Display Router HA configuration summary
+      ansible.builtin.debug:
+        msg:
+          - "======================================================"
+          - "MySQL Router HA Configuration Summary"
+          - "======================================================"
+          - "VIP Address:        {{ router_vip }}/{{ router_vip_netmask }}"
+          - "Network Interface:  {{ router_net_work_interface }}"
+          - "Current Node:       {{ ansible_default_ipv4.address }}"
+          - "Current Role:       {{ router_current_node_role }}"
+          - "Current Priority:   {{ router_current_node_priority }}"
+          - ""
+          - "HA Nodes:"
+          - "  - {{ router_ha_master_node.ip }} ({{ router_ha_master_node.role }}, priority: {{ router_ha_master_node.priority }})"
+          - "  - {{ router_ha_backup_node.ip }} ({{ router_ha_backup_node.role }}, priority: {{ router_ha_backup_node.priority }})"
+          - "======================================================"
+      when: router_enable_ha | bool
+
     - name: Import tasks to ensure tar exists on control host
       ansible.builtin.import_tasks: pre_tasks/ensure_control_host_tar.yml
 

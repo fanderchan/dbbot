@@ -1,10 +1,6 @@
 ---
 # InnoDB Cluster Router HA Configuration Validation
 
-# Import basic Router validation first
-- name: Import basic router validation
-  ansible.builtin.import_tasks: validate_innodb_cluster_router.yml
-
 # ============================================================
 # HA Specific Validation
 # ============================================================
@@ -73,20 +69,3 @@
     router_current_node_priority: "{{ (router_ha_nodes | selectattr('ip', 'equalto', ansible_default_ipv4.address) | first).priority }}"
     router_ha_master_node: "{{ router_ha_nodes | selectattr('role', 'equalto', 'MASTER') | first }}"
     router_ha_backup_node: "{{ router_ha_nodes | selectattr('role', 'equalto', 'BACKUP') | first }}"
-
-- name: Display Router HA configuration summary
-  ansible.builtin.debug:
-    msg:
-      - "======================================================"
-      - "MySQL Router HA Configuration Summary"
-      - "======================================================"
-      - "VIP Address:        {{ router_vip }}/{{ router_vip_netmask }}"
-      - "Network Interface:  {{ router_net_work_interface }}"
-      - "Current Node:       {{ ansible_default_ipv4.address }}"
-      - "Current Role:       {{ router_current_node_role }}"
-      - "Current Priority:   {{ router_current_node_priority }}"
-      - ""
-      - "HA Nodes:"
-      - "  - {{ router_ha_master_node.ip }} ({{ router_ha_master_node.role }}, priority: {{ router_ha_master_node.priority }})"
-      - "  - {{ router_ha_backup_node.ip }} ({{ router_ha_backup_node.role }}, priority: {{ router_ha_backup_node.priority }})"
-      - "======================================================"

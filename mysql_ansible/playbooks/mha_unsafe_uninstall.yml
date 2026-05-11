@@ -1,6 +1,8 @@
 - name: Unsafe uninstall classic MHA and MySQL instance
   hosts: dbbot_mysql
   become: true
+  any_errors_fatal: true
+  max_fail_percentage: 1
   vars_files:
     - default/common_config.yml
     - default/advanced_config.yml

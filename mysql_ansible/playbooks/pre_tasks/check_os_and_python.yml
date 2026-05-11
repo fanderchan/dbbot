@@ -15,9 +15,11 @@
 - name: Reject MySQL 9.7 on RHEL 7 family operating systems
   ansible.builtin.fail:
     msg: >-
-      MySQL {{ mysql_version }} packages use glibc2.28 and are not supported
-      on {{ os_type }}. Use MySQL 8.4.x on RHEL 7 family hosts, or upgrade
-      the operating system before deploying MySQL 9.7.
+      {{ ansible_play_name }}: MySQL {{ mysql_version }} packages use glibc2.28
+      and are not supported on {{ os_type }}. This playbook cannot continue with
+      MySQL 9.7 on RHEL 7 family hosts. Use MySQL 8.4.x on these hosts, upgrade
+      the operating system, or pass the version that was actually deployed when
+      running an uninstall playbook.
   when:
     - db_type | default('mysql') == 'mysql'
     - mysql_version is defined
