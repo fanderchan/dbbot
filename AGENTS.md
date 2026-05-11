@@ -35,6 +35,7 @@
 - 版本自检：
   - `python3 ${PORTABLE_ANSIBLE_HOME}/ansible-playbook --version`
 - 在最小化 IaaS 测试环境中：
+  - 中控机在解压 dbbot release 包前必须先具备 `tar`；最小化系统缺失时先用系统包管理器安装，例如 `yum install -y tar`。
   - 优先保持客机为“只保证能正常 yum”的最小状态，不预装额外依赖包来掩盖 `dbbot` 缺口。
   - 将仓库拷贝到控制节点后，先执行 `sh /usr/local/dbbot/libexec/dbbotctl/setup_portable_ansible.sh` 并 `source ~/.bashrc`。
   - 若依赖仍缺失，应作为 `dbbot` 待补能力反馈，不先在客机上手工 `yum install`。

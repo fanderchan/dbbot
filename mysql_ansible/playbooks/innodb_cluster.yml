@@ -36,6 +36,7 @@
       - "../roles/make_innodb_cluster"
     # InnoDB Cluster uses MGR, TLS required
     mtls_with_mysql_group_replication: 1
+    roles_precheckandset_check_networkcardnames: false
 
   pre_tasks:
     # Common configuration validation
