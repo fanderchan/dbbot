@@ -127,6 +127,7 @@
                   'MySQL Router HA Deployment Complete!',
                   '======================================================',
                   'VIP Address: ' ~ router_vip,
+                  'Router Host: ' ~ ansible_default_ipv4.address,
                   'Interface:   ' ~ router_net_work_interface,
                   'HA Nodes:    ' ~ (router_ha_nodes | map(attribute='ip') | list | join(', ')),
                   '',
@@ -151,7 +152,6 @@
                   '======================================================'
                 ]
               ) }}"
-      run_once: true
       when: router_enable_ha | bool
 
     - name: Display Router deployment summary (App mode)
