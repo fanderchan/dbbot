@@ -1,5 +1,5 @@
 ---
-- name: Determine whether dbbot support package metadata is required (local)
+- name: Determine whether dbbot support package metadata is required
   ansible.builtin.set_fact:
     dbbot_support_package_required: >-
       {{
@@ -7,11 +7,8 @@
         or '../roles/setup_mysqlshell' in (roles_to_execute | default([]))
         or '../roles/mysql_router' in (roles_to_execute | default([]))
       }}
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Select dbbot support package query scope (local)
+- name: Select dbbot support package query scope
   ansible.builtin.set_fact:
     dbbot_support_stack_id: "{{ db_type }}"
     dbbot_support_arch_id: >-
@@ -32,11 +29,8 @@
       all
       {%- endif -%}
   when: dbbot_support_package_required | bool
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Resolve package metadata from dbbot support matrix (local)
+- name: Resolve package metadata from dbbot support matrix
   ansible.builtin.command:
     argv:
       - "{{ playbook_dir }}/../../bin/dbbotctl"
@@ -58,19 +52,15 @@
   register: dbbot_support_package_query
   changed_when: false
   when: dbbot_support_package_required | bool
-  run_once: true
   delegate_to: localhost
   become: false
 
-- name: Parse dbbot support package metadata (local)
+- name: Parse dbbot support package metadata
   ansible.builtin.set_fact:
     dbbot_support_package_records: "{{ dbbot_support_package_query.stdout | from_json }}"
   when: dbbot_support_package_required | bool
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Fail when dbbot support package rule is not unique (local)
+- name: Fail when dbbot support package rule is not unique
   ansible.builtin.fail:
     msg: >-
       dbbot support package query must return exactly one rule for
@@ -80,19 +70,13 @@
   when:
     - dbbot_support_package_required | bool
     - (dbbot_support_package_records | length) != 1
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Store dbbot support package rule (local)
+- name: Store dbbot support package rule
   ansible.builtin.set_fact:
     dbbot_support_package_record: "{{ dbbot_support_package_records[0] }}"
   when: dbbot_support_package_required | bool
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Set primary package metadata from dbbot support matrix (local)
+- name: Set primary package metadata from dbbot support matrix
   ansible.builtin.set_fact:
     dbbot_support_package_resolved: true
     dbbot_mysql_package_using_custom: false
@@ -102,11 +86,8 @@
     mysql_package_checksum_type: "{{ dbbot_support_package_record.checksum_type }}"
     mysql_package_checksum: "{{ dbbot_support_package_record.checksum }}"
   when: dbbot_support_package_required | bool
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Fail when custom MySQL package name is invalid (local)
+- name: Fail when custom MySQL package name is invalid
   ansible.builtin.fail:
     msg: >-
       mysql_custom_package must be a local archive file name ending in .tar.gz
@@ -124,11 +105,8 @@
         (mysql_custom_package | default('')).endswith('.tar.gz')
         or (mysql_custom_package | default('')).endswith('.tar.xz')
       )
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Fail when custom MySQL package checksum type is invalid (local)
+- name: Fail when custom MySQL package checksum type is invalid
   ansible.builtin.fail:
     msg: >-
       mysql_custom_package_checksum_type must be one of none, md5, sha256,
@@ -138,11 +116,8 @@
     - "'../roles/mysql_server' in (roles_to_execute | default([]))"
     - fcs_allow_custom_mysql_package | default(false) | bool
     - (mysql_custom_package_checksum_type | default('none')) not in ['none', 'md5', 'sha256', 'sha512']
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Use custom MySQL Server package metadata (local)
+- name: Use custom MySQL Server package metadata
   ansible.builtin.set_fact:
     dbbot_mysql_package_using_custom: true
     dbbot_mysql_package_verify_with_support_matrix: false
@@ -154,11 +129,8 @@
     - dbbot_support_package_required | bool
     - "'../roles/mysql_server' in (roles_to_execute | default([]))"
     - fcs_allow_custom_mysql_package | default(false) | bool
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Fail when MySQL Shell package metadata is missing from dbbot support (local)
+- name: Fail when MySQL Shell package metadata is missing from dbbot support
   ansible.builtin.fail:
     msg: >-
       dbbot support did not return a MySQL Shell related package for
@@ -168,11 +140,8 @@
     - dbbot_support_package_required | bool
     - "'../roles/setup_mysqlshell' in (roles_to_execute | default([]))"
     - ((dbbot_support_package_record | default({})).related_packages | default([]) | length) < 1
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Set MySQL Shell package name from dbbot support matrix (local)
+- name: Set MySQL Shell package name from dbbot support matrix
   ansible.builtin.set_fact:
     mysqlshell_package: "{{ dbbot_support_package_record.related_packages[0] }}"
     mysqlshell_package_checksum_type: "{{ dbbot_support_package_record.related_package_1_checksum_type | default('none') }}"
@@ -181,11 +150,8 @@
     - dbbot_support_package_required | bool
     - "'../roles/setup_mysqlshell' in (roles_to_execute | default([]))"
     - ((dbbot_support_package_record | default({})).related_packages | default([]) | length) >= 1
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Fail when MySQL Router package metadata is missing from dbbot support (local)
+- name: Fail when MySQL Router package metadata is missing from dbbot support
   ansible.builtin.fail:
     msg: >-
       dbbot support did not return a MySQL Router related package for
@@ -195,11 +161,8 @@
     - dbbot_support_package_required | bool
     - "'../roles/mysql_router' in (roles_to_execute | default([]))"
     - ((dbbot_support_package_record | default({})).related_packages | default([]) | length) < 2
-  run_once: true
-  delegate_to: localhost
-  become: false
 
-- name: Set MySQL Router package name from dbbot support matrix (local)
+- name: Set MySQL Router package name from dbbot support matrix
   ansible.builtin.set_fact:
     router_package: "{{ dbbot_support_package_record.related_packages[1] }}"
     router_package_checksum_type: "{{ dbbot_support_package_record.related_package_2_checksum_type | default('none') }}"
@@ -208,6 +171,3 @@
     - dbbot_support_package_required | bool
     - "'../roles/mysql_router' in (roles_to_execute | default([]))"
     - ((dbbot_support_package_record | default({})).related_packages | default([]) | length) >= 2
-  run_once: true
-  delegate_to: localhost
-  become: false

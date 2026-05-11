@@ -1,9 +1,6 @@
-- name: Select MySQL package verification mode (local)
+- name: Select MySQL package verification mode
   ansible.builtin.set_fact:
     dbbot_mysql_package_verify_with_support_matrix_effective: "{{ dbbot_mysql_package_verify_with_support_matrix | default(dbbot_support_package_resolved | default(false)) | bool }}"
-  run_once: true
-  delegate_to: localhost
-  become: false
 
 - name: Verify {{ mysql_package }} using dbbot support matrix (local)
   ansible.builtin.command:
@@ -24,7 +21,6 @@
   register: mysql_package_support_verify
   changed_when: false
   when: dbbot_mysql_package_verify_with_support_matrix_effective | bool
-  run_once: true
   delegate_to: localhost
   become: false
 
@@ -33,7 +29,6 @@
     path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
   register: mysql_package_stat
   when: not (dbbot_mysql_package_verify_with_support_matrix_effective | bool)
-  run_once: true
   delegate_to: localhost
   become: false
 
@@ -43,9 +38,6 @@
   when:
     - not (dbbot_mysql_package_verify_with_support_matrix_effective | bool)
     - not mysql_package_stat.stat.exists
-  run_once: true
-  delegate_to: localhost
-  become: false
 
 - name: Check {{ mysql_package }} checksum when configured (local)
   ansible.builtin.stat:
@@ -58,11 +50,10 @@
     - mysql_package_stat.stat.exists
     - (mysql_package_checksum_type | default('none')) != 'none'
     - (mysql_package_checksum | default('-')) != '-'
-  run_once: true
   delegate_to: localhost
   become: false
 
-- name: Fail when {{ mysql_package }} checksum does not match (local)
+- name: Fail when {{ mysql_package }} checksum does not match
   ansible.builtin.fail:
     msg: >-
       MySQL package checksum mismatch at {{ mysql_packages_dir }}/{{ mysql_package }}:
@@ -73,6 +64,3 @@
     - (mysql_package_checksum_type | default('none')) != 'none'
     - (mysql_package_checksum | default('-')) != '-'
     - mysql_package_checksum_stat.stat.checksum != mysql_package_checksum
-  run_once: true
-  delegate_to: localhost
-  become: false

@@ -211,7 +211,7 @@
   run_once: true
   delegate_to: 127.0.0.1
   become: false
-  when: roles_precheckandset_check_networkcardnames is not defined or roles_precheckandset_check_networkcardnames != 0
+  when: roles_precheckandset_check_networkcardnames | default(true) | bool
 
 - name: Delete /tmp/net_aliases.txt
   ansible.builtin.file:

@@ -10,6 +10,105 @@
   tags:
     - dependents
 
+- name: Probe libxcrypt compatibility package for MySQL 5.7
+  ansible.builtin.shell: >-
+    {{ ansible_pkg_mgr | default('yum') }} -q list installed libxcrypt-compat >/dev/null 2>&1
+    || {{ ansible_pkg_mgr | default('yum') }} -q list available libxcrypt-compat >/dev/null 2>&1
+  args:
+    warn: false
+  register: mysql_server__libxcrypt_compat_probe
+  changed_when: false
+  failed_when: false
+  when:
+    - db_type == 'mysql'
+    - mysql_version.startswith('5.7')
+  tags:
+    - dependents
+
+- name: Install libxcrypt compatibility package for MySQL 5.7
+  ansible.builtin.yum:
+    name: libxcrypt-compat
+    state: present
+  when:
+    - db_type == 'mysql'
+    - mysql_version.startswith('5.7')
+    - mysql_server__libxcrypt_compat_probe is defined
+    - mysql_server__libxcrypt_compat_probe.rc == 0
+  tags:
+    - dependents
+
+- name: Clear bundled ncurses compatibility rpm fallback for MySQL 5.7 on Rocky 9
+  ansible.builtin.set_fact:
+    mysql_server__ncurses_compat_rpm_file: ""
+  when:
+    - db_type == 'mysql'
+    - mysql_version.startswith('5.7')
+    - os_type == 'Rocky9'
+  tags:
+    - dependents
+
+- name: Install ncurses compatibility package for MySQL 5.7 on Rocky 9 from yum
+  when:
+    - db_type == 'mysql'
+    - mysql_version.startswith('5.7')
+    - os_type == 'Rocky9'
+  tags:
+    - dependents
+  block:
+    - name: Probe ncurses compatibility package for MySQL 5.7 on Rocky 9
+      ansible.builtin.shell: >-
+        {{ ansible_pkg_mgr | default('yum') }} -q list installed ncurses-compat-libs >/dev/null 2>&1
+        || {{ ansible_pkg_mgr | default('yum') }} -q list available ncurses-compat-libs >/dev/null 2>&1
+      args:
+        warn: false
+      register: mysql_server__ncurses_compat_probe
+      changed_when: false
+      failed_when: false
+
+    - name: Install ncurses compatibility package from yum
+      ansible.builtin.yum:
+        name: ncurses-compat-libs
+        state: present
+      when: mysql_server__ncurses_compat_probe.rc == 0
+
+  rescue:
+    - name: Mark bundled ncurses compatibility rpm fallback as required
+      ansible.builtin.set_fact:
+        mysql_server__ncurses_compat_probe:
+          rc: 1
+
+- name: Set bundled ncurses compatibility rpm for MySQL 5.7 on Rocky 9
+  ansible.builtin.set_fact:
+    mysql_server__ncurses_compat_rpm_file: ncurses-compat-libs-6.2-12.20210508.el9.x86_64.rpm
+  when:
+    - db_type == 'mysql'
+    - mysql_version.startswith('5.7')
+    - os_type == 'Rocky9'
+    - mysql_server__ncurses_compat_probe is defined
+    - mysql_server__ncurses_compat_probe.rc != 0
+  tags:
+    - dependents
+
+- name: Copy bundled ncurses compatibility rpm to Rocky 9 target
+  ansible.builtin.copy:
+    src: "../files/{{ mysql_server__ncurses_compat_rpm_file }}"
+    dest: "/tmp/{{ mysql_server__ncurses_compat_rpm_file }}"
+    mode: '0644'
+  when:
+    - (mysql_server__ncurses_compat_rpm_file | default('') | length) > 0
+  tags:
+    - dependents
+
+- name: Install bundled ncurses compatibility rpm on Rocky 9 target
+  ansible.builtin.yum:
+    name: "/tmp/{{ mysql_server__ncurses_compat_rpm_file }}"
+    state: present
+    disable_gpg_check: true
+  when:
+    - (mysql_server__ncurses_compat_rpm_file | default('') | length) > 0
+  tags:
+    - dependents
+
 - name: Install jemalloc
   when: fcs_mysql_use_jemalloc | bool
   tags:

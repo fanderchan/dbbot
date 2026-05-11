@@ -1,5 +1,5 @@
 ---
-# Ensure packages required by selected roles are ready on the control host
+# Ensure packages required by selected roles are ready on the control host.
 
 - name: Ensure downloads directory exists when packages are needed (local)
   ansible.builtin.file:
@@ -14,97 +14,157 @@
     or '../roles/setup_mysqlshell' in roles_to_execute
     or '../roles/mysql_router' in roles_to_execute
 
-- name: Prepare MySQL Server package on control host
-  when: "'../roles/mysql_server' in roles_to_execute"
+- name: Initialize package preparation lists (local)
+  ansible.builtin.set_fact:
+    prepare_mysql_package_items: []
+    prepare_mysqlshell_package_items: []
+    prepare_router_package_items: []
   become: false
   delegate_to: localhost
   run_once: true
+
+- name: Collect unique MySQL Server packages required by target hosts (local)
+  ansible.builtin.set_fact:
+    prepare_mysql_package_items: "{{ prepare_mysql_package_items + [prepare_mysql_package_item] }}"
   vars:
-    prepare_mysql_package_url: "{{ mysql_package_download_url | default('') }}"
-    prepare_mysql_package_checksum_spec: >-
+    prepare_mysql_package_item:
+      package: "{{ hostvars[prepare_package_host].mysql_package }}"
+      dir: "{{ hostvars[prepare_package_host].mysql_packages_dir | default(mysql_packages_dir) }}"
+      path: "{{ hostvars[prepare_package_host].mysql_packages_dir | default(mysql_packages_dir) }}/{{ hostvars[prepare_package_host].mysql_package }}"
+      url: "{{ hostvars[prepare_package_host].mysql_package_download_url | default('') }}"
+      checksum_type: "{{ hostvars[prepare_package_host].mysql_package_checksum_type | default('none') }}"
+      checksum: "{{ hostvars[prepare_package_host].mysql_package_checksum | default('-') }}"
+      auto_download: "{{ hostvars[prepare_package_host].fcs_auto_download_packages | default(fcs_auto_download_packages) }}"
+      timeout: "{{ hostvars[prepare_package_host].mysql_package_download_timeout | default(mysql_package_download_timeout | default(300)) }}"
+  loop: "{{ ansible_play_hosts_all }}"
+  loop_control:
+    loop_var: prepare_package_host
+  when:
+    - "'../roles/mysql_server' in roles_to_execute"
+    - hostvars[prepare_package_host].mysql_package is defined
+    - prepare_mysql_package_item.path not in (prepare_mysql_package_items | map(attribute='path') | list)
+  become: false
+  delegate_to: localhost
+  run_once: true
+
+- name: Collect unique MySQL Shell packages required by target hosts (local)
+  ansible.builtin.set_fact:
+    prepare_mysqlshell_package_items: "{{ prepare_mysqlshell_package_items + [prepare_mysqlshell_package_item] }}"
+  vars:
+    prepare_mysqlshell_package_item:
+      package: "{{ hostvars[prepare_package_host].mysqlshell_package }}"
+      dir: "{{ hostvars[prepare_package_host].mysqlshell_packages_dir | default(hostvars[prepare_package_host].mysql_packages_dir | default(mysql_packages_dir)) }}"
+      path: "{{ hostvars[prepare_package_host].mysqlshell_packages_dir | default(hostvars[prepare_package_host].mysql_packages_dir | default(mysql_packages_dir)) }}/{{ hostvars[prepare_package_host].mysqlshell_package }}"
+      url: "https://cdn.mysql.com/Downloads/MySQL-Shell/{{ hostvars[prepare_package_host].mysqlshell_package }}"
+      checksum_type: "{{ hostvars[prepare_package_host].mysqlshell_package_checksum_type | default('none') }}"
+      checksum: "{{ hostvars[prepare_package_host].mysqlshell_package_checksum | default('-') }}"
+      auto_download: "{{ hostvars[prepare_package_host].fcs_auto_download_packages | default(fcs_auto_download_packages) }}"
+      timeout: "{{ hostvars[prepare_package_host].mysqlshell_package_download_timeout | default(mysqlshell_package_download_timeout | default(300)) }}"
+  loop: "{{ ansible_play_hosts_all }}"
+  loop_control:
+    loop_var: prepare_package_host
+  when:
+    - "'../roles/setup_mysqlshell' in roles_to_execute"
+    - hostvars[prepare_package_host].mysqlshell_package is defined
+    - prepare_mysqlshell_package_item.path not in (prepare_mysqlshell_package_items | map(attribute='path') | list)
+  become: false
+  delegate_to: localhost
+  run_once: true
+
+- name: Collect unique MySQL Router packages required by target hosts (local)
+  ansible.builtin.set_fact:
+    prepare_router_package_items: "{{ prepare_router_package_items + [prepare_router_package_item] }}"
+  vars:
+    prepare_router_package_item:
+      package: "{{ hostvars[prepare_package_host].router_package }}"
+      dir: "{{ hostvars[prepare_package_host].router_packages_dir | default(hostvars[prepare_package_host].mysql_packages_dir | default(mysql_packages_dir)) }}"
+      path: "{{ hostvars[prepare_package_host].router_packages_dir | default(hostvars[prepare_package_host].mysql_packages_dir | default(mysql_packages_dir)) }}/{{ hostvars[prepare_package_host].router_package }}"
+      url: "https://cdn.mysql.com/Downloads/MySQL-Router/{{ hostvars[prepare_package_host].router_package }}"
+      checksum_type: "{{ hostvars[prepare_package_host].router_package_checksum_type | default('none') }}"
+      checksum: "{{ hostvars[prepare_package_host].router_package_checksum | default('-') }}"
+      auto_download: "{{ hostvars[prepare_package_host].fcs_auto_download_packages | default(fcs_auto_download_packages) }}"
+      timeout: "{{ hostvars[prepare_package_host].router_package_download_timeout | default(router_package_download_timeout | default(300)) }}"
+  loop: "{{ ansible_play_hosts_all }}"
+  loop_control:
+    loop_var: prepare_package_host
+  when:
+    - "'../roles/mysql_router' in roles_to_execute"
+    - hostvars[prepare_package_host].router_package is defined
+    - prepare_router_package_item.path not in (prepare_router_package_items | map(attribute='path') | list)
+  become: false
+  delegate_to: localhost
+  run_once: true
+
+- name: Prepare MySQL Server package on control host
+  ansible.builtin.include_tasks: ../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
+  vars:
+    local_tar_archive_label: "MySQL package {{ prepare_mysql_package_item.package }}"
+    local_tar_archive_path: "{{ prepare_mysql_package_item.path }}"
+    local_tar_archive_auto_download: "{{ prepare_mysql_package_item.auto_download | bool }}"
+    local_tar_archive_url: "{{ prepare_mysql_package_item.url }}"
+    local_tar_archive_checksum_spec: >-
       {{
-        mysql_package_checksum_type ~ ':' ~ mysql_package_checksum
-        if (mysql_package_checksum_type | default('none')) != 'none'
-        and (mysql_package_checksum | default('-')) != '-'
+        prepare_mysql_package_item.checksum_type ~ ':' ~ prepare_mysql_package_item.checksum
+        if (prepare_mysql_package_item.checksum_type | default('none')) != 'none'
+        and (prepare_mysql_package_item.checksum | default('-')) != '-'
         else ''
       }}
-  block:
-    - name: Ensure MySQL Server package archive is ready (local)
-      ansible.builtin.import_tasks: ../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
-      vars:
-        local_tar_archive_label: "MySQL package {{ mysql_package }}"
-        local_tar_archive_path: "{{ mysql_packages_dir }}/{{ mysql_package }}"
-        local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
-        local_tar_archive_url: "{{ prepare_mysql_package_url }}"
-        local_tar_archive_checksum_spec: "{{ prepare_mysql_package_checksum_spec }}"
-        local_tar_archive_timeout: "{{ mysql_package_download_timeout | default(300) }}"
-        local_tar_archive_headers:
-          User-Agent: "Wget/1.21.1"
+    local_tar_archive_timeout: "{{ prepare_mysql_package_item.timeout }}"
+    local_tar_archive_headers:
+      User-Agent: "Wget/1.21.1"
+  loop: "{{ prepare_mysql_package_items }}"
+  loop_control:
+    loop_var: prepare_mysql_package_item
+    label: "{{ prepare_mysql_package_item.package }}"
+  when:
+    - "'../roles/mysql_server' in roles_to_execute"
+    - prepare_mysql_package_items | length > 0
+  run_once: true
 
 - name: Prepare MySQL Shell package on control host
-  when: "'../roles/setup_mysqlshell' in roles_to_execute"
-  become: false
-  delegate_to: localhost
-  run_once: true
+  ansible.builtin.include_tasks: ../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
   vars:
-    prepare_mysqlshell_version: "{{ mysqlshell_version | default(mysql_version) }}"
-    prepare_mysqlshell_linux_glibc_tag: "{{ 'glibc2.28' if prepare_mysqlshell_version.startswith('9.7') else 'glibc2.17' }}"
-    prepare_mysqlshell_package: "{{ mysqlshell_package | default('mysql-shell-' + prepare_mysqlshell_version + '-linux-' + prepare_mysqlshell_linux_glibc_tag + '-x86-64bit.tar.gz') }}"
-    prepare_mysqlshell_dir: "{{ mysqlshell_packages_dir | default(mysql_packages_dir) }}"
-    prepare_mysqlshell_package_checksum_spec: >-
+    local_tar_archive_label: "MySQL Shell package {{ prepare_mysqlshell_package_item.package }}"
+    local_tar_archive_path: "{{ prepare_mysqlshell_package_item.path }}"
+    local_tar_archive_auto_download: "{{ prepare_mysqlshell_package_item.auto_download | bool }}"
+    local_tar_archive_url: "{{ prepare_mysqlshell_package_item.url }}"
+    local_tar_archive_checksum_spec: >-
       {{
-        mysqlshell_package_checksum_type ~ ':' ~ mysqlshell_package_checksum
-        if (mysqlshell_package_checksum_type | default('none')) != 'none'
-        and (mysqlshell_package_checksum | default('-')) != '-'
+        prepare_mysqlshell_package_item.checksum_type ~ ':' ~ prepare_mysqlshell_package_item.checksum
+        if (prepare_mysqlshell_package_item.checksum_type | default('none')) != 'none'
+        and (prepare_mysqlshell_package_item.checksum | default('-')) != '-'
         else ''
       }}
-  block:
-    - name: Ensure MySQL Shell package archive is ready (local)
-      ansible.builtin.import_tasks: ../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
-      vars:
-        local_tar_archive_label: "MySQL Shell package {{ prepare_mysqlshell_package }}"
-        local_tar_archive_path: "{{ prepare_mysqlshell_dir }}/{{ prepare_mysqlshell_package }}"
-        local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
-        local_tar_archive_url: "https://cdn.mysql.com/Downloads/MySQL-Shell/{{ prepare_mysqlshell_package }}"
-        local_tar_archive_checksum_spec: "{{ prepare_mysqlshell_package_checksum_spec }}"
-        local_tar_archive_timeout: "{{ mysqlshell_package_download_timeout | default(300) }}"
+    local_tar_archive_timeout: "{{ prepare_mysqlshell_package_item.timeout }}"
+  loop: "{{ prepare_mysqlshell_package_items }}"
+  loop_control:
+    loop_var: prepare_mysqlshell_package_item
+    label: "{{ prepare_mysqlshell_package_item.package }}"
+  when:
+    - "'../roles/setup_mysqlshell' in roles_to_execute"
+    - prepare_mysqlshell_package_items | length > 0
+  run_once: true
 
 - name: Prepare MySQL Router package on control host
-  when: "'../roles/mysql_router' in roles_to_execute"
-  become: false
-  delegate_to: localhost
-  run_once: true
+  ansible.builtin.include_tasks: ../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
   vars:
-    prepare_router_version: "{{ router_version | default(mysql_version) }}"
-    prepare_router_linux_glibc_tag_setting: "{{ router_linux_glibc_tag | default('auto') }}"
-    prepare_router_linux_glibc_tag: >-
-      {%- if prepare_router_linux_glibc_tag_setting != 'auto' -%}
-      {{ prepare_router_linux_glibc_tag_setting }}
-      {%- elif prepare_router_version.startswith('9.7') -%}
-      glibc2.28
-      {%- elif prepare_router_version.startswith('8.4') -%}
-      glibc2.17
-      {%- elif (os_type | default('')) in ['CentOS7', 'CentOS8', 'BigCloud7', 'RedHat7', 'RedHat8'] -%}
-      glibc2.17
-      {%- else -%}
-      glibc2.28
-      {%- endif -%}
-    prepare_router_package: "{{ router_package | default('mysql-router-' + prepare_router_version + '-linux-' + prepare_router_linux_glibc_tag + '-x86_64.tar.xz') }}"
-    prepare_router_dir: "{{ router_packages_dir | default(mysql_packages_dir) }}"
-    prepare_router_package_checksum_spec: >-
+    local_tar_archive_label: "MySQL Router package {{ prepare_router_package_item.package }}"
+    local_tar_archive_path: "{{ prepare_router_package_item.path }}"
+    local_tar_archive_auto_download: "{{ prepare_router_package_item.auto_download | bool }}"
+    local_tar_archive_url: "{{ prepare_router_package_item.url }}"
+    local_tar_archive_checksum_spec: >-
       {{
-        router_package_checksum_type ~ ':' ~ router_package_checksum
-        if (router_package_checksum_type | default('none')) != 'none'
-        and (router_package_checksum | default('-')) != '-'
+        prepare_router_package_item.checksum_type ~ ':' ~ prepare_router_package_item.checksum
+        if (prepare_router_package_item.checksum_type | default('none')) != 'none'
+        and (prepare_router_package_item.checksum | default('-')) != '-'
         else ''
       }}
-  block:
-    - name: Ensure MySQL Router package archive is ready (local)
-      ansible.builtin.import_tasks: ../roles/common_utils/tasks/ensure_local_tar_archive_ready.yml
-      vars:
-        local_tar_archive_label: "MySQL Router package {{ prepare_router_package }}"
-        local_tar_archive_path: "{{ prepare_router_dir }}/{{ prepare_router_package }}"
-        local_tar_archive_auto_download: "{{ fcs_auto_download_packages | bool }}"
-        local_tar_archive_url: "https://cdn.mysql.com/Downloads/MySQL-Router/{{ prepare_router_package }}"
-        local_tar_archive_checksum_spec: "{{ prepare_router_package_checksum_spec }}"
-        local_tar_archive_timeout: "{{ router_package_download_timeout | default(300) }}"
+    local_tar_archive_timeout: "{{ prepare_router_package_item.timeout }}"
+  loop: "{{ prepare_router_package_items }}"
+  loop_control:
+    loop_var: prepare_router_package_item
+    label: "{{ prepare_router_package_item.package }}"
+  when:
+    - "'../roles/mysql_router' in roles_to_execute"
+    - prepare_router_package_items | length > 0
+  run_once: true
