@@ -69,9 +69,17 @@ RECORD_STATUS_LABELS = {
 CHECKSUM_TYPES = {"sha512", "sha256", "md5", "none"}
 CHECKSUM_LENGTHS = {"sha512": 128, "sha256": 64, "md5": 32}
 INSTALLABLE_PACKAGE_STATUSES = {"supported", "verified"}
-AGGREGATE_OS_RULES = {"all", "all-supported-os", "non-Rocky9", "not-rhel7-family"}
+AGGREGATE_OS_RULES = {
+    "all",
+    "all-supported-os",
+    "non-Rocky9",
+    "not-rhel7-family",
+    "not-rhel9-family",
+    "rhel9-family",
+}
 
 MYSQL_SUPPORTED_OS = {
+    "almalinux9",
     "rocky9",
     "bigcloud21",
     "bigcloud7",
@@ -86,13 +94,14 @@ MYSQL_SUPPORTED_OS = {
     "redhat8",
     "kylin linux advanced serverv10",
 }
-CLICKHOUSE_SUPPORTED_OS = MYSQL_SUPPORTED_OS | {
+CLICKHOUSE_SUPPORTED_OS = (MYSQL_SUPPORTED_OS - {"almalinux9"}) | {
     "ubuntu20",
     "ubuntu22",
     "debian10",
     "debian11",
 }
 RHEL7_FAMILY_OS = {"centos7", "redhat7", "bigcloud7"}
+RHEL9_FAMILY_OS = {"almalinux9", "rocky9"}
 MYSQL_ARCH_VERSION_PREFIXES = {
     "mysql_mgr": {"8.0", "8.4", "9.7"},
     "mysql_innodb_cluster": {"8.4", "9.7"},
@@ -683,6 +692,10 @@ def os_group_matches(stack_id: str, row_os: str, requested_os: Optional[str], *,
         return requested in MYSQL_SUPPORTED_OS and requested != "rocky9"
     if row_os == "not-rhel7-family":
         return requested in MYSQL_SUPPORTED_OS and requested not in RHEL7_FAMILY_OS
+    if row_os == "not-rhel9-family":
+        return requested in MYSQL_SUPPORTED_OS and requested not in RHEL9_FAMILY_OS
+    if row_os == "rhel9-family":
+        return requested in MYSQL_SUPPORTED_OS and requested in RHEL9_FAMILY_OS
     return False
 
 

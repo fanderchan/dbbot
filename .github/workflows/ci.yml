@@ -61,6 +61,7 @@ jobs:
         run: |
           sh mysql_ansible/tests/test_custom_mysql_packages_dir.sh
           sh mysql_ansible/tests/test_validate_default_password_guard_hint.sh
+          sh mysql_ansible/tests/test_almalinux9_support.sh
           sh mysql_ansible/tests/test_mysql_9_7_support.sh
           python3 portable-ansible/ansible-playbook -i localhost, mysql_ansible/tests/validate_custom_mysql_package_override.yml
 

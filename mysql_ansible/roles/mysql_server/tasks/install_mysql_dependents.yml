@@ -37,25 +37,25 @@
   tags:
     - dependents
 
-- name: Clear bundled ncurses compatibility rpm fallback for MySQL 5.7 on Rocky 9
+- name: Clear bundled ncurses compatibility rpm fallback for MySQL 5.7 on RHEL 9 family
   ansible.builtin.set_fact:
     mysql_server__ncurses_compat_rpm_file: ""
   when:
     - db_type == 'mysql'
     - mysql_version.startswith('5.7')
-    - os_type == 'Rocky9'
+    - os_type in ['AlmaLinux9', 'Rocky9']
   tags:
     - dependents
 
-- name: Install ncurses compatibility package for MySQL 5.7 on Rocky 9 from yum
+- name: Install ncurses compatibility package for MySQL 5.7 on RHEL 9 family from yum
   when:
     - db_type == 'mysql'
     - mysql_version.startswith('5.7')
-    - os_type == 'Rocky9'
+    - os_type in ['AlmaLinux9', 'Rocky9']
   tags:
     - dependents
   block:
-    - name: Probe ncurses compatibility package for MySQL 5.7 on Rocky 9
+    - name: Probe ncurses compatibility package for MySQL 5.7 on RHEL 9 family
       ansible.builtin.shell: >-
         {{ ansible_pkg_mgr | default('yum') }} -q list installed ncurses-compat-libs >/dev/null 2>&1
         || {{ ansible_pkg_mgr | default('yum') }} -q list available ncurses-compat-libs >/dev/null 2>&1
@@ -77,19 +77,19 @@
         mysql_server__ncurses_compat_probe:
           rc: 1
 
-- name: Set bundled ncurses compatibility rpm for MySQL 5.7 on Rocky 9
+- name: Set bundled ncurses compatibility rpm for MySQL 5.7 on RHEL 9 family
   ansible.builtin.set_fact:
     mysql_server__ncurses_compat_rpm_file: ncurses-compat-libs-6.2-12.20210508.el9.x86_64.rpm
   when:
     - db_type == 'mysql'
     - mysql_version.startswith('5.7')
-    - os_type == 'Rocky9'
+    - os_type in ['AlmaLinux9', 'Rocky9']
     - mysql_server__ncurses_compat_probe is defined
     - mysql_server__ncurses_compat_probe.rc != 0
   tags:
     - dependents
 
-- name: Copy bundled ncurses compatibility rpm to Rocky 9 target
+- name: Copy bundled ncurses compatibility rpm to RHEL 9 family target
   ansible.builtin.copy:
     src: "../files/{{ mysql_server__ncurses_compat_rpm_file }}"
     dest: "/tmp/{{ mysql_server__ncurses_compat_rpm_file }}"
@@ -99,7 +99,7 @@
   tags:
     - dependents
 
-- name: Install bundled ncurses compatibility rpm on Rocky 9 target
+- name: Install bundled ncurses compatibility rpm on RHEL 9 family target
   ansible.builtin.yum:
     name: "/tmp/{{ mysql_server__ncurses_compat_rpm_file }}"
     state: present
@@ -152,7 +152,7 @@
 
     - name: Set jemalloc rpm file name based on OS
       ansible.builtin.set_fact:
-        mysql_server__jemalloc_rpm_file: "{{ 'jemalloc-3.6.0-1.el8.x86_64.rpm' if os_type in ['Rocky9', 'openEuler24', 'openEuler22', 'openEuler20', 'BigCloud21', 'CentOS8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10'] else 'jemalloc-3.6.0-1.el7.x86_64.rpm' }}"
+        mysql_server__jemalloc_rpm_file: "{{ 'jemalloc-3.6.0-1.el8.x86_64.rpm' if os_type in ['AlmaLinux9', 'Rocky9', 'openEuler24', 'openEuler22', 'openEuler20', 'BigCloud21', 'CentOS8', 'BigCloud8', 'Anolis OS8', 'Kylin Linux Advanced ServerV10'] else 'jemalloc-3.6.0-1.el7.x86_64.rpm' }}"
       when:
         - not (mysql_server__jemalloc_installed | bool)
         - not (mysql_server__jemalloc_repo_available | bool)
