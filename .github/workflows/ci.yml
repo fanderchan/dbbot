@@ -58,6 +58,8 @@ jobs:
         run: sh mysql_ansible/lint_all_yml_files.sh
 
       - name: Run MySQL lightweight regression tests
+        env:
+          PORTABLE_ANSIBLE_HOME: ${{ github.workspace }}/portable-ansible
         run: |
           bash mysql_ansible/tests/test_custom_mysql_packages_dir.sh
           bash mysql_ansible/tests/test_validate_default_password_guard_hint.sh
