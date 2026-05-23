@@ -3,6 +3,7 @@
   connection: local
   gather_facts: false
   vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
     mysql_version: "9.7.0"
     db_type: mysql
     os_type: Rocky9
