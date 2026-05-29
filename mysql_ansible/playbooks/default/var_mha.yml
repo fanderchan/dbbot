@@ -8,3 +8,5 @@ manager_ip: "192.0.2.133"
 net_work_interface: "ens33"
 vip: 192.0.2.130
 vip_netmask: "32"
+# Optional MHA secondary_check_script command. Leave empty to keep the classic MHA default.
+mha_secondary_check_script: ""
