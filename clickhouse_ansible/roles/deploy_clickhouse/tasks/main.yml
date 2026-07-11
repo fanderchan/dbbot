@@ -20,6 +20,9 @@
 - name: Import tasks to configure cluster
   ansible.builtin.import_tasks: config_cluster.yml
 
+- name: Import tasks to configure protected automation client credentials
+  ansible.builtin.import_tasks: config_client.yml
+
 - name: Import tasks to remove Keeper config when not used
   ansible.builtin.import_tasks: remove_keeper.yml
 

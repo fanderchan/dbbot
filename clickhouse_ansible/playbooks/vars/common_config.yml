@@ -31,6 +31,8 @@ clickhouse_log_dir_base: "/opt/clickhouse/log"
 # ClickHouse default 用户密码
 # 开源默认值采用 Dbbot_default@8888 规律，便于快速体验。
 # 为避免公开默认密码直接进生产，默认会在 pre_tasks 阶段拦截，除非显式设置 fcs_allow_dbbot_default_passwd=true。
+# XML-significant characters are supported and escaped when configs are rendered.
+# Managed clickhouse-client calls read this secret from a root-only config file.
 clickhouse_default_password: "Dbbot_default@8888"
 
 # Source IP addresses or CIDRs allowed to authenticate as the ClickHouse

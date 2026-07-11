@@ -1,0 +1,30 @@
+- name: Set protected ClickHouse automation client config path
+  ansible.builtin.set_fact:
+    clickhouse_automation_client_config_file: "{{ clickhouse_config_dir }}/dbbot-client.xml"
+
+- name: Check ClickHouse automation client config directory
+  ansible.builtin.stat:
+    path: "{{ clickhouse_config_dir }}"
+  register: clickhouse_automation_client_config_dir_stat
+  changed_when: false
+
+- name: Validate ClickHouse automation client configuration inputs
+  ansible.builtin.assert:
+    that:
+      - clickhouse_automation_client_config_dir_stat.stat.isdir | default(false)
+      - (clickhouse_automation_client_user | default('default')) is string
+      - clickhouse_automation_client_user | default('default') | length > 0
+      - (clickhouse_automation_client_password | default(clickhouse_default_password)) is string
+    fail_msg: >-
+      ClickHouse automation client configuration requires an existing instance
+      config directory, a non-empty user, and a string password.
+  no_log: true
+
+- name: Write protected ClickHouse automation client config
+  ansible.builtin.template:
+    src: clickhouse-client-automation.xml.j2
+    dest: "{{ clickhouse_automation_client_config_file }}"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true

@@ -48,6 +48,11 @@
         clickhouse_tcp_port: "{{ (clickhouse_tcp_port_base | default(9000) | int) + (current_node_instance_id | int - 1) }}"
       when: clickhouse_tcp_port is not defined
 
+    - name: Configure protected ClickHouse automation client credentials
+      ansible.builtin.include_role:
+        name: "../roles/deploy_clickhouse"
+        tasks_from: config_client.yml
+
     - name: Derive effective instance id for backup preparation
       ansible.builtin.set_fact:
         backup_prepare_instance_id_effective: >-
@@ -160,7 +165,7 @@
 
     - name: Verify backup disk is visible
       ansible.builtin.shell: |
-        clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+        clickhouse-client --config-file="{{ clickhouse_automation_client_config_file }}" --host=127.0.0.1 --port={{ clickhouse_tcp_port }} \
           -q "SELECT name, path FROM system.disks WHERE name='{{ backup_storage_disk }}' FORMAT TSV"
       register: backup_disk_verify
       changed_when: false

@@ -48,3 +48,4 @@
 - `python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.restore.ini restore_cluster.yml --syntax-check`
 - `python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.restore.ini validate_restore_consistency.yml --syntax-check`
 - `python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.deploy.ini uninstall_cluster.yml --syntax-check`
+- `bash /usr/local/dbbot/clickhouse_ansible/tests/test_password_xml_and_cli_safety.sh`

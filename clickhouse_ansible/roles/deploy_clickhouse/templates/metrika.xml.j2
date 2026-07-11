@@ -57,7 +57,7 @@
                     <host>{{ node_ip }}</host>
                     <port>{{ (clickhouse_tcp_port_base | default(9000) | int) + (node_instance_id - 1) }}</port>
                     <user>default</user>
-                    <password>{{ clickhouse_default_password }}</password>
+                    <password>{{ clickhouse_default_password | e }}</password>
                 </replica>
 {% endif %}
 {% endfor %}

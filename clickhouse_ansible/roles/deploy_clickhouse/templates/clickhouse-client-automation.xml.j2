@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<config>
+    <user>{{ clickhouse_automation_client_user | default('default') | e }}</user>
+    <password>{{ clickhouse_automation_client_password | default(clickhouse_default_password) | e }}</password>
+</config>

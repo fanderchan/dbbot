@@ -31,7 +31,7 @@
 
 - name: Start restore phase
   ansible.builtin.shell: |
-    clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+    clickhouse-client --config-file="{{ clickhouse_automation_client_config_file }}" --host=127.0.0.1 --port={{ clickhouse_tcp_port }} \
       --multiquery -q "
         SET distributed_ddl_output_mode='none';
         {{ restore_sql_current }}
@@ -42,7 +42,7 @@
 
 - name: Wait restore phase status to finish
   ansible.builtin.shell: |
-    clickhouse-client --host=127.0.0.1 --port={{ clickhouse_tcp_port }} --password="{{ clickhouse_default_password }}" \
+    clickhouse-client --config-file="{{ clickhouse_automation_client_config_file }}" --host=127.0.0.1 --port={{ clickhouse_tcp_port }} \
       -q "
         SELECT id, name, status, error, num_files, compressed_size, uncompressed_size, start_time, end_time
         FROM system.backups

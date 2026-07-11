@@ -45,16 +45,26 @@
         validate_current_shard: "{{ shard | default(1) | int }}"
         validate_current_replica: "{{ replica | default(1) | int }}"
         validate_current_port: "{{ clickhouse_tcp_port | default((clickhouse_tcp_port_base | default(9000) | int) + (instance_id | default(replica | default(1)) | int - 1)) | int }}"
+        clickhouse_config_dir: >-
+          /etc/clickhouse-server{{ '' if (instance_id | default(replica | default(1)) | int) == 1 else '-' ~ (instance_id | default(replica | default(1)) | int) }}
+
+    - name: Configure protected ClickHouse source validation credentials
+      ansible.builtin.include_role:
+        name: "../roles/deploy_clickhouse"
+        tasks_from: config_client.yml
+      vars:
+        clickhouse_automation_client_user: "{{ validate_clickhouse_user }}"
+        clickhouse_automation_client_password: "{{ validate_clickhouse_password }}"
 
   tasks:
     - name: Execute validation queries on source node
       ansible.builtin.command:
         argv:
           - clickhouse-client
+          - "--config-file={{ clickhouse_automation_client_config_file }}"
           - "--host={{ validate_source_query_host }}"
           - "--port={{ validate_current_port }}"
           - "--user={{ validate_clickhouse_user }}"
-          - "--password={{ validate_clickhouse_password }}"
           - "--query"
           - "{{ validate_sql_current }}"
       vars:
@@ -104,16 +114,26 @@
         validate_current_shard: "{{ shard | default(1) | int }}"
         validate_current_replica: "{{ replica | default(1) | int }}"
         validate_current_port: "{{ clickhouse_tcp_port | default((clickhouse_tcp_port_base | default(9000) | int) + (instance_id | default(replica | default(1)) | int - 1)) | int }}"
+        clickhouse_config_dir: >-
+          /etc/clickhouse-server{{ '' if (instance_id | default(replica | default(1)) | int) == 1 else '-' ~ (instance_id | default(replica | default(1)) | int) }}
+
+    - name: Configure protected ClickHouse target validation credentials
+      ansible.builtin.include_role:
+        name: "../roles/deploy_clickhouse"
+        tasks_from: config_client.yml
+      vars:
+        clickhouse_automation_client_user: "{{ validate_clickhouse_user }}"
+        clickhouse_automation_client_password: "{{ validate_clickhouse_password }}"
 
   tasks:
     - name: Execute validation queries on target node
       ansible.builtin.command:
         argv:
           - clickhouse-client
+          - "--config-file={{ clickhouse_automation_client_config_file }}"
           - "--host={{ validate_target_query_host }}"
           - "--port={{ validate_current_port }}"
           - "--user={{ validate_clickhouse_user }}"
-          - "--password={{ validate_clickhouse_password }}"
           - "--query"
           - "{{ validate_sql_current }}"
       vars:

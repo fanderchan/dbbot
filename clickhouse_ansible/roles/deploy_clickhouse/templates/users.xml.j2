@@ -14,7 +14,7 @@
 
     <users>
         <default>
-            <password>{{ clickhouse_default_password }}</password>
+            <password>{{ clickhouse_default_password | e }}</password>
             <networks>
 {% for allowed_network in clickhouse_default_user_allowed_networks_effective %}
                 <ip>{{ allowed_network | e }}</ip>
