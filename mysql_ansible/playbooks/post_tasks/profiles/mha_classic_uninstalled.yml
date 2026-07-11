@@ -12,6 +12,28 @@
     fail_msg: "Classic MHA manager process is still running after uninstall."
     success_msg: "Classic MHA manager process is absent after uninstall."
 
+- name: Validate sudoers configuration after classic MHA uninstall
+  ansible.builtin.command: /usr/sbin/visudo -c
+  changed_when: false
+
+- name: Check for legacy dbbot-generated classic MHA sudoers marker after uninstall
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -Fq
+      - '#add by dbbot MHA install playbook'
+      - /etc/sudoers
+  register: dbbot_post_check__mha_classic_uninstall_legacy_sudoers_marker
+  changed_when: false
+  failed_when: false
+
+- name: Assert legacy dbbot-generated classic MHA sudoers marker is absent after uninstall
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__mha_classic_uninstall_legacy_sudoers_marker.rc == 1
+    fail_msg: "The legacy dbbot-generated classic MHA sudoers block requires manual review."
+    success_msg: "The legacy dbbot-generated classic MHA sudoers marker is absent after uninstall."
+
 - name: Check classic MHA VIP after uninstall
   ansible.builtin.command: "ip addr show {{ net_work_interface }}"
   register: dbbot_post_check__mha_classic_uninstall_vip
@@ -50,6 +72,7 @@
     - /usr/local/start_mha.sh
     - /usr/local/bin/master_ip_failover
     - /usr/local/bin/master_ip_online_change
+    - /etc/sudoers.d/dbbot-mha-vip
   loop_control:
     loop_var: dbbot_post_check__mha_classic_uninstall_path
     label: "{{ dbbot_post_check__mha_classic_uninstall_path }}"

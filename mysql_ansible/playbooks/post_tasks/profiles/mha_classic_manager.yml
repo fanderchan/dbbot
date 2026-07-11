@@ -17,6 +17,28 @@
   no_log: true
   when: manager_ip in ansible_all_ipv4_addresses
 
+- name: Validate classic MHA VIP sudo policy
+  ansible.builtin.command: /usr/sbin/visudo -c
+  changed_when: false
+
+- name: Check for legacy dbbot-generated classic MHA sudoers marker
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -Fq
+      - '#add by dbbot MHA install playbook'
+      - /etc/sudoers
+  register: dbbot_post_check__mha_classic_legacy_sudoers_marker
+  changed_when: false
+  failed_when: false
+
+- name: Assert legacy dbbot-generated classic MHA sudoers marker is absent
+  ansible.builtin.assert:
+    that:
+      - dbbot_post_check__mha_classic_legacy_sudoers_marker.rc == 1
+    fail_msg: "The legacy dbbot-generated classic MHA sudoers block requires manual review."
+    success_msg: "The legacy dbbot-generated classic MHA sudoers marker is absent."
+
 - name: Check classic MHA VIP placement
   ansible.builtin.command: "ip addr show {{ net_work_interface }}"
   register: dbbot_post_check__mha_classic_vip_status

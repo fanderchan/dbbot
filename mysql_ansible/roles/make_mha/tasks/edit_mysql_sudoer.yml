@@ -1,14 +1,65 @@
-- name: Copy edit_mysql_sudoer.sh to /tmp/
+---
+- name: Install classic MHA VIP sudo policy
   ansible.builtin.template:
-    src: ../templates/edit_mysql_sudoer.sh.j2
-    dest: /tmp/edit_mysql_sudoer.sh
-    mode: '0700'
+    src: ../templates/mha_vip_sudoers.j2
+    dest: /etc/sudoers.d/dbbot-mha-vip
+    owner: root
+    group: root
+    mode: '0440'
+    validate: /usr/sbin/visudo -cf %s
 
-- name: Bash edit_mysql_sudoer.sh
-  ansible.builtin.command: bash /tmp/edit_mysql_sudoer.sh
-  changed_when: true
+- name: Remove legacy dbbot-generated classic MHA sudoers block
+  ansible.builtin.replace:
+    path: /etc/sudoers
+    regexp: '(?m)^#add by dbbot MHA install playbook[ \t]*\r?\n[ \t]*[^# \t\r\n][^ \t\r\n]*[ \t]+ALL[ \t]*=[ \t]*\(ALL\)[ \t]+NOPASSWD:[ \t]*/usr/sbin/ip[ \t]*,[ \t]*/sbin/arping[ \t]*,[ \t]*/usr/bin/scp[ \t]*(?:\r?\n)?'
+    replace: ''
+    validate: /usr/sbin/visudo -cf %s
 
-- name: Delete edit_mysql_sudoer.sh script
-  ansible.builtin.file:
-    path: /tmp/edit_mysql_sudoer.sh
-    state: absent
+- name: Validate complete sudoers configuration
+  ansible.builtin.command: /usr/sbin/visudo -c
+  changed_when: false
+
+- name: Verify required classic MHA VIP commands are allowed
+  ansible.builtin.command:
+    argv: "{{ ['/usr/bin/sudo', '-n', '-l', '-U', mysql_user, '--'] + item }}"
+  loop:
+    - - /usr/sbin/ip
+      - addr
+      - add
+      - "{{ vip }}/{{ vip_netmask }}"
+      - dev
+      - "{{ net_work_interface }}"
+    - - /usr/sbin/ip
+      - addr
+      - del
+      - "{{ vip }}/{{ vip_netmask }}"
+      - dev
+      - "{{ net_work_interface }}"
+    - - /sbin/arping
+      - -c
+      - '5'
+      - -U
+      - -I
+      - "{{ net_work_interface }}"
+      - "{{ vip }}"
+  loop_control:
+    label: "{{ item | join(' ') }}"
+  changed_when: false
+
+- name: Verify unsafe classic MHA sudo commands are denied
+  ansible.builtin.command:
+    argv: "{{ ['/usr/bin/sudo', '-n', '-l', '-U', mysql_user, '--'] + item }}"
+  loop:
+    - - /usr/sbin/ip
+      - netns
+      - exec
+      - dbbot-sudo-policy-check
+      - /usr/bin/id
+    - - /usr/bin/scp
+      - /dev/null
+      - /etc/sudoers.d/dbbot-sudo-policy-check
+  loop_control:
+    label: "{{ item | join(' ') }}"
+  register: make_mha__unsafe_sudo_check
+  changed_when: false
+  failed_when: make_mha__unsafe_sudo_check.rc != 1

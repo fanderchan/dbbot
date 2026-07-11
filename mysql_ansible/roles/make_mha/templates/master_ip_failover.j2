@@ -12,8 +12,8 @@ my (
 
 my $vip = '{{ vip }}';
 my $key = '0';
-my $ssh_start_vip = "sudo /usr/sbin/ip addr add $vip/{{ vip_netmask }} dev {{ net_work_interface }};sudo /sbin/arping -c 5 -U -I {{ net_work_interface }} $vip";
-my $ssh_stop_vip = "sudo /usr/sbin/ip addr del $vip/{{ vip_netmask }} dev {{ net_work_interface }}";
+my $ssh_start_vip = "sudo -n /usr/sbin/ip addr add $vip/{{ vip_netmask }} dev {{ net_work_interface }};sudo -n /sbin/arping -c 5 -U -I {{ net_work_interface }} $vip";
+my $ssh_stop_vip = "sudo -n /usr/sbin/ip addr del $vip/{{ vip_netmask }} dev {{ net_work_interface }}";
 
 GetOptions(
     'command=s'          => \$command,

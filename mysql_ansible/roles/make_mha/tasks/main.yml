@@ -40,9 +40,9 @@
 - name: Config manager
   ansible.builtin.import_tasks: config_manager.yml
 
+- name: Configure classic MHA VIP sudo policy
+  ansible.builtin.import_tasks: edit_mysql_sudoer.yml
+
 - name: Start manager
   ansible.builtin.import_tasks: start_manager.yml
   when: manager_ip in ansible_all_ipv4_addresses
-
-- name: Edit /etc/sudoers
-  ansible.builtin.import_tasks: edit_mysql_sudoer.yml

@@ -46,19 +46,21 @@
     - /tmp/mha4mysql-node-0.58-0.el7.centos.noarch.rpm
     - /tmp/dependencies
 
-- name: Remove classic MHA sudoers comment
-  ansible.builtin.lineinfile:
+- name: Remove legacy dbbot-generated classic MHA sudoers block
+  ansible.builtin.replace:
     path: /etc/sudoers
-    regexp: "^#add by dbbot MHA install playbook$"
-    state: absent
+    regexp: '(?m)^#add by dbbot MHA install playbook[ \t]*\r?\n[ \t]*[^# \t\r\n][^ \t\r\n]*[ \t]+ALL[ \t]*=[ \t]*\(ALL\)[ \t]+NOPASSWD:[ \t]*/usr/sbin/ip[ \t]*,[ \t]*/sbin/arping[ \t]*,[ \t]*/usr/bin/scp[ \t]*(?:\r?\n)?'
+    replace: ''
     validate: /usr/sbin/visudo -cf %s
 
-- name: Remove classic MHA sudoers rule
-  ansible.builtin.lineinfile:
-    path: /etc/sudoers
-    regexp: "^{{ mysql_user }}\\s+ALL=\\(ALL\\)\\s+NOPASSWD: /usr/sbin/ip,/sbin/arping,/usr/bin/scp$"
+- name: Remove classic MHA VIP sudo policy
+  ansible.builtin.file:
+    path: /etc/sudoers.d/dbbot-mha-vip
     state: absent
-    validate: /usr/sbin/visudo -cf %s
+
+- name: Validate complete sudoers configuration after classic MHA removal
+  ansible.builtin.command: /usr/sbin/visudo -c
+  changed_when: false
 
 - name: Remove classic MHA RPM packages when requested
   ansible.builtin.yum:
