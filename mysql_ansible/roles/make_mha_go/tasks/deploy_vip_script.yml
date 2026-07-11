@@ -13,6 +13,6 @@
   ansible.builtin.template:
     src: ../templates/mha_ip_failover.sh.j2
     dest: /usr/local/bin/mha_ip_failover.sh
-    owner: "{{ mysql_user }}"
+    owner: root
     group: "{{ mysql_group }}"
     mode: '0750'

@@ -4,6 +4,10 @@
 - name: Check prerequisites (MySQL installed by dbbot and GTID enabled)
   ansible.builtin.import_tasks: check_prereqs.yml
 
+- name: Remove stale manager instances from non-manager nodes
+  ansible.builtin.import_tasks: cleanup_stale_manager.yml
+  when: manager_ip not in ansible_all_ipv4_addresses
+
 - name: Install mha binary on manager node
   ansible.builtin.import_tasks: install_binary.yml
   when: manager_ip in ansible_all_ipv4_addresses
@@ -12,9 +16,21 @@
   ansible.builtin.import_tasks: create_mha_user.yml
   when: master_ip in ansible_all_ipv4_addresses
 
-- name: Add sudo rules for mysql user on all nodes (required for VIP script)
+- name: Install constrained sudo rules for the VIP script
   ansible.builtin.import_tasks: edit_sudoer.yml
   when: mha_go_writer_endpoint_enabled | bool
+
+- name: Configure manager-to-node SSH for the VIP script
+  ansible.builtin.import_tasks: setup_vip_ssh.yml
+  when: mha_go_writer_endpoint_enabled | bool
+
+- name: Initialize the VIP on the current primary
+  ansible.builtin.import_tasks: initialize_vip.yml
+  when: mha_go_writer_endpoint_enabled | bool
+
+- name: Remove disabled MHA-Go VIP artifacts
+  ansible.builtin.import_tasks: cleanup_disabled_vip.yml
+  when: not (mha_go_writer_endpoint_enabled | bool)
 
 - name: Deploy mha-go cluster config on manager node
   ansible.builtin.import_tasks: deploy_config.yml

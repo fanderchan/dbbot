@@ -34,13 +34,30 @@
   delegate_to: localhost
   become: false
 
-- name: Validate manager_ip is one of the configured MySQL nodes
+- name: Validate manager_ip is one of the configured replicas
   ansible.builtin.fail:
-    msg: "mha_go.yml: `manager_ip` ({{ manager_ip }}) must be listed in master_ip or slave_ips"
-  when: manager_ip not in ([master_ip] + slave_ips)
+    msg: "mha_go.yml: `manager_ip` ({{ manager_ip }}) must be listed in slave_ips and must not be master_ip"
+  when: manager_ip not in slave_ips
   run_once: true
   delegate_to: localhost
   become: false
+
+- name: Validate mha_go_salvage_policy is supported
+  ansible.builtin.fail:
+    msg: "mha_go.yml: `mha_go_salvage_policy` must be strict, salvage-if-possible, or availability-first"
+  when: mha_go_salvage_policy not in ['strict', 'salvage-if-possible', 'availability-first']
+  run_once: true
+  delegate_to: localhost
+  become: false
+
+- name: Warn about availability-first data loss boundary
+  ansible.builtin.debug:
+    msg: >-
+      mha_go.yml: availability-first can promote a surviving replica when the
+      old primary host is unreachable, but transactions that never reached any
+      replica cannot be recovered.
+  when: mha_go_salvage_policy == 'availability-first'
+  run_once: true
 
 - name: Validate mha_go.yml IPs are all present in inventory/hosts.ini
   ansible.builtin.fail:

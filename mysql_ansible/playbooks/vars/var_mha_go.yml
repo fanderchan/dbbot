@@ -7,9 +7,9 @@ slave_ips:
   - 192.0.2.133
 sub_nets: "192.0.2.%"
 
-# manager defaults to the primary/control node. Change if you want a different
-# MySQL node to run `mha manager`.
-manager_ip: "{{ master_ip }}"
+# Run the manager on the last replica so a primary host failure does not also
+# remove the failover controller.
+manager_ip: "{{ slave_ips | last }}"
 
 # Cluster name shown in `mha check-repl` output and log lines
 mha_go_cluster_name: app1
@@ -19,7 +19,9 @@ mha_go_cluster_name: app1
 mha_go_semi_sync_policy: disabled
 mha_go_semi_sync_wait_for_replica_count: 0
 mha_go_semi_sync_timeout: 5s
-mha_go_salvage_policy: salvage-if-possible
+# availability-first permits automatic promotion when the old primary host is
+# unreachable. Unreplicated transactions on that host may be lost.
+mha_go_salvage_policy: availability-first
 mha_go_salvage_timeout: 30s
 
 # --- Writer endpoint ---

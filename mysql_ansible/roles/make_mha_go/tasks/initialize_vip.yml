@@ -1,0 +1,68 @@
+---
+- name: Create dbbot runtime state directory
+  ansible.builtin.file:
+    path: /var/lib/dbbot
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Record managed MHA-Go VIP state
+  ansible.builtin.template:
+    src: ../templates/mha_go_vip_state.yml.j2
+    dest: /var/lib/dbbot/mha-go-vip.yml
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Check MHA-Go VIP assignment on every MySQL node
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ip
+      - -o
+      - addr
+      - show
+      - dev
+      - "{{ net_work_interface }}"
+  register: make_mha_go__vip_assignment
+  changed_when: false
+
+- name: Reject MHA-Go VIP assignment on a non-primary node
+  ansible.builtin.fail:
+    msg: >-
+      MHA-Go VIP {{ vip }}/{{ vip_netmask }} is already assigned to non-primary
+      node {{ inventory_hostname }}. Remove the stale VIP or correct master_ip
+      before rerunning mha_go.yml.
+  when:
+    - master_ip not in ansible_all_ipv4_addresses
+    - (vip ~ '/' ~ vip_netmask) in make_mha_go__vip_assignment.stdout
+
+- name: Assign MHA-Go VIP to the current primary
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ip
+      - addr
+      - add
+      - "{{ vip }}/{{ vip_netmask }}"
+      - dev
+      - "{{ net_work_interface }}"
+  when:
+    - master_ip in ansible_all_ipv4_addresses
+    - (vip ~ '/' ~ vip_netmask) not in make_mha_go__vip_assignment.stdout
+  register: make_mha_go__vip_added
+  changed_when: true
+
+- name: Announce the initial MHA-Go VIP
+  ansible.builtin.command:
+    argv:
+      - /sbin/arping
+      - -c
+      - '3'
+      - -U
+      - -I
+      - "{{ net_work_interface }}"
+      - "{{ vip }}"
+  when:
+    - master_ip in ansible_all_ipv4_addresses
+    - make_mha_go__vip_added is changed
+  changed_when: true

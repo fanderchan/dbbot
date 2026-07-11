@@ -23,22 +23,61 @@
     daemon_reload: true
   when: uninstall_mha_go__service_unit.stat.exists
 
-- name: Check mha-go VIP on configured interface
-  ansible.builtin.command: "ip addr show {{ net_work_interface }}"
+- name: Set MHA-Go VIP uninstall defaults
+  ansible.builtin.set_fact:
+    uninstall_mha_go__vip_address: "{{ vip | default('') }}"
+    uninstall_mha_go__vip_netmask: "{{ vip_netmask | default('32') | string }}"
+    uninstall_mha_go__vip_interface: "{{ net_work_interface | default('') }}"
+
+- name: Check managed MHA-Go VIP state for uninstall
+  ansible.builtin.stat:
+    path: /var/lib/dbbot/mha-go-vip.yml
+  register: uninstall_mha_go__vip_state_file
+
+- name: Read managed MHA-Go VIP state for uninstall
+  ansible.builtin.slurp:
+    path: /var/lib/dbbot/mha-go-vip.yml
+  register: uninstall_mha_go__vip_state_raw
+  when: uninstall_mha_go__vip_state_file.stat.exists
+
+- name: Use recorded MHA-Go VIP state for uninstall
+  ansible.builtin.set_fact:
+    uninstall_mha_go__vip_address: "{{ uninstall_mha_go__vip_state.vip }}"
+    uninstall_mha_go__vip_netmask: "{{ uninstall_mha_go__vip_state.netmask | string }}"
+    uninstall_mha_go__vip_interface: "{{ uninstall_mha_go__vip_state.interface }}"
+  vars:
+    uninstall_mha_go__vip_state: >-
+      {{ uninstall_mha_go__vip_state_raw.content | b64decode | from_yaml }}
+  when: uninstall_mha_go__vip_state_file.stat.exists
+
+- name: Check MHA-Go VIP on the recorded interface
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ip
+      - -o
+      - addr
+      - show
+      - dev
+      - "{{ uninstall_mha_go__vip_interface }}"
   register: uninstall_mha_go__vip_status
   changed_when: false
   failed_when: false
   when:
-    - vip is defined
-    - net_work_interface is defined
+    - uninstall_mha_go__vip_address | length > 0
+    - uninstall_mha_go__vip_interface | length > 0
 
-- name: Remove mha-go VIP when present
-  ansible.builtin.command: "ip addr del {{ vip }}/{{ vip_netmask | default('32') }} dev {{ net_work_interface }}"
+- name: Remove MHA-Go VIP when present
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ip
+      - addr
+      - del
+      - "{{ uninstall_mha_go__vip_address }}/{{ uninstall_mha_go__vip_netmask }}"
+      - dev
+      - "{{ uninstall_mha_go__vip_interface }}"
   when:
-    - vip is defined
-    - net_work_interface is defined
     - uninstall_mha_go__vip_status.stdout is defined
-    - uninstall_mha_go__vip_status.stdout is search(vip)
+    - (uninstall_mha_go__vip_address ~ '/' ~ uninstall_mha_go__vip_netmask) in uninstall_mha_go__vip_status.stdout
   changed_when: true
   failed_when: false
 
@@ -51,26 +90,54 @@
     - "{{ mha_go_config_dir }}"
     - "{{ mha_go_log_dir }}"
     - /usr/local/bin/mha_ip_failover.sh
-  when: manager_ip in ansible_all_ipv4_addresses
 
 - name: Remove mha-go finish flag
   ansible.builtin.file:
     path: "{{ datadir }}/mha_go_finish.flag"
     state: absent
-  when: manager_ip in ansible_all_ipv4_addresses
 
-- name: Remove mha-go sudoers comment
-  ansible.builtin.lineinfile:
-    path: /etc/sudoers
-    regexp: "^# added by dbbot make_mha_go$"
+- name: Remove MHA-Go VIP sudo policy
+  ansible.builtin.file:
+    path: /etc/sudoers.d/dbbot-mha-go-vip
     state: absent
-    validate: /usr/sbin/visudo -cf %s
-  when: mha_go_writer_endpoint_enabled | default(false) | bool
 
-- name: Remove mha-go sudoers rule
-  ansible.builtin.lineinfile:
+- name: Remove legacy dbbot-generated MHA-Go sudoers block
+  ansible.builtin.replace:
     path: /etc/sudoers
-    regexp: "^{{ mysql_user }}\\s+ALL=\\(ALL\\)\\s+NOPASSWD: /usr/sbin/ip,/sbin/arping$"
-    state: absent
+    regexp: '(?m)^# added by dbbot make_mha_go[ \t]*\r?\n[ \t]*[^# \t\r\n][^ \t\r\n]*[ \t]+ALL[ \t]*=[ \t]*\(ALL\)[ \t]+NOPASSWD:[ \t]*/usr/sbin/ip[ \t]*,[ \t]*/sbin/arping[ \t]*(?:\r?\n)?'
+    replace: ''
     validate: /usr/sbin/visudo -cf %s
-  when: mha_go_writer_endpoint_enabled | default(false) | bool
+
+- name: Check MHA-Go VIP SSH authorization file
+  ansible.builtin.stat:
+    path: "/home/{{ mysql_user }}/.ssh/authorized_keys"
+  register: uninstall_mha_go__authorized_keys
+
+- name: Remove MHA-Go VIP SSH authorization block
+  ansible.builtin.blockinfile:
+    path: "/home/{{ mysql_user }}/.ssh/authorized_keys"
+    marker: "# {mark} DBBOT MHA-GO VIP SSH KEY"
+    state: absent
+  when:
+    - uninstall_mha_go__authorized_keys.stat.exists | default(false)
+
+- name: Remove MHA-Go VIP manager SSH files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+    - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go.pub"
+    - "/home/{{ mysql_user }}/.ssh/id_ed25519_dbbot_mha_go"
+    - "/home/{{ mysql_user }}/.ssh/id_ed25519_dbbot_mha_go.pub"
+    - "/home/{{ mysql_user }}/.ssh/known_hosts_dbbot_mha_go"
+
+- name: Remove MHA-Go VIP SSH forced-command allowlist
+  ansible.builtin.file:
+    path: /usr/local/libexec/dbbot-mha-go-vip-ssh
+    state: absent
+
+- name: Remove managed MHA-Go VIP state
+  ansible.builtin.file:
+    path: /var/lib/dbbot/mha-go-vip.yml
+    state: absent

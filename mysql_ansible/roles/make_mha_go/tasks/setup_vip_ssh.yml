@@ -1,0 +1,163 @@
+---
+- name: Install OpenSSH client on the MHA-Go manager
+  ansible.builtin.package:
+    name: openssh-clients
+    state: present
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Create mysql SSH directory for MHA-Go VIP access
+  ansible.builtin.file:
+    path: "/home/{{ mysql_user }}/.ssh"
+    state: directory
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0700'
+
+- name: Create MHA-Go VIP SSH command directory
+  ansible.builtin.file:
+    path: /usr/local/libexec
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install MHA-Go VIP SSH forced-command allowlist
+  ansible.builtin.template:
+    src: ../templates/mha_go_vip_ssh_command.sh.j2
+    dest: /usr/local/libexec/dbbot-mha-go-vip-ssh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Remove superseded MHA-Go VIP Ed25519 keys
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/home/{{ mysql_user }}/.ssh/id_ed25519_dbbot_mha_go"
+    - "/home/{{ mysql_user }}/.ssh/id_ed25519_dbbot_mha_go.pub"
+
+- name: Generate dedicated MHA-Go VIP SSH key on the manager
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/ssh-keygen
+      - -q
+      - -t
+      - rsa
+      - -b
+      - '3072'
+      - -N
+      - ''
+      - -C
+      - dbbot-mha-go-vip
+      - -f
+      - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+    creates: "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+  become_user: "{{ mysql_user }}"
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Enforce MHA-Go VIP private key permissions
+  ansible.builtin.file:
+    path: "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+    state: file
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0600'
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Read MHA-Go VIP public key from the manager
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/ssh-keygen
+      - -y
+      - -f
+      - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+  register: make_mha_go__vip_public_key
+  changed_when: false
+  become_user: "{{ mysql_user }}"
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Authorize the manager MHA-Go VIP key on every MySQL node
+  ansible.builtin.blockinfile:
+    path: "/home/{{ mysql_user }}/.ssh/authorized_keys"
+    create: true
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0600'
+    marker: "# {mark} DBBOT MHA-GO VIP SSH KEY"
+    block: >-
+      command="/usr/local/libexec/dbbot-mha-go-vip-ssh",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty {{ hostvars[manager_ip].make_mha_go__vip_public_key.stdout }}
+
+- name: Scan MySQL node SSH host keys from the manager
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/ssh-keyscan
+      - -T
+      - '5'
+      - -t
+      - rsa
+      - "{{ item }}"
+  loop: "{{ [master_ip] + slave_ips }}"
+  register: make_mha_go__vip_host_keys
+  changed_when: false
+  failed_when: >-
+    make_mha_go__vip_host_keys.rc != 0
+    or (make_mha_go__vip_host_keys.stdout | trim | length) == 0
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Install MHA-Go VIP SSH known hosts on the manager
+  ansible.builtin.copy:
+    content: "{{ make_mha_go__vip_host_keys.results | map(attribute='stdout') | join('\n') }}\n"
+    dest: "/home/{{ mysql_user }}/.ssh/known_hosts_dbbot_mha_go"
+    owner: "{{ mysql_user }}"
+    group: "{{ mysql_group }}"
+    mode: '0600'
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Verify non-interactive MHA-Go VIP SSH access to every MySQL node
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/ssh
+      - -i
+      - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+      - -o
+      - BatchMode=yes
+      - -o
+      - IdentitiesOnly=yes
+      - -o
+      - StrictHostKeyChecking=yes
+      - -o
+      - "UserKnownHostsFile=/home/{{ mysql_user }}/.ssh/known_hosts_dbbot_mha_go"
+      - -o
+      - ConnectTimeout=5
+      - "{{ mysql_user }}@{{ item }}"
+      - /usr/bin/true
+  loop: "{{ [master_ip] + slave_ips }}"
+  changed_when: false
+  become_user: "{{ mysql_user }}"
+  when: manager_ip in ansible_all_ipv4_addresses
+
+- name: Verify MHA-Go VIP SSH rejects commands outside the allowlist
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/ssh
+      - -i
+      - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+      - -o
+      - BatchMode=yes
+      - -o
+      - IdentitiesOnly=yes
+      - -o
+      - StrictHostKeyChecking=yes
+      - -o
+      - "UserKnownHostsFile=/home/{{ mysql_user }}/.ssh/known_hosts_dbbot_mha_go"
+      - -o
+      - ConnectTimeout=5
+      - "{{ mysql_user }}@{{ item }}"
+      - /usr/bin/id
+  loop: "{{ [master_ip] + slave_ips }}"
+  register: make_mha_go__vip_ssh_rejected_command
+  changed_when: false
+  failed_when: make_mha_go__vip_ssh_rejected_command.rc != 126
+  become_user: "{{ mysql_user }}"
+  when: manager_ip in ansible_all_ipv4_addresses

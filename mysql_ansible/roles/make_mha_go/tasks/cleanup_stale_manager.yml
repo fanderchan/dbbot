@@ -1,0 +1,42 @@
+---
+- name: Check for stale MHA-Go manager service unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/mha-manager.service
+  register: make_mha_go__stale_service_unit
+
+- name: Stop and disable stale MHA-Go manager service
+  ansible.builtin.systemd:
+    name: mha-manager
+    state: stopped
+    enabled: false
+  when: make_mha_go__stale_service_unit.stat.exists
+
+- name: Remove stale MHA-Go manager service unit
+  ansible.builtin.file:
+    path: /etc/systemd/system/mha-manager.service
+    state: absent
+  when: make_mha_go__stale_service_unit.stat.exists
+
+- name: Reload systemd after stale MHA-Go manager removal
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: make_mha_go__stale_service_unit.stat.exists
+
+- name: Remove stale manager-only MHA-Go files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ mha_go_binary_dest }}"
+    - "{{ mha_go_config_dir }}"
+    - /usr/local/bin/mha_ip_failover.sh
+    - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+    - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go.pub"
+    - "/home/{{ mysql_user }}/.ssh/id_ed25519_dbbot_mha_go"
+    - "/home/{{ mysql_user }}/.ssh/id_ed25519_dbbot_mha_go.pub"
+    - "/home/{{ mysql_user }}/.ssh/known_hosts_dbbot_mha_go"
+
+- name: Remove stale MHA-Go finish flag
+  ansible.builtin.file:
+    path: "{{ datadir }}/mha_go_finish.flag"
+    state: absent

@@ -1,0 +1,4 @@
+# Managed by dbbot. Manual changes will be overwritten.
+{{ mysql_user }} ALL=(root) NOPASSWD: /usr/sbin/ip addr add {{ vip }}/{{ vip_netmask }} dev {{ net_work_interface }}
+{{ mysql_user }} ALL=(root) NOPASSWD: /usr/sbin/ip addr del {{ vip }}/{{ vip_netmask }} dev {{ net_work_interface }}
+{{ mysql_user }} ALL=(root) NOPASSWD: /sbin/arping -c 3 -U -I {{ net_work_interface }} {{ vip }}

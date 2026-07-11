@@ -15,7 +15,16 @@ VIP="{{ vip }}"
 MASK="{{ vip_netmask }}"
 IFACE="{{ net_work_interface }}"
 SSH_USER="{{ mysql_user }}"
-SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes"
+SSH_KEY="/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+SSH_KNOWN_HOSTS="/home/{{ mysql_user }}/.ssh/known_hosts_dbbot_mha_go"
+SSH_OPTS=(
+  -i "${SSH_KEY}"
+  -o BatchMode=yes
+  -o IdentitiesOnly=yes
+  -o StrictHostKeyChecking=yes
+  -o "UserKnownHostsFile=${SSH_KNOWN_HOSTS}"
+  -o ConnectTimeout=10
+)
 
 NEW_HOST="${MHA_NEW_PRIMARY_HOST:-}"
 OLD_HOST="${MHA_OLD_PRIMARY_HOST:-}"
@@ -30,20 +39,25 @@ fi
 # Step 1 - remove VIP from old primary (best-effort; node may be unreachable)
 if [[ -n "${OLD_HOST}" && "${OLD_HOST}" != "${NEW_HOST}" ]]; then
   log "Removing VIP ${VIP}/${MASK} from old primary ${OLD_HOST} (iface=${IFACE})"
-  ssh ${SSH_OPTS} ${SSH_USER}@${OLD_HOST} \
-    "sudo /usr/sbin/ip addr del ${VIP}/${MASK} dev ${IFACE}" 2>/dev/null \
+  ssh "${SSH_OPTS[@]}" "${SSH_USER}@${OLD_HOST}" \
+    "sudo -n /usr/sbin/ip addr del ${VIP}/${MASK} dev ${IFACE}" 2>/dev/null \
     && log "VIP removed from ${OLD_HOST}" \
     || log "WARNING: could not remove VIP from ${OLD_HOST} (node may be down - continuing)"
 fi
 
 # Step 2 - add VIP to new primary and send gratuitous ARP
 log "Adding VIP ${VIP}/${MASK} to new primary ${NEW_HOST} (iface=${IFACE})"
-ssh ${SSH_OPTS} ${SSH_USER}@${NEW_HOST} \
-  "sudo /usr/sbin/ip addr add ${VIP}/${MASK} dev ${IFACE}"
-log "VIP added to ${NEW_HOST}"
+if ssh "${SSH_OPTS[@]}" "${SSH_USER}@${NEW_HOST}" \
+  "/usr/sbin/ip -o addr show dev ${IFACE}" | /usr/bin/grep -Fq " ${VIP}/${MASK} "; then
+  log "VIP already present on ${NEW_HOST}"
+else
+  ssh "${SSH_OPTS[@]}" "${SSH_USER}@${NEW_HOST}" \
+    "sudo -n /usr/sbin/ip addr add ${VIP}/${MASK} dev ${IFACE}"
+  log "VIP added to ${NEW_HOST}"
+fi
 
 log "Sending gratuitous ARP to update network neighbours"
-ssh ${SSH_OPTS} ${SSH_USER}@${NEW_HOST} \
-  "sudo /sbin/arping -c 3 -U -I ${IFACE} ${VIP}" 2>/dev/null || true
+ssh "${SSH_OPTS[@]}" "${SSH_USER}@${NEW_HOST}" \
+  "sudo -n /sbin/arping -c 3 -U -I ${IFACE} ${VIP}" 2>/dev/null || true
 
 log "VIP migration complete: ${VIP} is now on ${NEW_HOST}"

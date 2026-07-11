@@ -1,0 +1,26 @@
+#!/bin/bash
+# Managed by dbbot. Restricts the MHA-Go VIP SSH key to generated hook commands.
+
+set -euo pipefail
+
+case "${SSH_ORIGINAL_COMMAND:-}" in
+  '/usr/bin/true')
+    exec /usr/bin/true
+    ;;
+  '/usr/sbin/ip -o addr show dev {{ net_work_interface }}')
+    exec /usr/sbin/ip -o addr show dev {{ net_work_interface }}
+    ;;
+  'sudo -n /usr/sbin/ip addr add {{ vip }}/{{ vip_netmask }} dev {{ net_work_interface }}')
+    exec /usr/bin/sudo -n /usr/sbin/ip addr add {{ vip }}/{{ vip_netmask }} dev {{ net_work_interface }}
+    ;;
+  'sudo -n /usr/sbin/ip addr del {{ vip }}/{{ vip_netmask }} dev {{ net_work_interface }}')
+    exec /usr/bin/sudo -n /usr/sbin/ip addr del {{ vip }}/{{ vip_netmask }} dev {{ net_work_interface }}
+    ;;
+  'sudo -n /sbin/arping -c 3 -U -I {{ net_work_interface }} {{ vip }}')
+    exec /usr/bin/sudo -n /sbin/arping -c 3 -U -I {{ net_work_interface }} {{ vip }}
+    ;;
+  *)
+    printf 'Command denied by dbbot MHA-Go VIP SSH policy.\n' >&2
+    exit 126
+    ;;
+esac

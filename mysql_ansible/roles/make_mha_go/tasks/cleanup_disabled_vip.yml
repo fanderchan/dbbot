@@ -1,0 +1,102 @@
+---
+- name: Set disabled MHA-Go VIP cleanup defaults
+  ansible.builtin.set_fact:
+    make_mha_go__disabled_vip_address: "{{ vip | default('') }}"
+    make_mha_go__disabled_vip_netmask: "{{ vip_netmask | default('32') | string }}"
+    make_mha_go__disabled_vip_interface: "{{ net_work_interface | default('') }}"
+
+- name: Check managed MHA-Go VIP state
+  ansible.builtin.stat:
+    path: /var/lib/dbbot/mha-go-vip.yml
+  register: make_mha_go__disabled_vip_state_file
+
+- name: Read managed MHA-Go VIP state
+  ansible.builtin.slurp:
+    path: /var/lib/dbbot/mha-go-vip.yml
+  register: make_mha_go__disabled_vip_state_raw
+  when: make_mha_go__disabled_vip_state_file.stat.exists
+
+- name: Use recorded MHA-Go VIP state for cleanup
+  ansible.builtin.set_fact:
+    make_mha_go__disabled_vip_address: "{{ make_mha_go__disabled_vip_state.vip }}"
+    make_mha_go__disabled_vip_netmask: "{{ make_mha_go__disabled_vip_state.netmask | string }}"
+    make_mha_go__disabled_vip_interface: "{{ make_mha_go__disabled_vip_state.interface }}"
+  vars:
+    make_mha_go__disabled_vip_state: >-
+      {{ make_mha_go__disabled_vip_state_raw.content | b64decode | from_yaml }}
+  when: make_mha_go__disabled_vip_state_file.stat.exists
+
+- name: Check disabled MHA-Go VIP assignment
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ip
+      - -o
+      - addr
+      - show
+      - dev
+      - "{{ make_mha_go__disabled_vip_interface }}"
+  register: make_mha_go__disabled_vip_assignment
+  changed_when: false
+  when:
+    - make_mha_go__disabled_vip_address | length > 0
+    - make_mha_go__disabled_vip_interface | length > 0
+
+- name: Remove disabled MHA-Go VIP
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ip
+      - addr
+      - del
+      - "{{ make_mha_go__disabled_vip_address }}/{{ make_mha_go__disabled_vip_netmask }}"
+      - dev
+      - "{{ make_mha_go__disabled_vip_interface }}"
+  when:
+    - make_mha_go__disabled_vip_assignment.stdout is defined
+    - (make_mha_go__disabled_vip_address ~ '/' ~ make_mha_go__disabled_vip_netmask) in make_mha_go__disabled_vip_assignment.stdout
+  changed_when: true
+
+- name: Remove managed MHA-Go VIP state
+  ansible.builtin.file:
+    path: /var/lib/dbbot/mha-go-vip.yml
+    state: absent
+
+- name: Remove disabled MHA-Go VIP sudo policy
+  ansible.builtin.file:
+    path: /etc/sudoers.d/dbbot-mha-go-vip
+    state: absent
+
+- name: Remove legacy dbbot-generated MHA-Go sudoers block
+  ansible.builtin.replace:
+    path: /etc/sudoers
+    regexp: '(?m)^# added by dbbot make_mha_go[ \t]*\r?\n[ \t]*[^# \t\r\n][^ \t\r\n]*[ \t]+ALL[ \t]*=[ \t]*\(ALL\)[ \t]+NOPASSWD:[ \t]*/usr/sbin/ip[ \t]*,[ \t]*/sbin/arping[ \t]*(?:\r?\n)?'
+    replace: ''
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Check MHA-Go VIP SSH authorization file
+  ansible.builtin.stat:
+    path: "/home/{{ mysql_user }}/.ssh/authorized_keys"
+  register: make_mha_go__disabled_authorized_keys
+
+- name: Remove disabled MHA-Go VIP SSH authorization block
+  ansible.builtin.blockinfile:
+    path: "/home/{{ mysql_user }}/.ssh/authorized_keys"
+    marker: "# {mark} DBBOT MHA-GO VIP SSH KEY"
+    state: absent
+  when: make_mha_go__disabled_authorized_keys.stat.exists
+
+- name: Remove disabled MHA-Go VIP files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/bin/mha_ip_failover.sh
+    - /usr/local/libexec/dbbot-mha-go-vip-ssh
+    - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go"
+    - "/home/{{ mysql_user }}/.ssh/id_rsa_dbbot_mha_go.pub"
+    - "/home/{{ mysql_user }}/.ssh/id_ed25519_dbbot_mha_go"
+    - "/home/{{ mysql_user }}/.ssh/id_ed25519_dbbot_mha_go.pub"
+    - "/home/{{ mysql_user }}/.ssh/known_hosts_dbbot_mha_go"
+
+- name: Validate sudoers after disabled MHA-Go VIP cleanup
+  ansible.builtin.command: /usr/sbin/visudo -c
+  changed_when: false

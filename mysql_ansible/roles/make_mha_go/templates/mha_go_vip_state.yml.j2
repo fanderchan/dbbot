@@ -1,0 +1,4 @@
+# Managed by dbbot. Used to clean up a disabled MHA-Go VIP safely.
+vip: {{ vip | to_json }}
+netmask: {{ vip_netmask | string | to_json }}
+interface: {{ net_work_interface | to_json }}

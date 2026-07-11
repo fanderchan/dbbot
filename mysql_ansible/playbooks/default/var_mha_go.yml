@@ -6,10 +6,10 @@ slave_ips:
   - 192.0.2.133
 sub_nets: "192.0.2.%"
 
-# manager_ip: node that runs `mha manager`.
-# Default to the primary/control node, matching the current mha-go manual
-# deployment guide. Override in vars/var_mha_go.yml if needed.
-manager_ip: "{{ master_ip }}"
+# manager_ip: replica node that runs `mha manager`.
+# Keep the manager outside the primary failure domain. The last replica is
+# preferred so the first replica remains the highest-priority failover target.
+manager_ip: "{{ slave_ips | last }}"
 
 # --- mha-go specific defaults ---
 
@@ -30,7 +30,10 @@ mha_go_service_enabled: true
 mha_go_semi_sync_policy: disabled
 mha_go_semi_sync_wait_for_replica_count: 0
 mha_go_semi_sync_timeout: 5s
-mha_go_salvage_policy: salvage-if-possible
+# A host-level primary failure cannot guarantee recovery of transactions that
+# never reached a replica. Match traditional MHA availability semantics by
+# promoting the most advanced surviving replica after best-effort salvage.
+mha_go_salvage_policy: availability-first
 mha_go_salvage_timeout: 30s
 
 # --- Writer endpoint (VIP failover script) ---

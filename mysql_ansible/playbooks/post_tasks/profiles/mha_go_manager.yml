@@ -47,3 +47,28 @@
   when:
     - manager_ip in ansible_all_ipv4_addresses
     - mha_go_writer_endpoint_enabled | bool
+
+- name: Check MHA-Go VIP is assigned to the configured primary
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/ip
+      - -o
+      - addr
+      - show
+      - dev
+      - "{{ net_work_interface }}"
+  register: dbbot_post_check__mha_go_vip_assignment
+  changed_when: false
+  when:
+    - master_ip in ansible_all_ipv4_addresses
+    - mha_go_writer_endpoint_enabled | bool
+
+- name: Assert MHA-Go VIP is assigned to the configured primary
+  ansible.builtin.assert:
+    that:
+      - (vip ~ '/' ~ vip_netmask) in dbbot_post_check__mha_go_vip_assignment.stdout
+    fail_msg: "mha-go VIP is not assigned to the configured primary."
+    success_msg: "mha-go VIP and manager-to-node SSH post-checks passed."
+  when:
+    - master_ip in ansible_all_ipv4_addresses
+    - mha_go_writer_endpoint_enabled | bool
