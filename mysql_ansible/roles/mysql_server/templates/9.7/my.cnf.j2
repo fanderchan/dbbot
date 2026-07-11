@@ -79,7 +79,7 @@ max_prepared_stmt_count                  = 1048576                              
 log_timestamps                           = SYSTEM                                    # UTC
 pid_file                                 = mysqld.pid
 read_only                                = OFF                                       # OFF
-super_read_only                          = OFF                                       # OFF
+super_read_only                          = {{ 'ON' if (mtls_with_mysql_group_replication | bool) else 'OFF' }}  # OFF
 skip_name_resolve                        = ON                                        # OFF
 auto_increment_increment                 = 1                                         # 1
 auto_increment_offset                    = 1                                         # 1
@@ -213,7 +213,7 @@ loose-group_replication_recovery_retry_count          = 10                      
 loose-group_replication_recovery_reconnect_interval   = 60                                     # 60
 loose-group_replication_ip_allowlist                  = AUTOMATIC                              # AUTOMATIC
 loose-group_replication_group_name = "{{ mysql_group_replication_group_name if mgr_use_random_uuid == 1 else 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }}"
-loose-group_replication_start_on_boot                 = OFF                                    # ON
+loose-group_replication_start_on_boot                 = ON                                     # ON
 loose-group_replication_bootstrap_group               = OFF                                    # OFF
 loose-group_replication_single_primary_mode           = ON                                     # ON
 loose-group_replication_enforce_update_everywhere_checks = OFF                                  # OFF
