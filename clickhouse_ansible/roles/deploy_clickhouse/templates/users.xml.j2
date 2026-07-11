@@ -16,7 +16,9 @@
         <default>
             <password>{{ clickhouse_default_password }}</password>
             <networks>
-                <ip>::/0</ip>
+{% for allowed_network in clickhouse_default_user_allowed_networks_effective %}
+                <ip>{{ allowed_network | e }}</ip>
+{% endfor %}
             </networks>
             <profile>default</profile>
             <quota>default</quota>

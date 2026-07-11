@@ -26,3 +26,28 @@
   when:
     - not (fcs_allow_dbbot_default_passwd | bool)
     - clickhouse_default_password == 'Dbbot_default@8888'
+
+- name: Validate ClickHouse default user allowed networks type
+  ansible.builtin.assert:
+    that:
+      - clickhouse_default_user_allowed_networks is defined
+      - clickhouse_default_user_allowed_networks is sequence
+      - clickhouse_default_user_allowed_networks is not string
+      - clickhouse_default_user_auto_include_cluster_nodes is defined
+      - (clickhouse_default_user_auto_include_cluster_nodes | string | lower) in ['true', 'false']
+    fail_msg: >-
+      clickhouse_default_user_allowed_networks must be a YAML list of IP
+      addresses or CIDRs, and clickhouse_default_user_auto_include_cluster_nodes
+      must be set to true or false.
+
+- name: Validate ClickHouse default user allowed network entries
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item | trim | length > 0
+    fail_msg: >-
+      Each clickhouse_default_user_allowed_networks entry must be a non-empty
+      IP address or CIDR string.
+  loop: "{{ clickhouse_default_user_allowed_networks }}"
+  loop_control:
+    label: "{{ item }}"

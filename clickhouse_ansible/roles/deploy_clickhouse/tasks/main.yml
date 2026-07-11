@@ -11,6 +11,9 @@
 - name: Import tasks to calculate performance parameters
   ansible.builtin.import_tasks: calculate_params.yml
 
+- name: Import tasks to calculate default user allowed networks
+  ansible.builtin.import_tasks: calculate_default_user_networks.yml
+
 - name: Import tasks to configure server
   ansible.builtin.import_tasks: config_server.yml
 

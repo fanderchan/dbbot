@@ -1,0 +1,36 @@
+---
+- name: Calculate automatically trusted ClickHouse node IPs
+  ansible.builtin.set_fact:
+    clickhouse_default_user_auto_allowed_networks: >-
+      {{
+        (
+          [ck_physical_host]
+          if (clickhouse_topology_mode | default('cluster')) == 'standalone'
+          else (clickhouse_all_nodes | default([]) | map(attribute='ip') | list)
+        )
+        if (clickhouse_default_user_auto_include_cluster_nodes | bool)
+        else []
+      }}
+
+- name: Build effective ClickHouse default user allowed networks
+  ansible.builtin.set_fact:
+    clickhouse_default_user_allowed_networks_effective: >-
+      {{
+        (
+          clickhouse_default_user_allowed_networks
+          + clickhouse_default_user_auto_allowed_networks
+        )
+        | map('trim')
+        | reject('equalto', '')
+        | unique
+        | list
+      }}
+
+- name: Validate effective ClickHouse default user allowed networks
+  ansible.builtin.assert:
+    that:
+      - clickhouse_default_user_allowed_networks_effective | length > 0
+    fail_msg: >-
+      The effective ClickHouse default user network allowlist is empty.
+      Configure clickhouse_default_user_allowed_networks or enable automatic
+      cluster node inclusion.

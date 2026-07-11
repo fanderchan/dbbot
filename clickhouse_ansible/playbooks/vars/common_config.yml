@@ -32,6 +32,30 @@ clickhouse_log_dir_base: "/opt/clickhouse/log"
 # 开源默认值采用 Dbbot_default@8888 规律，便于快速体验。
 # 为避免公开默认密码直接进生产，默认会在 pre_tasks 阶段拦截，除非显式设置 fcs_allow_dbbot_default_passwd=true。
 clickhouse_default_password: "Dbbot_default@8888"
+
+# Source IP addresses or CIDRs allowed to authenticate as the ClickHouse
+# default user. Cluster node IPs are appended automatically by default.
+clickhouse_default_user_allowed_networks:
+  - "127.0.0.1"
+  - "::1"
+
+# In cluster mode, append every unique ansible_host value from the
+# clickhouse_cluster inventory group. In standalone mode, append only the
+# current physical host IP. Set this to false for a fully manual allowlist.
+clickhouse_default_user_auto_include_cluster_nodes: true
+
+# Example: additionally trust a management subnet and one exact host.
+# clickhouse_default_user_allowed_networks:
+#   - "127.0.0.1"
+#   - "::1"
+#   - "10.20.30.0/24"
+#   - "10.40.50.60"
+#
+# Example: explicitly restore unrestricted access from any network.
+# clickhouse_default_user_allowed_networks:
+#   - "::/0"
+# clickhouse_default_user_auto_include_cluster_nodes: false
+
 clickhouse_distributed_ddl_path: "/clickhouse/task_queue/ddl"
 # MySQL/PostgreSQL 协议端口步长：
 # mysql/postgresql 实际端口 = *_port_base + (instance_id - 1) * clickhouse_aux_port_stride
