@@ -4,7 +4,7 @@
     dest: /usr/local/alertmanager/alertmanager.yml
     owner: "{{ alertmanager_run_user }}"
     group: "{{ alertmanager_run_user_group }}"
-    mode: '0644'
+    mode: '0600'
 
 - name: Copy alertmanager.tmpl to alertmanager server directory
   ansible.builtin.copy:
