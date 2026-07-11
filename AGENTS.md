@@ -124,6 +124,8 @@
 - Git 提交、分支推送、tag 推送优先使用 SSH。
 
 ## 校验清单
+- 改动 `dbbotctl release` 升级或回滚逻辑时，执行：
+  - `bash /usr/local/dbbot/tests/test_dbbotctl_release_auto_rollback.sh`
 - 改动 Ansible 代码时，至少执行对应模块 `AGENTS.md` 中列出的 syntax-check。
 - 改动 Ansible 代码时，建议本地再跑一次对应子项目的 lint 脚本，例如：
   - `sh /usr/local/dbbot/mysql_ansible/lint_all_yml_files.sh`

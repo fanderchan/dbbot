@@ -55,6 +55,9 @@ jobs:
           PORTABLE_ANSIBLE_HOME: ${{ github.workspace }}/portable-ansible
         run: bash clickhouse_ansible/tests/test_password_xml_and_cli_safety.sh
 
+      - name: Run dbbotctl automatic rollback regression
+        run: bash tests/test_dbbotctl_release_auto_rollback.sh
+
       - name: Run monitoring syntax check
         working-directory: monitoring_prometheus_ansible/playbooks
         run: python3 ../../portable-ansible/ansible-playbook -i ../inventory/hosts.ini monitoring_prometheus_deployment.yml --syntax-check
