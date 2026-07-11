@@ -24,7 +24,7 @@
 ## 公开入口
 - `deploy_cluster.yml`
 - `deploy_single.yml`
-- `setup_nfs_server.yml`
+- `setup_nfs_server.yml`（仅实验/测试，不作为生产 NFS 交付能力）
 - `setup_nfs_client_mount_rc_local.yml`
 - `prepare_backup_disk.yml`
 - `backup_cluster.yml`
@@ -39,6 +39,7 @@
 - 对 TTL 表不建议直接用源/目标全表 `count()` 做强一致验收；优先使用固定时间窗口或无 TTL 业务表做校验。
 - 不要把 MySQL 复制、MGR、InnoDB Cluster、MHA 或 Prometheus 部署术语套进 ClickHouse 剧本。
 - NFS、备份盘准备、备份、恢复、卸载类剧本必须保留 inventory purpose 守卫和手工确认类守卫。
+- `setup_nfs_server.yml` 仅用于实验/测试；生产 NFS 由外部存储系统提供和治理。
 - 不要把生产密码、私钥、备份存储凭据或 token 写入 inventory 示例、文档或 `AGENTS.md`。
 
 ## 校验清单

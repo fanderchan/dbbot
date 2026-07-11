@@ -656,6 +656,7 @@
     - name: Check config snapshot archive exists on current host
       ansible.builtin.stat:
         path: "{{ restore_config_snapshot_abs_archive }}"
+        checksum_algorithm: sha256
       register: restore_config_snapshot_archive_stat
       changed_when: false
       when:
@@ -690,6 +691,24 @@
         - not (restore_config_fail_on_missing_snapshot | bool)
         - restore_config_snapshot_record | default({}) | length > 0
         - not (restore_config_snapshot_archive_stat.stat.exists | default(false))
+
+    - name: Verify config snapshot archive SHA-256 before apply
+      ansible.builtin.assert:
+        that:
+          - restore_config_snapshot_archive_stat.stat.isreg | default(false)
+          - (restore_config_snapshot_record.archive_sha256 | default('')) is match('^[0-9a-fA-F]{64}$')
+          - >-
+            (restore_config_snapshot_archive_stat.stat.checksum | default('') | lower)
+            == (restore_config_snapshot_record.archive_sha256 | default('') | lower)
+        fail_msg: >-
+          Config snapshot archive SHA-256 verification failed for
+          {{ restore_config_snapshot_abs_archive }}. Refusing to extract the
+          archive. expected={{ restore_config_snapshot_record.archive_sha256 | default('missing') }},
+          actual={{ restore_config_snapshot_archive_stat.stat.checksum | default('unavailable') }}.
+      when:
+        - restore_include_config_files | bool
+        - restore_config_snapshot_record | default({}) | length > 0
+        - restore_config_snapshot_archive_stat.stat.exists | default(false)
 
     - name: Check existing config paths before apply
       ansible.builtin.stat:

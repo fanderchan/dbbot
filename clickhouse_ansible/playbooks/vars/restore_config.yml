@@ -64,6 +64,8 @@ restore_two_phase_fail_on_unsupported_objects: false
 
 # 是否额外恢复配置与权限相关文件（默认关闭）
 # 说明：开启后会从备份 manifest 的 config_snapshots 中匹配当前主机并回放
+# The config snapshot archive SHA-256 is always verified against the manifest
+# before extraction. Missing or mismatched checksum metadata blocks the apply.
 restore_include_config_files: false
 # true: 开启配置恢复时，若找不到当前主机对应的配置快照则失败
 restore_config_fail_on_missing_snapshot: true

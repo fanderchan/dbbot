@@ -1,12 +1,16 @@
 ---
-- name: Setup NFS Server For ClickHouse Backups
+- name: Setup Lab/Test NFS Server For ClickHouse Backups
   hosts: clickhouse_nfs_server
   become: true
   gather_facts: true
   vars:
     nfs_export_dir: "/srv/nfs/clickhouse_backup"
-    nfs_export_mode: "0777"
-    # 文档默认值使用 RFC 5737 示例网段，生产前请改为真实客户端网段。
+    nfs_export_mode: "0770"
+    nfs_export_uid: 18123
+    nfs_export_gid: 18123
+    # This lab-only helper intentionally keeps no_root_squash so root-run
+    # manifest and config-snapshot tasks can write to the shared filesystem.
+    # Do not use this export policy for a production backup repository.
     nfs_export_cidr: "192.0.2.0/24"
     nfs_export_opts: "rw,sync,no_subtree_check,no_root_squash"
     nfs_exports_file: "/etc/exports.d/clickhouse_backup.exports"
@@ -16,6 +20,24 @@
     nfs_server_inventory_purpose: "nfs_server"
 
   pre_tasks:
+    - name: Display lab-only NFS server warning
+      ansible.builtin.debug:
+        msg: >-
+          setup_nfs_server.yml is a lab/test helper and does not implement a
+          production NFS security or immutability policy.
+      run_once: true
+
+    - name: Validate lab NFS export ownership settings
+      ansible.builtin.assert:
+        that:
+          - nfs_export_uid | int > 0
+          - nfs_export_gid | int > 0
+          - (nfs_export_mode | string) is match('^0[0-7]{3}$')
+        fail_msg: >-
+          The lab NFS export requires a positive numeric UID/GID and a
+          four-digit octal directory mode such as 0770.
+      run_once: true
+
     - name: Validate dedicated NFS server inventory filename guard
       ansible.builtin.assert:
         that:
@@ -48,8 +70,8 @@
       ansible.builtin.file:
         path: "{{ nfs_export_dir }}"
         state: directory
-        owner: root
-        group: root
+        owner: "{{ nfs_export_uid }}"
+        group: "{{ nfs_export_gid }}"
         mode: "{{ nfs_export_mode }}"
 
     - name: Check SELinux mode
@@ -82,11 +104,23 @@
         enabled: true
         state: started
 
-    - name: Check firewalld status
-      ansible.builtin.command: systemctl is-active firewalld
-      register: nfs_firewalld_status
-      changed_when: false
-      failed_when: false
+    - name: Gather service facts before NFS firewall changes
+      ansible.builtin.service_facts:
+
+    - name: Resolve firewalld running state
+      ansible.builtin.set_fact:
+        nfs_firewalld_running: >-
+          {{
+            (
+              ansible_facts.services['firewalld.service'].state == 'running'
+              if 'firewalld.service' in ansible_facts.services
+              else (
+                ansible_facts.services['firewalld'].state == 'running'
+                if 'firewalld' in ansible_facts.services
+                else false
+              )
+            )
+          }}
 
     - name: Open NFS-related services in firewalld
       ansible.posix.firewalld:
@@ -98,7 +132,7 @@
         - nfs
         - mountd
         - rpc-bind
-      when: nfs_firewalld_status.stdout == "active"
+      when: nfs_firewalld_running | bool
 
     - name: Show exported NFS paths
       ansible.builtin.command: exportfs -v

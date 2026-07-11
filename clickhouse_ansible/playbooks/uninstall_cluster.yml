@@ -69,13 +69,80 @@
       ansible.builtin.import_tasks: pre_tasks/check_os_and_python.yml
 
   tasks:
+    - name: Gather service facts before ClickHouse uninstall
+      ansible.builtin.service_facts:
+
+    - name: Resolve ClickHouse service fact name
+      ansible.builtin.set_fact:
+        uninstall_clickhouse_service_fact_name: >-
+          {%- if (clickhouse_service_name ~ '.service') in ansible_facts.services -%}
+          {{ clickhouse_service_name }}.service
+          {%- elif clickhouse_service_name in ansible_facts.services -%}
+          {{ clickhouse_service_name }}
+          {%- else -%}
+          {%- endif -%}
+
     - name: Stop and disable ClickHouse service
       ansible.builtin.systemd:
         name: "{{ clickhouse_service_name }}"
         state: stopped
         enabled: false
-      failed_when: false
-      when: uninstall_disable_services | bool
+      when:
+        - uninstall_disable_services | bool
+        - uninstall_clickhouse_service_fact_name | trim | length > 0
+
+    - name: Gather service facts after ClickHouse stop
+      ansible.builtin.service_facts:
+
+    - name: Resolve ClickHouse service state after stop
+      ansible.builtin.set_fact:
+        uninstall_clickhouse_service_state: >-
+          {{
+            (
+              ansible_facts.services[uninstall_clickhouse_service_fact_name].state
+              if uninstall_clickhouse_service_fact_name in ansible_facts.services
+              else 'not-found'
+            )
+          }}
+
+    - name: Refuse ClickHouse cleanup while service is running
+      ansible.builtin.assert:
+        that:
+          - uninstall_clickhouse_service_state != 'running'
+        fail_msg: >-
+          Refusing to remove ClickHouse files because service
+          {{ clickhouse_service_name }} is still running.
+
+    - name: List processes before ClickHouse cleanup
+      ansible.builtin.command:
+        argv:
+          - ps
+          - -eo
+          - pid=,args=
+      register: uninstall_clickhouse_process_list
+      changed_when: false
+      failed_when: uninstall_clickhouse_process_list.rc != 0
+
+    - name: Resolve running processes for current ClickHouse instance
+      ansible.builtin.set_fact:
+        uninstall_clickhouse_running_processes: >-
+          {{
+            uninstall_clickhouse_process_list.stdout_lines
+            | select(
+                'search',
+                (clickhouse_config_dir | regex_escape) ~ '/config[.]xml'
+              )
+            | list
+          }}
+
+    - name: Refuse ClickHouse cleanup while instance process is running
+      ansible.builtin.assert:
+        that:
+          - uninstall_clickhouse_running_processes | length == 0
+        fail_msg: >-
+          Refusing to remove ClickHouse files because a process still uses
+          {{ clickhouse_config_dir }}/config.xml:
+          {{ uninstall_clickhouse_running_processes }}
 
     - name: Remove ClickHouse systemd service file
       ansible.builtin.file:
@@ -228,12 +295,102 @@
       run_once: true
 
   tasks:
+    - name: Gather service facts before Zookeeper uninstall
+      ansible.builtin.service_facts:
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: Resolve Zookeeper service fact name
+      ansible.builtin.set_fact:
+        uninstall_zookeeper_service_fact_name: >-
+          {%- if 'zookeeper.service' in ansible_facts.services -%}
+          zookeeper.service
+          {%- elif 'zookeeper' in ansible_facts.services -%}
+          zookeeper
+          {%- else -%}
+          {%- endif -%}
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
     - name: Stop and disable Zookeeper service
       ansible.builtin.systemd:
         name: zookeeper
         state: stopped
         enabled: false
-      failed_when: false
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+        - uninstall_zookeeper_service_fact_name | default('') | trim | length > 0
+
+    - name: Gather service facts after Zookeeper stop
+      ansible.builtin.service_facts:
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: Resolve Zookeeper service state after stop
+      ansible.builtin.set_fact:
+        uninstall_zookeeper_service_state: >-
+          {{
+            (
+              ansible_facts.services[uninstall_zookeeper_service_fact_name].state
+              if uninstall_zookeeper_service_fact_name in ansible_facts.services
+              else 'not-found'
+            )
+          }}
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: Refuse Zookeeper cleanup while service is running
+      ansible.builtin.assert:
+        that:
+          - uninstall_zookeeper_service_state != 'running'
+        fail_msg: >-
+          Refusing to remove Zookeeper files because zookeeper.service is
+          still running.
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: List processes before Zookeeper cleanup
+      ansible.builtin.command:
+        argv:
+          - ps
+          - -eo
+          - pid=,args=
+      register: uninstall_zookeeper_process_list
+      changed_when: false
+      failed_when: uninstall_zookeeper_process_list.rc != 0
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: Resolve running processes for managed Zookeeper instance
+      ansible.builtin.set_fact:
+        uninstall_zookeeper_running_processes: >-
+          {{
+            uninstall_zookeeper_process_list.stdout_lines
+            | select(
+                'search',
+                (zookeeper_home | regex_escape) ~ '/conf/zoo[.]cfg'
+              )
+            | list
+          }}
+      when:
+        - uninstall_purge_zookeeper | bool
+        - not use_clickhouse_keeper | default(false) | bool
+
+    - name: Refuse Zookeeper cleanup while managed process is running
+      ansible.builtin.assert:
+        that:
+          - uninstall_zookeeper_running_processes | length == 0
+        fail_msg: >-
+          Refusing to remove Zookeeper files because a process still uses
+          {{ zookeeper_home }}/conf/zoo.cfg:
+          {{ uninstall_zookeeper_running_processes }}
       when:
         - uninstall_purge_zookeeper | bool
         - not use_clickhouse_keeper | default(false) | bool
